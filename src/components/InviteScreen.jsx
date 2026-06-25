@@ -35,7 +35,9 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       const qSnapshot = await getDocs(collection(db, 'invites'));
       const list = [];
       qSnapshot.forEach((d) => {
-        list.push({ id: d.id, ...d.data() });
+        if (d.id !== 'CONFIG-GEMINI') {
+          list.push({ id: d.id, ...d.data() });
+        }
       });
       list.sort((a, b) => {
         const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : 0;
@@ -53,7 +55,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
   const fetchSharedGeminiKey = async () => {
     if (!db) return;
     try {
-      const docRef = doc(db, 'config', 'gemini');
+      const docRef = doc(db, 'invites', 'CONFIG-GEMINI');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -175,7 +177,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
     setSuccess(null);
     setSavingGeminiKey(true);
     try {
-      await setDoc(doc(db, 'config', 'gemini'), {
+      await setDoc(doc(db, 'invites', 'CONFIG-GEMINI'), {
         apiKey: tempGeminiKey.trim(),
         updatedAt: new Date()
       });

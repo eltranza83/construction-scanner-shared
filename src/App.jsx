@@ -102,7 +102,7 @@ export default function App() {
       const db = getFirebaseDb();
       if (!db) return;
       try {
-        const docRef = doc(db, 'config', 'gemini');
+        const docRef = doc(db, 'invites', 'CONFIG-GEMINI');
         const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
           const data = docSnap.data();

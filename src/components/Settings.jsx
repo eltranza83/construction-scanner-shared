@@ -68,7 +68,9 @@ export default function Settings({
       const qSnapshot = await getDocs(collection(db, 'invites'));
       const list = [];
       qSnapshot.forEach((d) => {
-        list.push({ id: d.id, ...d.data() });
+        if (d.id !== 'CONFIG-GEMINI') {
+          list.push({ id: d.id, ...d.data() });
+        }
       });
       // Sort by createdAt desc
       list.sort((a, b) => {
@@ -88,7 +90,7 @@ export default function Settings({
     const db = getFirebaseDb();
     if (!db) return;
     try {
-      const docRef = doc(db, 'config', 'gemini');
+      const docRef = doc(db, 'invites', 'CONFIG-GEMINI');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
@@ -215,7 +217,7 @@ export default function Settings({
     setSuccess(null);
     setSavingGeminiKey(true);
     try {
-      await setDoc(doc(db, 'config', 'gemini'), {
+      await setDoc(doc(db, 'invites', 'CONFIG-GEMINI'), {
         apiKey: tempGeminiKey.trim(),
         updatedAt: new Date()
       });
