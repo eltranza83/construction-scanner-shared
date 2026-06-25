@@ -7,6 +7,8 @@ import Settings from './components/Settings';
 import InviteScreen from './components/InviteScreen';
 import { generateDocumentPDF } from './services/pdfGenerator';
 import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet } from './services/googleDrive';
+import { getFirebaseDb } from './services/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 
 export default function App() {
   // Config & Auth State
@@ -43,9 +45,9 @@ export default function App() {
 
   // Load configuration and history on mount
   useEffect(() => {
-    const key = localStorage.getItem('jobscan_gemini_key') || 'AQ.Ab8RN6ILa6ghbAySaFrh7KaIoVIRqVT18MpTb7YjO1-tK-8KsQ';
+    const key = localStorage.getItem('jobscan_gemini_key') || '';
     if (!localStorage.getItem('jobscan_gemini_key')) {
-      localStorage.setItem('jobscan_gemini_key', 'AQ.Ab8RN6ILa6ghbAySaFrh7KaIoVIRqVT18MpTb7YjO1-tK-8KsQ');
+      localStorage.setItem('jobscan_gemini_key', '');
     }
     const cid = localStorage.getItem('jobscan_google_client_id') || '523814311929-lku3c1m2rq4qpmbf1earpgnm1beuvq8m.apps.googleusercontent.com';
     if (!localStorage.getItem('jobscan_google_client_id')) {
@@ -93,6 +95,31 @@ export default function App() {
       document.body.appendChild(script);
     }
   }, []);
+
+  // Fetch shared Gemini key from Firestore if unlocked
+  useEffect(() => {
+    const fetchSharedGeminiKey = async () => {
+      const db = getFirebaseDb();
+      if (!db) return;
+      try {
+        const docRef = doc(db, 'config', 'gemini');
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data && data.apiKey) {
+            setGeminiKey(data.apiKey);
+            localStorage.setItem('jobscan_gemini_key', data.apiKey);
+          }
+        }
+      } catch (err) {
+        console.error('Failed to fetch shared Gemini key from Firestore:', err);
+      }
+    };
+
+    if (isInvited) {
+      fetchSharedGeminiKey();
+    }
+  }, [isInvited]);
 
   // Close project dropdown when clicking outside
   useEffect(() => {
@@ -542,7 +569,7 @@ export default function App() {
           setIsInvited(true);
         }} 
         onKeyUpdated={(key) => setGeminiKey(key)}
-        defaultGeminiKey={localStorage.getItem('jobscan_gemini_key') || 'AQ.Ab8RN6ILa6ghbAySaFrh7KaIoVIRqVT18MpTb7YjO1-tK-8KsQ'}
+        defaultGeminiKey={localStorage.getItem('jobscan_gemini_key') || ''}
         googleUser={googleUser}
         onGoogleSignIn={handleGoogleSignIn}
         onSignOut={handleSignOut}

@@ -17,7 +17,7 @@ import {
   Share2
 } from 'lucide-react';
 import { listFolders, createFolder } from '../services/googleDrive';
-import { collection, getDocs, doc, setDoc, deleteDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 
 export default function Settings({ 
@@ -56,6 +56,10 @@ export default function Settings({
   const [firebaseProjectId, setFirebaseProjectId] = useState(localStorage.getItem('jobscan_firebase_project_id') || 'adepec-scanner-invites');
   const [firebaseAppId, setFirebaseAppId] = useState(localStorage.getItem('jobscan_firebase_app_id') || '1:256926375840:web:1dfab80a93a0f9cfa9cec5');
 
+  // Gemini API Key states
+  const [tempGeminiKey, setTempGeminiKey] = useState('');
+  const [savingGeminiKey, setSavingGeminiKey] = useState(false);
+
   const fetchInvitesList = async () => {
     const db = getFirebaseDb();
     if (!db) return;
@@ -80,9 +84,27 @@ export default function Settings({
     }
   };
 
+  const fetchSharedGeminiKey = async () => {
+    const db = getFirebaseDb();
+    if (!db) return;
+    try {
+      const docRef = doc(db, 'config', 'gemini');
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        if (data && data.apiKey) {
+          setTempGeminiKey(data.apiKey);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to fetch shared Gemini key:', err);
+    }
+  };
+
   useEffect(() => {
     if (isAdminUnlocked) {
       fetchInvitesList();
+      fetchSharedGeminiKey();
     }
   }, [isAdminUnlocked]);
 
@@ -181,6 +203,35 @@ export default function Settings({
       setSuccess(null);
       window.location.reload();
     }, 1500);
+  };
+
+  const handleSaveSharedGeminiKey = async () => {
+    const db = getFirebaseDb();
+    if (!db) {
+      setError('Database not configured. Set up Firebase below first.');
+      return;
+    }
+    setError(null);
+    setSuccess(null);
+    setSavingGeminiKey(true);
+    try {
+      await setDoc(doc(db, 'config', 'gemini'), {
+        apiKey: tempGeminiKey.trim(),
+        updatedAt: new Date()
+      });
+      setSuccess('Shared Gemini API Key saved to database! Other users will receive it automatically on next load.');
+      
+      // Update local state and storage
+      setGeminiKey(tempGeminiKey.trim());
+      localStorage.setItem('jobscan_gemini_key', tempGeminiKey.trim());
+      
+      setTimeout(() => setSuccess(null), 4000);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to save Gemini API Key to database.');
+    } finally {
+      setSavingGeminiKey(false);
+    }
   };
 
   // Folder Explorer Navigation States
@@ -574,6 +625,36 @@ export default function Settings({
                       onClick={handleSaveFirebaseConfig}
                     >
                       Save Configuration
+                    </button>
+                  </div>
+                </div>
+
+                {/* 1.5. Config Gemini API Key */}
+                <div style={{ borderBottom: '1px solid var(--color-zinc-800)', paddingBottom: '16px' }}>
+                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-amber-400)', marginBottom: '10px' }}>
+                    Shared Gemini API Key
+                  </h4>
+                  <p style={{ fontSize: '0.78rem', color: 'var(--color-zinc-400)', marginBottom: '8px', lineHeight: '1.4' }}>
+                    Set the Gemini API Key that all invited users will share. This key will be securely fetched from Firestore and is not stored in the GitHub repository.
+                  </p>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    <div className="form-group">
+                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Gemini API Key</label>
+                      <input 
+                        type="password"
+                        className="form-input"
+                        value={tempGeminiKey}
+                        onChange={(e) => setTempGeminiKey(e.target.value)}
+                        placeholder="Paste new Gemini Key (AIzaSy... or AQ...)"
+                      />
+                    </div>
+                    <button 
+                      type="button" 
+                      className="btn btn-secondary"
+                      onClick={handleSaveSharedGeminiKey}
+                      disabled={savingGeminiKey}
+                    >
+                      {savingGeminiKey ? 'Saving Key...' : 'Save Gemini Key to Database'}
                     </button>
                   </div>
                 </div>

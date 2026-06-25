@@ -234,7 +234,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         });
       });
 
-      const finalKey = defaultGeminiKey || 'AQ.Ab8RN6ILa6ghbAySaFrh7KaIoVIRqVT18MpTb7YjO1-tK-8KsQ';
+      const finalKey = defaultGeminiKey || '';
 
       // Save local credentials
       localStorage.setItem('jobscan_invited', 'true');
