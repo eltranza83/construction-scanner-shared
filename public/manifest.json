@@ -1,0 +1,26 @@
+{
+  "short_name": "Adepec Homes",
+  "name": "Adepec Homes Scanner",
+  "icons": [
+    {
+      "src": "/logo.svg",
+      "type": "image/svg+xml",
+      "sizes": "any"
+    },
+    {
+      "src": "/logo-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/logo-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0a0a0a",
+  "theme_color": "#C5A059",
+  "display": "standalone",
+  "orientation": "portrait"
+}
