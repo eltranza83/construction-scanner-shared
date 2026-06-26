@@ -55,6 +55,108 @@ function compressImage(file, maxWidth = 1200, maxHeight = 1200) {
   });
 }
 
+/**
+ * Performs a perspective projection warp on a source image
+ * using 4 arbitrary coordinates and scales to a rectangular destination canvas.
+ */
+function warpPerspective(srcImgData, srcWidth, srcHeight, corners) {
+  const [p0, p1, p2, p3] = corners;
+  
+  const w1 = Math.hypot(p1.x - p0.x, p1.y - p0.y);
+  const w2 = Math.hypot(p2.x - p3.x, p2.y - p3.y);
+  const W = Math.round(Math.max(w1, w2));
+
+  const h1 = Math.hypot(p3.x - p0.x, p3.y - p0.y);
+  const h2 = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+  const H = Math.round(Math.max(h1, h2));
+
+  if (W < 50 || H < 50) return null; // Avoid empty or tiny crops
+
+  const canvas = document.createElement('canvas');
+  canvas.width = W;
+  canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const dstImgData = ctx.createImageData(W, H);
+
+  const x0 = p0.x, y0 = p0.y;
+  const x1 = p1.x, y1 = p1.y;
+  const x2 = p2.x, y2 = p2.y;
+  const x3 = p3.x, y3 = p3.y;
+
+  const dx1 = x1 - x2;
+  const dx2 = x3 - x2;
+  const sx = x0 - x1 + x2 - x3;
+
+  const dy1 = y1 - y2;
+  const dy2 = y3 - y2;
+  const sy = y0 - y1 + y2 - y3;
+
+  let a, b, c, d, e, f, g, h;
+
+  if (sx === 0 && sy === 0) {
+    // Affine
+    a = x1 - x0;
+    b = x3 - x0;
+    c = x0;
+    d = y1 - y0;
+    e = y3 - y0;
+    f = y0;
+    g = 0;
+    h = 0;
+  } else {
+    // Projective
+    const det = dx1 * dy2 - dy1 * dx2;
+    if (Math.abs(det) < 1e-6) {
+      return null;
+    }
+    g = (sx * dy2 - sy * dx2) / det;
+    h = (dx1 * sy - dy1 * sx) / det;
+    a = x1 - x0 + g * x1;
+    b = x3 - x0 + h * x3;
+    c = x0;
+    d = y1 - y0 + g * y1;
+    e = y3 - y0 + h * y3;
+    f = y0;
+  }
+
+  const srcData = srcImgData.data;
+  const dstData = dstImgData.data;
+
+  for (let r = 0; r < H; r++) {
+    const v = r / H;
+    const offsetDstRow = r * W * 4;
+    for (let c_idx = 0; c_idx < W; c_idx++) {
+      const u = c_idx / W;
+      const den = g * u + h * v + 1;
+      
+      const x = Math.round((a * u + b * v + c) / den);
+      const y = Math.round((d * u + e * v + f) / den);
+
+      const clampedX = Math.max(0, Math.min(srcWidth - 1, x));
+      const clampedY = Math.max(0, Math.min(srcHeight - 1, y));
+
+      const srcIdx = (clampedY * srcWidth + clampedX) * 4;
+      const dstIdx = offsetDstRow + c_idx * 4;
+
+      dstData[dstIdx] = srcData[srcIdx];         // R
+      dstData[dstIdx + 1] = srcData[srcIdx + 1]; // G
+      dstData[dstIdx + 2] = srcData[srcIdx + 2]; // B
+      dstData[dstIdx + 3] = srcData[srcIdx + 3]; // A
+    }
+  }
+
+  // Apply a simple high-contrast filter to clarify document scans
+  const factor = 1.15; // 15% increase in contrast
+  for (let i = 0; i < dstData.length; i += 4) {
+    dstData[i]     = Math.max(0, Math.min(255, (dstData[i] - 128) * factor + 128));     // R
+    dstData[i + 1] = Math.max(0, Math.min(255, (dstData[i + 1] - 128) * factor + 128)); // G
+    dstData[i + 2] = Math.max(0, Math.min(255, (dstData[i + 2] - 128) * factor + 128)); // B
+  }
+
+  ctx.putImageData(dstImgData, 0, 0);
+  return canvas;
+}
+
 export default function Scanner({ geminiKey, onDataExtracted, onError }) {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
@@ -64,6 +166,164 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
   const [showCamera, setShowCamera] = useState(false);
   const [cameraStream, setCameraStream] = useState(null);
   const videoRef = useRef(null);
+
+  // Crop & Perspective Correction states
+  const [croppingImageSrc, setCroppingImageSrc] = useState(null);
+  const [originalFile, setOriginalFile] = useState(null);
+  const [corners, setCorners] = useState([
+    { x: 0.1, y: 0.1 }, // top-left
+    { x: 0.9, y: 0.1 }, // top-right
+    { x: 0.9, y: 0.9 }, // bottom-right
+    { x: 0.1, y: 0.9 }  // bottom-left
+  ]);
+  const [activeHandle, setActiveHandle] = useState(null);
+  const containerRef = useRef(null);
+
+  // Drag handlers
+  const startDrag = (idx, e) => {
+    e.preventDefault();
+    setActiveHandle(idx);
+  };
+
+  const handleMove = (clientX, clientY) => {
+    if (activeHandle === null || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    
+    let x = (clientX - rect.left) / rect.width;
+    let y = (clientY - rect.top) / rect.height;
+    
+    x = Math.max(0, Math.min(1, x));
+    y = Math.max(0, Math.min(1, y));
+
+    setCorners(prev => {
+      const next = [...prev];
+      next[activeHandle] = { x, y };
+      return next;
+    });
+  };
+
+  const handleMouseMove = (e) => {
+    if (activeHandle === null) return;
+    handleMove(e.clientX, e.clientY);
+  };
+
+  const handleTouchMove = (e) => {
+    if (activeHandle === null || e.touches.length === 0) return;
+    handleMove(e.touches[0].clientX, e.touches[0].clientY);
+  };
+
+  const handleMouseUp = () => {
+    setActiveHandle(null);
+  };
+
+  const handleTouchEnd = () => {
+    setActiveHandle(null);
+  };
+
+  const handleRotateImage = () => {
+    if (!croppingImageSrc) return;
+    
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.height;
+      canvas.height = img.width;
+      
+      const ctx = canvas.getContext('2d');
+      ctx.translate(canvas.width / 2, canvas.height / 2);
+      ctx.rotate(Math.PI / 2);
+      ctx.drawImage(img, -img.width / 2, -img.height / 2);
+      
+      canvas.toBlob((blob) => {
+        if (blob) {
+          const rotatedFile = new File([blob], `rotated_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setOriginalFile(rotatedFile);
+          
+          const newUrl = URL.createObjectURL(rotatedFile);
+          if (croppingImageSrc.startsWith('blob:')) {
+            URL.revokeObjectURL(croppingImageSrc);
+          }
+          setCroppingImageSrc(newUrl);
+          
+          // Reset handles
+          setCorners([
+            { x: 0.1, y: 0.1 },
+            { x: 0.9, y: 0.1 },
+            { x: 0.9, y: 0.9 },
+            { x: 0.1, y: 0.9 }
+          ]);
+        }
+      }, 'image/jpeg', 0.85);
+    };
+    img.src = croppingImageSrc;
+  };
+
+  const handleCropAndScan = () => {
+    if (!originalFile || !croppingImageSrc) return;
+    
+    setLoading(true);
+    setStatusMessage('Warping perspective...');
+    
+    const img = new Image();
+    img.onload = () => {
+      const srcCanvas = document.createElement('canvas');
+      srcCanvas.width = img.width;
+      srcCanvas.height = img.height;
+      const srcCtx = srcCanvas.getContext('2d');
+      srcCtx.drawImage(img, 0, 0);
+      const srcImgData = srcCtx.getImageData(0, 0, img.width, img.height);
+      
+      const rawCorners = corners.map(c => ({
+        x: c.x * img.width,
+        y: c.y * img.height
+      }));
+      
+      const warpedCanvas = warpPerspective(srcImgData, img.width, img.height, rawCorners);
+      
+      if (!warpedCanvas) {
+        setLoading(false);
+        setLocalError('Failed to crop the document. Try adjusting the corners.');
+        return;
+      }
+      
+      if (croppingImageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(croppingImageSrc);
+      }
+      setCroppingImageSrc(null);
+      setOriginalFile(null);
+      
+      setStatusMessage('Analyzing document with Gemini AI...');
+      
+      warpedCanvas.toBlob(async (blob) => {
+        if (blob) {
+          const croppedFile = new File([blob], `cropped_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          await analyzeCroppedFile(croppedFile);
+        } else {
+          setLoading(false);
+          setLocalError('Failed to capture cropped canvas.');
+        }
+      }, 'image/jpeg', 0.85);
+    };
+    img.src = croppingImageSrc;
+  };
+
+  const analyzeCroppedFile = async (file) => {
+    try {
+      const extractedData = await extractDocumentData(file, geminiKey);
+      onDataExtracted({
+        metadata: extractedData,
+        mainImage: file,
+      });
+    } catch (err) {
+      console.error('Scan process failed:', err);
+      const errMsg = err.message || 'AI parsing failed. Please check your API key or connection.';
+      setLocalError(errMsg);
+      if (onError) onError(errMsg);
+    } finally {
+      setLoading(false);
+      setStatusMessage('');
+    }
+  };
 
   // Cleanup camera stream on unmount
   useEffect(() => {
@@ -153,37 +413,152 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
   const processFile = async (file) => {
     setLoading(true);
     setLocalError(null);
-    if (onError) onError(null); // clear parent error
-    setStatusMessage('Compressing photo...');
+    if (onError) onError(null);
+    setStatusMessage('Preparing photo...');
 
     try {
       if (file.size === 0) {
         throw new Error('Captured image is empty. Please try choosing a photo from your gallery instead.');
       }
 
-      // Step 1: Compress the image client-side
+      // Compress client-side first
       const compressedFile = await compressImage(file);
       
-      setStatusMessage('Analyzing document with Gemini AI...');
-
-      // Step 2: Call Gemini AI
-      const extractedData = await extractDocumentData(compressedFile, geminiKey);
+      // Load image into crop editor
+      const url = URL.createObjectURL(compressedFile);
+      setOriginalFile(compressedFile);
+      setCroppingImageSrc(url);
       
-      // Step 3: Callback to parent to stage
-      onDataExtracted({
-        metadata: extractedData,
-        mainImage: compressedFile,
-      });
+      // Reset handles
+      setCorners([
+        { x: 0.1, y: 0.1 },
+        { x: 0.9, y: 0.1 },
+        { x: 0.9, y: 0.9 },
+        { x: 0.1, y: 0.9 }
+      ]);
     } catch (err) {
-      console.error('Scan process failed:', err);
-      const errMsg = err.message || 'AI parsing failed. Please check your API key or connection.';
-      setLocalError(errMsg);
-      if (onError) onError(errMsg); // propagate to main screen alert box
+      console.error('File preparation failed:', err);
+      setLocalError(err.message || 'Failed to load file.');
     } finally {
       setLoading(false);
       setStatusMessage('');
     }
   };
+
+  if (croppingImageSrc) {
+    const c0 = corners[0];
+    const c1 = corners[1];
+    const c2 = corners[2];
+    const c3 = corners[3];
+
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h2 style={{ fontSize: '1.2rem', fontWeight: 700, fontFamily: 'var(--font-serif)' }}>Adjust Corners & Crop</h2>
+          <button 
+            type="button" 
+            onClick={() => {
+              if (croppingImageSrc.startsWith('blob:')) {
+                URL.revokeObjectURL(croppingImageSrc);
+              }
+              setCroppingImageSrc(null);
+              setOriginalFile(null);
+            }} 
+            className="btn btn-secondary" 
+            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
+          >
+            Cancel
+          </button>
+        </div>
+
+        <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)', margin: 0, lineHeight: 1.4 }}>
+          Drag the gold corners to match the boundaries of the receipt or invoice. Use "Rotate 90°" if needed.
+        </p>
+
+        <div style={{ display: 'flex', justifyContent: 'center', backgroundColor: '#000', borderRadius: '12px', overflow: 'hidden', padding: '10px' }}>
+          <div 
+            ref={containerRef}
+            style={{ 
+              position: 'relative', 
+              display: 'inline-block', 
+              userSelect: 'none', 
+              touchAction: 'none',
+              maxWidth: '100%'
+            }}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
+            <img 
+              src={croppingImageSrc} 
+              alt="Crop area" 
+              style={{ display: 'block', maxWidth: '100%', maxHeight: '400px', objectFit: 'contain', pointerEvents: 'none' }} 
+            />
+
+            <svg 
+              viewBox="0 0 100 100" 
+              preserveAspectRatio="none"
+              style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', pointerEvents: 'none', zIndex: 10 }}
+            >
+              <path 
+                d={`M 0 0 H 100 V 100 H 0 Z M ${c0.x*100} ${c0.y*100} L ${c1.x*100} ${c1.y*100} L ${c2.x*100} ${c2.y*100} L ${c3.x*100} ${c3.y*100} Z`} 
+                fill="rgba(0, 0, 0, 0.6)" 
+                fillRule="evenodd" 
+              />
+              <line x1={c0.x*100} y1={c0.y*100} x2={c1.x*100} y2={c1.y*100} stroke="#C5A059" strokeWidth="0.8" />
+              <line x1={c1.x*100} y1={c1.y*100} x2={c2.x*100} y2={c2.y*100} stroke="#C5A059" strokeWidth="0.8" />
+              <line x1={c2.x*100} y1={c2.y*100} x2={c3.x*100} y2={c3.y*100} stroke="#C5A059" strokeWidth="0.8" />
+              <line x1={c3.x*100} y1={c3.y*100} x2={c0.x*100} y2={c0.y*100} stroke="#C5A059" strokeWidth="0.8" />
+            </svg>
+
+            {corners.map((c, idx) => (
+              <div
+                key={idx}
+                style={{
+                  position: 'absolute',
+                  left: `${c.x * 100}%`,
+                  top: `${c.y * 100}%`,
+                  width: '28px',
+                  height: '28px',
+                  marginLeft: '-14px',
+                  marginTop: '-14px',
+                  backgroundColor: '#C5A059',
+                  border: '2px solid #fff',
+                  borderRadius: '50%',
+                  cursor: 'grab',
+                  zIndex: 20,
+                  touchAction: 'none',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.5)'
+                }}
+                onMouseDown={(e) => startDrag(idx, e)}
+                onTouchStart={(e) => startDrag(idx, e)}
+              />
+            ))}
+          </div>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            type="button" 
+            onClick={handleRotateImage} 
+            className="btn btn-secondary" 
+            style={{ flex: 1, padding: '12px' }}
+          >
+            Rotate 90°
+          </button>
+          <button 
+            type="button" 
+            onClick={handleCropAndScan} 
+            className="btn btn-primary" 
+            style={{ flex: 1.5, padding: '12px' }}
+          >
+            Crop & Scan
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   if (showCamera) {
     return (

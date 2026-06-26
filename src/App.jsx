@@ -403,19 +403,35 @@ export default function App() {
         a.click();
         URL.revokeObjectURL(url);
 
-        // Add to local history list
-        const log = {
-          id: Date.now().toString(),
-          dateLogged: new Date().toLocaleDateString(),
-          dateTransaction: metadata.date,
-          description: metadata.description,
-          vendor: metadata.vendor,
-          costCategory: metadata.costCategory,
-          amount: metadata.amount,
-          link: null, // local only
-        };
+        // Add to local history list (handling splits if defined)
+        let logs = [];
+        if (metadata.splits && metadata.splits.length > 0) {
+          metadata.splits.forEach((split, index) => {
+            logs.push({
+              id: `${Date.now()}_split_${index}`,
+              dateLogged: new Date().toLocaleDateString(),
+              dateTransaction: metadata.date,
+              description: `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
+              vendor: metadata.vendor,
+              costCategory: split.costCategory || 'material',
+              amount: split.amount,
+              link: null
+            });
+          });
+        } else {
+          logs.push({
+            id: Date.now().toString(),
+            dateLogged: new Date().toLocaleDateString(),
+            dateTransaction: metadata.date,
+            description: `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
+            vendor: metadata.vendor,
+            costCategory: metadata.costCategory,
+            amount: metadata.amount,
+            link: null, // local only
+          });
+        }
 
-        saveHistory([log, ...history]);
+        saveHistory([...logs, ...history]);
         setSuccess('Document PDF generated and downloaded to device!');
         
         // Remove from drafts
@@ -440,20 +456,67 @@ export default function App() {
           pdfBlob
         );
 
-        // B. Update local history
-        const log = {
-          id: uploadResult.id,
-          dateLogged: new Date().toLocaleDateString(),
-          dateTransaction: metadata.date,
-          description: metadata.description,
-          vendor: metadata.vendor,
-          costCategory: metadata.costCategory,
-          amount: metadata.amount,
-          link: uploadResult.webViewLink,
-        };
-        saveHistory([log, ...history]);
+        // B. Log row(s) to Google Sheets expense tracking log sheet
+        const sheetId = await findOrCreateTrackingSheet(googleToken, selectedFolder.id);
+        const dateLoggedStr = new Date().toLocaleDateString();
+        
+        let logs = [];
+        if (metadata.splits && metadata.splits.length > 0) {
+          // Loop through split items and log each separately
+          for (let index = 0; index < metadata.splits.length; index++) {
+            const split = metadata.splits[index];
+            const rowData = [
+              dateLoggedStr,
+              metadata.date || '',
+              `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
+              metadata.vendor || '',
+              split.costCategory || 'material',
+              Number(split.amount || 0),
+              metadata.checkNumber || '',
+              uploadResult.webViewLink
+            ];
+            await appendRowToSheet(googleToken, sheetId, rowData);
+            
+            logs.push({
+              id: `${uploadResult.id}_split_${index}`,
+              dateLogged: dateLoggedStr,
+              dateTransaction: metadata.date,
+              description: `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
+              vendor: metadata.vendor,
+              costCategory: split.costCategory || 'material',
+              amount: split.amount,
+              link: uploadResult.webViewLink,
+            });
+          }
+        } else {
+          const rowData = [
+            dateLoggedStr,
+            metadata.date || '',
+            `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
+            metadata.vendor || '',
+            metadata.costCategory || 'material',
+            Number(metadata.amount || 0),
+            metadata.checkNumber || '',
+            uploadResult.webViewLink
+          ];
+          await appendRowToSheet(googleToken, sheetId, rowData);
+          
+          logs.push({
+            id: uploadResult.id,
+            dateLogged: dateLoggedStr,
+            dateTransaction: metadata.date,
+            description: `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
+            vendor: metadata.vendor,
+            costCategory: metadata.costCategory,
+            amount: metadata.amount,
+            link: uploadResult.webViewLink,
+          });
+        }
+        
+        // C. Update local history
+        saveHistory([...logs, ...history]);
 
-        setSuccess('Document report PDF synced successfully!');
+        setSuccess('Document report PDF and expense log entries synced successfully!');
         
         // Remove from drafts
         const updatedDrafts = stagedItems.filter(item => item.id !== id);
@@ -512,7 +575,8 @@ export default function App() {
 
     if (googleToken) {
       try {
-        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${item.id}?alt=media`, {
+        const fileId = item.id.split('_split_')[0];
+        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
           headers: {
             Authorization: `Bearer ${googleToken}`
           }
@@ -711,6 +775,8 @@ export default function App() {
             stagedItem={stagedItems.find(item => item.id === editingItemId)}
             onSave={handleSaveStagedEdits}
             onCancel={() => setEditingItemId(null)}
+            history={history}
+            stagedItems={stagedItems}
           />
         ) : activeTab === 'scanner' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

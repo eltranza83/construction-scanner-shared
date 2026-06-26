@@ -76,7 +76,11 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   // 2. Draw Metadata Grid Block
   let currentY = 50;
   const hasCheck = !!metadata.checkNumber;
-  const boxHeight = hasCheck ? 67 : 59;
+  const hasSplits = metadata.splits && metadata.splits.length > 0;
+  
+  // Calculate height needed for splits table
+  const splitsHeight = hasSplits ? (15 + (metadata.splits.length * 6)) : 0;
+  const boxHeight = (hasCheck ? 67 : 59) + splitsHeight;
 
   // Draw Box Container for Metadata
   pdf.setFillColor(244, 244, 245); // Zinc 100
@@ -125,7 +129,10 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   pdf.setFont('helvetica', 'bold');
   pdf.text('COST CLASSIFICATION:', margin + 5, currentY + 42);
   pdf.setFont('helvetica', 'bold');
-  if (metadata.costCategory === 'labor') {
+  if (hasSplits) {
+    pdf.setTextColor(147, 107, 40); // Adepec Dark Gold
+    pdf.text('MULTIPLE (SPLIT)', margin + 55, currentY + 42);
+  } else if (metadata.costCategory === 'labor') {
     pdf.setTextColor(30, 64, 175); // Royal Blue
     pdf.text('LABOR COST', margin + 55, currentY + 42);
   } else {
@@ -136,7 +143,7 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   // Row 6
   pdf.setTextColor(82, 82, 91);
   pdf.setFont('helvetica', 'bold');
-  pdf.text('TOTAL AMOUNT:', margin + 5, currentY + 50);
+  pdf.text(hasSplits ? 'TOTAL AMOUNT (SPLIT):' : 'TOTAL AMOUNT:', margin + 5, currentY + 50);
   pdf.setFont('helvetica', 'bold');
   pdf.setTextColor(24, 24, 27);
   pdf.setFontSize(11);
@@ -151,6 +158,74 @@ export async function generateDocumentPDF(metadata, imageUrls) {
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(24, 24, 27);
     pdf.text(metadata.checkNumber, margin + 55, currentY + 58);
+  }
+
+  // Draw Splits Table if present
+  if (hasSplits) {
+    const splitsStartY = currentY + (hasCheck ? 66 : 58);
+    
+    // Divider line
+    pdf.setDrawColor(200, 200, 204);
+    pdf.setLineWidth(0.3);
+    pdf.line(margin + 5, splitsStartY - 4, margin + contentWidth - 5, splitsStartY - 4);
+
+    // Section title
+    pdf.setTextColor(197, 160, 89); // Adepec Gold
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(9);
+    pdf.text('ALLOTMENT SPLITS', margin + 5, splitsStartY);
+
+    // Table Headers
+    pdf.setTextColor(113, 113, 122); // Zinc 500
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8);
+    
+    // Column coordinates
+    const colLotX = margin + 5;
+    const colCatX = margin + 45;
+    const colDescX = margin + 75;
+    const colAmtX = margin + contentWidth - 5; // Align right
+
+    pdf.text('LOT / ADDRESS', colLotX, splitsStartY + 5);
+    pdf.text('CATEGORY', colCatX, splitsStartY + 5);
+    pdf.text('DESCRIPTION', colDescX, splitsStartY + 5);
+    pdf.text('AMOUNT', colAmtX, splitsStartY + 5, { align: 'right' });
+
+    // Draw header bottom line
+    pdf.line(margin + 5, splitsStartY + 7, margin + contentWidth - 5, splitsStartY + 7);
+
+    // Table Rows
+    pdf.setFont('helvetica', 'normal');
+    pdf.setTextColor(24, 24, 27); // Zinc 900
+    
+    metadata.splits.forEach((split, idx) => {
+      const rowY = splitsStartY + 12 + (idx * 6);
+      
+      // Lot
+      pdf.text(split.lotNumber || 'N/A', colLotX, rowY);
+      
+      // Category
+      pdf.setFont('helvetica', 'bold');
+      if (split.costCategory === 'labor') {
+        pdf.setTextColor(30, 64, 175);
+        pdf.text('LABOR', colCatX, rowY);
+      } else {
+        pdf.setTextColor(147, 107, 40);
+        pdf.text('MATERIAL', colCatX, rowY);
+      }
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(24, 24, 27);
+      
+      // Description
+      const desc = split.description || metadata.description || 'N/A';
+      const truncatedDesc = desc.length > 35 ? desc.substring(0, 32) + '...' : desc;
+      pdf.text(truncatedDesc, colDescX, rowY);
+      
+      // Amount
+      pdf.setFont('helvetica', 'bold');
+      pdf.text(`$${Number(split.amount || 0).toFixed(2)}`, colAmtX, rowY, { align: 'right' });
+      pdf.setFont('helvetica', 'normal');
+    });
   }
 
   // 3. Attach First Image on Page 1

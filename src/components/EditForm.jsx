@@ -53,7 +53,7 @@ function compressImage(file, maxWidth = 1200, maxHeight = 1200) {
   });
 }
 
-export default function EditForm({ stagedItem, onSave, onCancel }) {
+export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [] }) {
   const [formData, setFormData] = useState({
     type: stagedItem.metadata.type || 'invoice',
     description: stagedItem.metadata.description || '',
@@ -68,8 +68,91 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
   const [mainImageBase64, setMainImageBase64] = useState(stagedItem.mainImageBase64 || null);
   const [secondaryImageBase64, setSecondaryImageBase64] = useState(stagedItem.secondaryImageBase64 || null);
 
+  // Duplicate Warning State
+  const [duplicateWarning, setDuplicateWarning] = useState(null);
+
+  // Splits state
+  const [isSplit, setIsSplit] = useState(stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0);
+  const [splits, setSplits] = useState(stagedItem.metadata.splits || [
+    { id: 'split_1', amount: stagedItem.metadata.amount || '', costCategory: stagedItem.metadata.costCategory || 'material', lotNumber: stagedItem.metadata.lotNumber || '', description: stagedItem.metadata.description || '' }
+  ]);
+
+  // Run real-time duplicate check
+  useEffect(() => {
+    const amountVal = parseFloat(formData.amount);
+    const vendorVal = formData.vendor.trim().toLowerCase();
+    const dateVal = formData.date.trim();
+
+    if (!amountVal || !vendorVal || !dateVal) {
+      setDuplicateWarning(null);
+      return;
+    }
+
+    // Check history
+    const matchHistory = history.find(h => 
+      parseFloat(h.amount) === amountVal &&
+      h.vendor?.toLowerCase().trim() === vendorVal &&
+      h.dateTransaction === dateVal
+    );
+
+    // Check other staged drafts (excluding this one)
+    const matchDrafts = stagedItems.find(d => 
+      d.id !== stagedItem.id &&
+      parseFloat(d.metadata?.amount) === amountVal &&
+      d.metadata?.vendor?.toLowerCase().trim() === vendorVal &&
+      d.metadata?.date === dateVal
+    );
+
+    if (matchHistory) {
+      setDuplicateWarning(`Already logged on ${matchHistory.dateLogged} (available in History).`);
+    } else if (matchDrafts) {
+      setDuplicateWarning(`Matches another staged draft in your list.`);
+    } else {
+      setDuplicateWarning(null);
+    }
+  }, [formData.amount, formData.vendor, formData.date, history, stagedItems, stagedItem.id]);
+
   const mainImageUrl = mainImageBase64;
   const secondaryImageUrl = secondaryImageBase64;
+
+  // Splits handlers
+  const handleAddSplit = () => {
+    setSplits(prev => [
+      ...prev,
+      { 
+        id: `split_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`, 
+        amount: '', 
+        costCategory: 'material', 
+        lotNumber: formData.lotNumber || '', 
+        description: '' 
+      }
+    ]);
+  };
+
+  const handleRemoveSplit = (id) => {
+    if (splits.length <= 1) return;
+    setSplits(prev => prev.filter(s => s.id !== id));
+  };
+
+  const handleSplitChange = (id, field, value) => {
+    setSplits(prev => prev.map(s => {
+      if (s.id === id) {
+        const updated = { ...s, [field]: value };
+        // If updating split amounts, keep main formData.amount updated as the sum in real-time
+        if (field === 'amount') {
+          setTimeout(() => {
+            setSplits(currentSplits => {
+              const sum = currentSplits.reduce((acc, sp) => acc + (parseFloat(sp.amount) || 0), 0);
+              setFormData(f => ({ ...f, amount: sum || '' }));
+              return currentSplits;
+            });
+          }, 10);
+        }
+        return updated;
+      }
+      return s;
+    }));
+  };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -195,10 +278,25 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
 
   const handleSubmit = (e) => {
     e.preventDefault();
+    
+    let finalAmount = parseFloat(formData.amount) || 0;
+    let finalSplits = null;
+    
+    if (isSplit) {
+      finalAmount = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
+      finalSplits = splits.map(s => ({
+        amount: parseFloat(s.amount) || 0,
+        costCategory: s.costCategory,
+        lotNumber: s.lotNumber.trim(),
+        description: s.description.trim() || formData.description
+      }));
+    }
+
     onSave({
       metadata: {
         ...formData,
-        amount: parseFloat(formData.amount) || 0
+        amount: finalAmount,
+        splits: finalSplits
       },
       mainImageBase64,
       secondaryImageBase64
@@ -256,6 +354,29 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         
+        {/* Real-Time Duplicate Warning */}
+        {duplicateWarning && (
+          <div style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.04)',
+            border: '1px solid rgba(245, 158, 11, 0.25)',
+            borderLeft: '4px solid var(--color-amber-500)',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            color: 'var(--color-zinc-100)',
+            fontSize: '0.8rem',
+            lineHeight: '1.4',
+            display: 'flex',
+            alignItems: 'flex-start',
+            gap: '8px',
+            marginBottom: '4px'
+          }}>
+            <span style={{ fontSize: '1.1rem', marginTop: '-2px', color: 'var(--color-amber-500)' }}>⚠️</span>
+            <div>
+              <strong style={{ color: 'var(--color-amber-400)' }}>Potential Duplicate Scan:</strong> {duplicateWarning}
+            </div>
+          </div>
+        )}
+        
         {/* Row 1: Document Type & Cost Classification */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
           <div className="form-group">
@@ -282,24 +403,30 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
 
           <div className="form-group">
             <label className="form-label" style={{ fontSize: '0.72rem' }}>Classification</label>
-            <div className="cost-toggle-container">
-              <button 
-                type="button" 
-                className={`cost-toggle-btn ${formData.costCategory === 'material' ? 'active material' : ''}`}
-                style={{ padding: '8px 4px', fontSize: '0.75rem' }}
-                onClick={() => handleToggleCategory('material')}
-              >
-                Material
-              </button>
-              <button 
-                type="button" 
-                className={`cost-toggle-btn ${formData.costCategory === 'labor' ? 'active labor' : ''}`}
-                style={{ padding: '8px 4px', fontSize: '0.75rem' }}
-                onClick={() => handleToggleCategory('labor')}
-              >
-                Labor
-              </button>
-            </div>
+            {isSplit ? (
+              <div style={{ padding: '8px 12px', fontSize: '0.75rem', color: 'var(--color-amber-400)', fontWeight: 700, backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px', border: '1px solid var(--color-zinc-800)', textAlign: 'center', height: '36px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxSizing: 'border-box' }}>
+                Multiple (Split)
+              </div>
+            ) : (
+              <div className="cost-toggle-container">
+                <button 
+                  type="button" 
+                  className={`cost-toggle-btn ${formData.costCategory === 'material' ? 'active material' : ''}`}
+                  style={{ padding: '8px 4px', fontSize: '0.75rem' }}
+                  onClick={() => handleToggleCategory('material')}
+                >
+                  Material
+                </button>
+                <button 
+                  type="button" 
+                  className={`cost-toggle-btn ${formData.costCategory === 'labor' ? 'active labor' : ''}`}
+                  style={{ padding: '8px 4px', fontSize: '0.75rem' }}
+                  onClick={() => handleToggleCategory('labor')}
+                >
+                  Labor
+                </button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -364,20 +491,31 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
           <div className="form-group">
             <label className="form-label" htmlFor="edit-amount" style={{ fontSize: '0.72rem' }}>
               <DollarSign size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              Amount ($)
+              {isSplit ? 'Total Amount (Split)' : 'Amount ($)'}
             </label>
-            <input 
-              type="number"
-              step="0.01"
-              id="edit-amount"
-              name="amount"
-              required
-              className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
-              value={formData.amount}
-              onChange={handleChange}
-              placeholder="0.00"
-            />
+            {isSplit ? (
+              <input 
+                type="text"
+                id="edit-amount"
+                disabled
+                className="form-input"
+                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: 'var(--color-amber-400)', fontWeight: 700, border: '1px dashed var(--color-zinc-700)', boxSizing: 'border-box' }}
+                value={`$${(splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0)).toFixed(2)}`}
+              />
+            ) : (
+              <input 
+                type="number"
+                step="0.01"
+                id="edit-amount"
+                name="amount"
+                required
+                className="form-input"
+                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                value={formData.amount}
+                onChange={handleChange}
+                placeholder="0.00"
+              />
+            )}
           </div>
         </div>
 
@@ -417,6 +555,122 @@ export default function EditForm({ stagedItem, onSave, onCancel }) {
                 onChange={handleChange}
                 placeholder="Check #"
               />
+            </div>
+          )}
+        </div>
+
+        {/* Split Expense Configuration Block */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--color-zinc-800)', padding: '10px 12px', borderRadius: '8px', backgroundColor: 'var(--color-zinc-900)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-zinc-200)' }}>Split Expense Allocations</span>
+              <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)' }}>Allot costs to different lots or classifications</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const nextSplit = !isSplit;
+                setIsSplit(nextSplit);
+                if (nextSplit && splits.length === 1 && splits[0].amount === '') {
+                  setSplits([{
+                    id: 'split_init',
+                    amount: formData.amount || '',
+                    costCategory: formData.costCategory || 'material',
+                    lotNumber: formData.lotNumber || '',
+                    description: formData.description || ''
+                  }]);
+                }
+              }}
+              className={`cost-toggle-btn ${isSplit ? 'active material' : ''}`}
+              style={{ width: 'auto', padding: '5px 10px', fontSize: '0.72rem', border: '1px solid var(--color-zinc-800)', borderRadius: '6px' }}
+            >
+              {isSplit ? 'Split Active' : 'Enable Split'}
+            </button>
+          </div>
+
+          {isSplit && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', borderTop: '1px solid var(--color-zinc-800)', paddingTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
+                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#C5A059' }}>Splits List</span>
+                <button 
+                  type="button"
+                  onClick={handleAddSplit}
+                  className="btn btn-secondary"
+                  style={{ width: 'auto', padding: '3px 8px', fontSize: '0.68rem', borderColor: '#C5A059', color: '#C5A059' }}
+                >
+                  + Add Split Row
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                {splits.map((split, index) => (
+                  <div key={split.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '8px', borderRadius: '6px' }}>
+                    {/* Split Row 1: Amount & Category Toggle & Remove */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                      <input 
+                        type="number"
+                        step="0.01"
+                        required
+                        className="form-input"
+                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                        value={split.amount}
+                        onChange={(e) => handleSplitChange(split.id, 'amount', e.target.value)}
+                        placeholder="Amount ($)"
+                      />
+
+                      <div className="cost-toggle-container" style={{ margin: 0, padding: '2px', height: '28px' }}>
+                        <button 
+                          type="button"
+                          onClick={() => handleSplitChange(split.id, 'costCategory', 'material')}
+                          className={`cost-toggle-btn ${split.costCategory === 'material' ? 'active material' : ''}`}
+                          style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                        >
+                          Mat
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleSplitChange(split.id, 'costCategory', 'labor')}
+                          className={`cost-toggle-btn ${split.costCategory === 'labor' ? 'active labor' : ''}`}
+                          style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                        >
+                          Lab
+                        </button>
+                      </div>
+
+                      {splits.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => handleRemoveSplit(split.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-rose-500)', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Split Row 2: Lot Number & Description */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+                      <input 
+                        type="text"
+                        required
+                        className="form-input"
+                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                        value={split.lotNumber}
+                        onChange={(e) => handleSplitChange(split.id, 'lotNumber', e.target.value)}
+                        placeholder="Lot / Address"
+                      />
+                      <input 
+                        type="text"
+                        className="form-input"
+                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                        value={split.description}
+                        onChange={(e) => handleSplitChange(split.id, 'description', e.target.value)}
+                        placeholder="Split description..."
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>

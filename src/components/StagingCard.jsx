@@ -62,10 +62,15 @@ export default function StagingCard({
     <div className="staging-box" style={{ padding: '12px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
       {/* Row 0: Merged Header & Timer */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--color-zinc-800)', paddingBottom: '8px', gap: '8px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flexWrap: 'wrap' }}>
           <span className="staging-title-tag" style={{ margin: 0, padding: '3px 8px', fontSize: '0.7rem', display: 'inline-flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
             <FileText size={10} /> {metadata.type || 'Document'}{isCheck && metadata.checkNumber ? ` #${metadata.checkNumber}` : ''}
           </span>
+          {metadata.splits && metadata.splits.length > 0 && (
+            <span style={{ fontSize: '0.65rem', padding: '2px 6px', borderRadius: '4px', fontWeight: 'bold', backgroundColor: 'rgba(197, 160, 89, 0.15)', color: '#C5A059', border: '1px solid rgba(197, 160, 89, 0.3)', flexShrink: 0 }}>
+              Split ({metadata.splits.length})
+            </span>
+          )}
           
           <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
             <Clock size={12} style={{ color: timeLeft === 0 ? 'var(--color-rose-500)' : 'var(--color-amber-500)' }} />
@@ -103,33 +108,65 @@ export default function StagingCard({
         </div>
       </div>
 
-      {/* Row 1: Description & Lot / Address Inputs */}
-      <div style={{ display: 'flex', gap: '10px' }}>
-        <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-          <span className="staging-label" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-zinc-500)' }}>Description</span>
-          <input 
-            type="text" 
-            className="staging-inline-input"
-            style={{ padding: '6px 10px', fontSize: '0.8rem', marginTop: 0 }}
-            value={metadata.description || ''} 
-            onChange={(e) => onDescriptionChange(e.target.value)}
-            placeholder="Describe the job or item..."
-            disabled={uploading}
-          />
+      {/* Row 1: Description & Lot / Address Inputs or Splits Table */}
+      {metadata.splits && metadata.splits.length > 0 ? (
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '4px', 
+          backgroundColor: 'var(--color-zinc-950)', 
+          border: '1px solid var(--color-zinc-800)', 
+          borderRadius: '6px', 
+          padding: '6px 8px',
+          fontSize: '0.72rem'
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr 1fr', gap: '6px', fontWeight: 'bold', borderBottom: '1px solid var(--color-zinc-800)', paddingBottom: '3px', color: 'var(--color-zinc-400)' }}>
+            <span>Lot/Addr</span>
+            <span>Cat</span>
+            <span>Description</span>
+            <span style={{ textAlign: 'right' }}>Amount</span>
+          </div>
+          {metadata.splits.map((s, idx) => (
+            <div key={s.id || idx} style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.6fr 1.5fr 1fr', gap: '6px', color: 'var(--color-zinc-300)', alignItems: 'center' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.lotNumber}</span>
+              <span style={{ 
+                fontSize: '0.65rem', 
+                fontWeight: 700,
+                color: s.costCategory === 'labor' ? 'var(--color-sky-400)' : 'var(--color-amber-400)' 
+              }}>{s.costCategory === 'labor' ? 'LAB' : 'MAT'}</span>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={s.description}>{s.description || metadata.description}</span>
+              <span style={{ textAlign: 'right', fontWeight: 600 }}>${Number(s.amount || 0).toFixed(2)}</span>
+            </div>
+          ))}
         </div>
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
-          <span className="staging-label" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-zinc-500)' }}>Lot / Address</span>
-          <input 
-            type="text" 
-            className="staging-inline-input"
-            style={{ padding: '6px 10px', fontSize: '0.8rem', marginTop: 0 }}
-            value={metadata.lotNumber || ''} 
-            onChange={(e) => onLotNumberChange(e.target.value)}
-            placeholder="Lot Number or Address..."
-            disabled={uploading}
-          />
+      ) : (
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ flex: 1.5, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+            <span className="staging-label" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-zinc-500)' }}>Description</span>
+            <input 
+              type="text" 
+              className="staging-inline-input"
+              style={{ padding: '6px 10px', fontSize: '0.8rem', marginTop: 0 }}
+              value={metadata.description || ''} 
+              onChange={(e) => onDescriptionChange(e.target.value)}
+              placeholder="Describe the job or item..."
+              disabled={uploading}
+            />
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+            <span className="staging-label" style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-zinc-500)' }}>Lot / Address</span>
+            <input 
+              type="text" 
+              className="staging-inline-input"
+              style={{ padding: '6px 10px', fontSize: '0.8rem', marginTop: 0 }}
+              value={metadata.lotNumber || ''} 
+              onChange={(e) => onLotNumberChange(e.target.value)}
+              placeholder="Lot Number or Address..."
+              disabled={uploading}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Row 2: Metadata row (Vendor & Date, Cost Category Toggle, Amount) */}
       <div style={{ 
@@ -154,32 +191,38 @@ export default function StagingCard({
 
         {/* Category Toggle */}
         <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
-          <div className="staging-mini-toggle" style={{ margin: 0, padding: '2px', width: '100%', maxWidth: '110px' }}>
-            <button 
-              type="button" 
-              className={`mini-toggle-btn material ${!isLabor ? 'active' : ''}`}
-              style={{ padding: '2px 4px', fontSize: '0.68rem' }}
-              onClick={() => onCostCategoryChange('material')}
-              disabled={uploading}
-            >
-              Mat
-            </button>
-            <button 
-              type="button" 
-              className={`mini-toggle-btn labor ${isLabor ? 'active' : ''}`}
-              style={{ padding: '2px 4px', fontSize: '0.68rem' }}
-              onClick={() => onCostCategoryChange('labor')}
-              disabled={uploading}
-            >
-              Lab
-            </button>
-          </div>
+          {metadata.splits && metadata.splits.length > 0 ? (
+            <div style={{ fontSize: '0.7rem', color: 'var(--color-amber-400)', fontWeight: 700, textTransform: 'uppercase', border: '1px dashed var(--color-zinc-700)', padding: '4px 8px', borderRadius: '4px', backgroundColor: 'var(--color-zinc-950)' }}>
+              Split Categories
+            </div>
+          ) : (
+            <div className="staging-mini-toggle" style={{ margin: 0, padding: '2px', width: '100%', maxWidth: '110px' }}>
+              <button 
+                type="button" 
+                className={`mini-toggle-btn material ${!isLabor ? 'active' : ''}`}
+                style={{ padding: '2px 4px', fontSize: '0.68rem' }}
+                onClick={() => onCostCategoryChange('material')}
+                disabled={uploading}
+              >
+                Mat
+              </button>
+              <button 
+                type="button" 
+                className={`mini-toggle-btn labor ${isLabor ? 'active' : ''}`}
+                style={{ padding: '2px 4px', fontSize: '0.68rem' }}
+                onClick={() => onCostCategoryChange('labor')}
+                disabled={uploading}
+              >
+                Lab
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Amount */}
         <div style={{ flex: 0.8, textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
           <span style={{ fontSize: '0.65rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase' }}>Amount</span>
-          <span className={`staging-val amount ${isLabor ? 'labor' : 'material'}`} style={{ fontSize: '1rem', fontWeight: 800, padding: 0, lineHeight: 1.1 }}>
+          <span className={`staging-val amount ${metadata.splits && metadata.splits.length > 0 ? 'material' : (isLabor ? 'labor' : 'material')}`} style={{ fontSize: '1rem', fontWeight: 800, padding: 0, lineHeight: 1.1 }}>
             ${Number(metadata.amount || 0).toFixed(2)}
           </span>
         </div>
