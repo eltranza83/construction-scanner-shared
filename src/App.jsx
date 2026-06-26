@@ -456,8 +456,7 @@ export default function App() {
           pdfBlob
         );
 
-        // B. Log row(s) to Google Sheets expense tracking log sheet
-        const sheetId = await findOrCreateTrackingSheet(googleToken, selectedFolder.id);
+        // B. Update local history log items (Google Sheets log appending disabled per user request)
         const dateLoggedStr = new Date().toLocaleDateString();
         
         let logs = [];
@@ -465,18 +464,6 @@ export default function App() {
           // Loop through split items and log each separately
           for (let index = 0; index < metadata.splits.length; index++) {
             const split = metadata.splits[index];
-            const rowData = [
-              dateLoggedStr,
-              metadata.date || '',
-              `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
-              metadata.vendor || '',
-              split.costCategory || 'material',
-              Number(split.amount || 0),
-              metadata.checkNumber || '',
-              uploadResult.webViewLink
-            ];
-            await appendRowToSheet(googleToken, sheetId, rowData);
-            
             logs.push({
               id: `${uploadResult.id}_split_${index}`,
               dateLogged: dateLoggedStr,
@@ -489,18 +476,6 @@ export default function App() {
             });
           }
         } else {
-          const rowData = [
-            dateLoggedStr,
-            metadata.date || '',
-            `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
-            metadata.vendor || '',
-            metadata.costCategory || 'material',
-            Number(metadata.amount || 0),
-            metadata.checkNumber || '',
-            uploadResult.webViewLink
-          ];
-          await appendRowToSheet(googleToken, sheetId, rowData);
-          
           logs.push({
             id: uploadResult.id,
             dateLogged: dateLoggedStr,
@@ -516,7 +491,7 @@ export default function App() {
         // C. Update local history
         saveHistory([...logs, ...history]);
 
-        setSuccess('Document report PDF and expense log entries synced successfully!');
+        setSuccess('Document report PDF synced successfully!');
         
         // Remove from drafts
         const updatedDrafts = stagedItems.filter(item => item.id !== id);
