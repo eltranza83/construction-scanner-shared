@@ -667,14 +667,14 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right Side: Current Project Block (Interactive Selector) */}
+        {/* Centered Project Selector Pill (Interactive Selector) */}
         <div 
           className="header-project-section" 
           onClick={(e) => {
             e.stopPropagation();
             setShowProjectDropdown(!showProjectDropdown);
           }}
-          style={{ position: 'relative' }}
+          style={{ position: 'relative', width: '100%', display: 'flex', justifyContent: 'center' }}
           role="button"
           tabIndex={0}
           onKeyDown={(e) => {
@@ -684,23 +684,38 @@ export default function App() {
             }
           }}
         >
-          <span className="header-project-title" style={{ display: 'flex', alignItems: 'center', gap: '3px' }}>
-            Current Project <span style={{ fontSize: '0.55rem', opacity: 0.7 }}>▼</span>
-          </span>
-          <span className="header-project-name">
-            {activeProject ? activeProject.name : 'No Active Project'}
-          </span>
-          <span className="header-project-folder">
-            -&gt; {selectedFolder ? selectedFolder.name : 'Set in Settings'}
-          </span>
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            fontSize: '0.78rem', 
+            color: 'var(--color-zinc-300)', 
+            backgroundColor: 'var(--color-zinc-900)', 
+            border: '1px solid var(--color-zinc-800)', 
+            padding: '5px 12px', 
+            borderRadius: '20px', 
+            cursor: 'pointer', 
+            maxWidth: '90%',
+            userSelect: 'none'
+          }}>
+            <span style={{ color: 'var(--color-zinc-400)', whiteSpace: 'nowrap' }}>Current Project:</span>
+            <span style={{ fontWeight: 700, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+              {activeProject ? activeProject.name : 'None'}
+            </span>
+            <span style={{ color: 'var(--color-zinc-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '120px' }}>
+              ({selectedFolder ? selectedFolder.name : 'Set in Settings'})
+            </span>
+            <span style={{ fontSize: '0.55rem', color: 'var(--color-amber-500)', marginLeft: '1px', flexShrink: 0 }}>▼</span>
+          </div>
           
           {showProjectDropdown && (
-            /* Custom styled project dropdown popup */
+            /* Custom styled project dropdown popup centered */
             <div style={{
               position: 'absolute',
-              top: 'calc(100% + 8px)',
-              right: 0,
-              width: '220px',
+              top: 'calc(100% + 4px)',
+              left: '50%',
+              transform: 'translateX(-50%)',
+              width: '240px',
               backgroundColor: 'var(--color-zinc-950)',
               border: '1px solid var(--color-zinc-800)',
               borderRadius: '8px',
