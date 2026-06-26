@@ -242,6 +242,7 @@ export default function Settings({
 
   // Redesign state variables
   const [projectNameInput, setProjectNameInput] = useState('');
+  const [appsScriptUrlInput, setAppsScriptUrlInput] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFolderPickerModal, setShowFolderPickerModal] = useState(false);
   const [showProjectsAccordion, setShowProjectsAccordion] = useState(false);
@@ -268,7 +269,8 @@ export default function Settings({
       id: `proj_${Date.now()}`,
       name: projectNameInput.trim(),
       folderId: tempSelectedFolder.id,
-      folderName: tempSelectedFolder.name
+      folderName: tempSelectedFolder.name,
+      appsScriptUrl: appsScriptUrlInput.trim() || ''
     };
 
     const updatedProjects = [...projects, newProj];
@@ -285,6 +287,7 @@ export default function Settings({
     localStorage.setItem('jobscan_folder_name', newProj.folderName);
 
     setProjectNameInput('');
+    setAppsScriptUrlInput('');
     setTempSelectedFolder(null);
     setShowCreateModal(false);
     setSuccess(`Project "${newProj.name}" saved and set as active!`);
@@ -293,6 +296,7 @@ export default function Settings({
 
   const handleCancelCreateProject = () => {
     setProjectNameInput('');
+    setAppsScriptUrlInput('');
     setTempSelectedFolder(null);
     setShowCreateModal(false);
     setError(null);
@@ -489,7 +493,7 @@ export default function Settings({
                             overflow: 'hidden',
                             textOverflow: 'ellipsis'
                           }}>
-                            Folder: {proj.folderName}
+                            Folder: {proj.folderName} {proj.appsScriptUrl ? ' • Script Linked' : ''}
                           </div>
                         </div>
                         <button 
@@ -944,6 +948,22 @@ export default function Settings({
                   <FolderOpen size={16} /> 
                   {tempSelectedFolder ? 'Change Folder...' : 'Select Target Folder...'}
                 </button>
+              </div>
+
+              {/* Optional Apps Script Web App URL */}
+              <div className="form-group">
+                <label className="form-label" htmlFor="new-project-script-url">Apps Script URL (Optional)</label>
+                <input 
+                  type="text"
+                  id="new-project-script-url"
+                  className="form-input"
+                  value={appsScriptUrlInput}
+                  onChange={(e) => setAppsScriptUrlInput(e.target.value)}
+                  placeholder="https://script.google.com/macros/s/.../exec"
+                />
+                <span style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', marginTop: '2px', display: 'block', lineHeight: '1.3' }}>
+                  If provided, this enables a "Sync Now" button inside the app to trigger spreadsheet logging immediately on upload.
+                </span>
               </div>
             </div>
 

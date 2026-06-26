@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check } from 'lucide-react';
+import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database } from 'lucide-react';
 import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
 import EditForm from './components/EditForm';
@@ -30,6 +30,10 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [hasUnprocessedUploads, setHasUnprocessedUploads] = useState(
+    localStorage.getItem('jobscan_has_unprocessed_uploads') === 'true'
+  );
+  const [triggeringSync, setTriggeringSync] = useState(false);
   const checkInitialInviteState = () => {
     const userStr = localStorage.getItem('jobscan_google_user');
     if (!userStr) return false;
@@ -233,6 +237,33 @@ export default function App() {
 
       setSuccess(`Switched active project to: "${proj.name}"`);
       setTimeout(() => setSuccess(null), 2500);
+    }
+  };
+
+  const handleTriggerAppsScriptSync = async () => {
+    if (!activeProject?.appsScriptUrl) return;
+    setTriggeringSync(true);
+    setError(null);
+    try {
+      // Trigger Apps Script webhook POST sync action
+      await fetch(`${activeProject.appsScriptUrl}?action=sync`, {
+        method: 'POST',
+        mode: 'no-cors'
+      });
+      
+      // Wait a moment to show completion
+      setTimeout(() => {
+        setHasUnprocessedUploads(false);
+        localStorage.setItem('jobscan_has_unprocessed_uploads', 'false');
+        setTriggeringSync(false);
+        setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
+        setTimeout(() => setSuccess(null), 4000);
+      }, 2000);
+      
+    } catch (err) {
+      console.error(err);
+      setError(`Failed to trigger spreadsheet sync: ${err.message}`);
+      setTriggeringSync(false);
     }
   };
 
@@ -490,6 +521,12 @@ export default function App() {
         
         // C. Update local history
         saveHistory([...logs, ...history]);
+
+        // Mark that there is a new upload that has landed in Drive
+        if (activeProject?.appsScriptUrl) {
+          setHasUnprocessedUploads(true);
+          localStorage.setItem('jobscan_has_unprocessed_uploads', 'true');
+        }
 
         setSuccess('Document report PDF synced successfully!');
         
@@ -758,6 +795,55 @@ export default function App() {
       <main className="app-content">
         {success && <div className="alert-box alert-success">{success}</div>}
         {error && <div className="alert-box alert-error">{error}</div>}
+
+        {activeProject?.appsScriptUrl && hasUnprocessedUploads && (
+          <div className="settings-card" style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'space-between', 
+            gap: '12px', 
+            border: '1px solid rgba(16, 185, 129, 0.3)', 
+            backgroundColor: 'rgba(16, 185, 129, 0.08)',
+            padding: '10px 14px',
+            borderRadius: '10px',
+            marginTop: '-4px',
+            marginBottom: '10px'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+              <Database size={16} style={{ color: 'var(--color-emerald-400)', flexShrink: 0 }} />
+              <span style={{ fontSize: '0.8rem', color: 'var(--color-zinc-200)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                Files uploaded! Sync spreadsheet?
+              </span>
+            </div>
+            <button 
+              onClick={handleTriggerAppsScriptSync}
+              className="btn btn-primary" 
+              style={{ 
+                width: 'auto', 
+                padding: '5px 12px',
+                fontSize: '0.75rem',
+                fontWeight: 700, 
+                backgroundColor: 'var(--color-emerald-500)',
+                color: '#000',
+                border: 'none',
+                height: '28px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px'
+              }}
+              disabled={triggeringSync}
+            >
+              {triggeringSync ? (
+                <>
+                  <div className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1.2px', borderColor: '#000', borderTopColor: 'transparent', margin: 0 }}></div>
+                  Syncing...
+                </>
+              ) : (
+                "Sync Now"
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Tab view routing */}
         {editingItemId && stagedItems.find(item => item.id === editingItemId) ? (
