@@ -43,6 +43,7 @@ export default function Settings({
   const [loadingFolders, setLoadingFolders] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
+  const [appsScriptUrl, setAppsScriptUrl] = useState(localStorage.getItem('jobscan_apps_script_url') || '');
 
   // Admin & Invite management states
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
@@ -524,6 +525,30 @@ export default function Settings({
           <li>The AI extracts description, totals, and category.</li>
           <li>Review details and optionally attach a receipt before uploading to Drive.</li>
         </ol>
+      </div>
+
+      {/* 4. Apps Script Webhook Integration */}
+      <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', marginTop: '4px' }}>
+        <h3 className="settings-title" style={{ color: 'var(--color-zinc-200)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <Database size={18} style={{ color: 'var(--color-amber-500)' }} />
+          Apps Script Webhook URL
+        </h3>
+        <p style={{ fontSize: '0.82rem', color: 'var(--color-zinc-400)', lineHeight: '1.4', marginBottom: '10px' }}>
+          Paste your Google Apps Script Web App URL below to trigger instant parsing and moving the exact millisecond a PDF is uploaded.
+        </p>
+        <div className="form-group" style={{ marginBottom: 0 }}>
+          <input 
+            type="text"
+            className="form-input"
+            value={appsScriptUrl}
+            onChange={(e) => {
+              setAppsScriptUrl(e.target.value);
+              localStorage.setItem('jobscan_apps_script_url', e.target.value.trim());
+            }}
+            placeholder="https://script.google.com/macros/s/.../exec"
+            style={{ width: '100%' }}
+          />
+        </div>
       </div>
 
       {/* 3.5 Admin Invite & Database Management Card */}

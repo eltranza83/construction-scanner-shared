@@ -491,6 +491,15 @@ export default function App() {
         // C. Update local history
         saveHistory([...logs, ...history]);
 
+        // D. Trigger Apps Script webhook instantly if configured
+        const appsScriptUrl = localStorage.getItem('jobscan_apps_script_url');
+        if (appsScriptUrl) {
+          fetch(`${appsScriptUrl}?action=sync`, {
+            method: 'POST',
+            mode: 'no-cors'
+          }).catch(e => console.error("Failed to ping Apps Script webhook:", e));
+        }
+
         setSuccess('Document report PDF synced successfully!');
         
         // Remove from drafts
