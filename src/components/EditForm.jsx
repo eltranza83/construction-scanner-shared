@@ -127,17 +127,30 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
   // Splits state
   const [isSplit, setIsSplit] = useState(stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0);
-  const [splits, setSplits] = useState(stagedItem.metadata.splits || [
-    { 
-      id: 'split_1', 
-      amount: stagedItem.metadata.amount || '', 
-      costCategory: stagedItem.metadata.costCategory || 'material', 
-      lotNumber: stagedItem.metadata.lotNumber || '', 
-      description: stagedItem.metadata.description || '',
-      tradeCategory: stagedItem.metadata.tradeCategory || 'Mechanicals_&_Utilities',
-      tradePhase: stagedItem.metadata.tradePhase || 'Plumbing Rough-In'
+  const [splits, setSplits] = useState(() => {
+    if (stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0) {
+      return stagedItem.metadata.splits.map((s, idx) => ({
+        id: s.id || `split_loaded_${idx}_${Date.now()}`,
+        amount: s.amount || '',
+        costCategory: s.costCategory || 'material',
+        lotNumber: s.lotNumber || '',
+        description: s.description || '',
+        tradeCategory: s.tradeCategory || 'Mechanicals_&_Utilities',
+        tradePhase: s.tradePhase || 'Plumbing Rough-In'
+      }));
     }
-  ]);
+    return [
+      { 
+        id: 'split_1', 
+        amount: stagedItem.metadata.amount || '', 
+        costCategory: stagedItem.metadata.costCategory || 'material', 
+        lotNumber: stagedItem.metadata.lotNumber || '', 
+        description: stagedItem.metadata.description || '',
+        tradeCategory: stagedItem.metadata.tradeCategory || 'Mechanicals_&_Utilities',
+        tradePhase: stagedItem.metadata.tradePhase || 'Plumbing Rough-In'
+      }
+    ];
+  });
 
   // itemAllocations maps: itemIndex -> split.id
   const [itemAllocations, setItemAllocations] = useState({});
@@ -424,10 +437,11 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
     if (isSplit) {
       finalAmount = splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0);
       finalSplits = splits.map(s => ({
+        id: s.id || `split_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
         amount: parseFloat(s.amount) || 0,
         costCategory: s.costCategory,
         lotNumber: s.lotNumber.trim(),
-        description: s.description.trim() || formData.description,
+        description: s.description.trim(),
         tradeCategory: s.tradeCategory || formData.tradeCategory,
         tradePhase: s.tradePhase || formData.tradePhase
       }));
