@@ -209,13 +209,11 @@ function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
 export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
   const ranges = [
     'Summary_Dashboard!A1:E60',
-    'Paperwork_&_Permits!A1:K80',
     'Site_Prep_&_Structure!A1:K80',
     'Framing_&_Lumber!A1:K80',
     'Mechanicals_&_Utilities!A1:K80',
     'Interior_Finishes!A1:K80',
     'Paint_Tile!A1:K80',
-    'Interior_Hardware!A1:K80',
     'House_Exterior_&_Yard!A1:K80',
     'Project_Overhead_&_Bills!A1:K80'
   ];
