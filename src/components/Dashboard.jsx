@@ -271,6 +271,13 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
   const selectSubcontractor = (sub) => {
     setSelectedSub(sub);
     setSearchTerm('');
+    // Smooth scroll the lookup box directly to the top edge of the viewport
+    setTimeout(() => {
+      const el = document.getElementById('contractor-lookup-container');
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 80);
   };
 
   // Status badge styling
@@ -507,7 +514,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
           )}
 
           {/* Subcontractor Balance Checker */}
-          <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <div id="contractor-lookup-container" className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
             <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-zinc-200)', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Search size={16} style={{ color: 'var(--color-amber-500)' }} />
               Contractor Balance Lookup
