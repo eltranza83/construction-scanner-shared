@@ -49,7 +49,13 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
         "date": "YYYY-MM-DD (format the date found on the document, or empty string)",
         "checkNumber": "Check number (only if the document is a check, otherwise null)",
         "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills",
-        "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes')"
+        "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes')",
+        "lineItems": [
+          {
+            "description": "Clean description of the item or group of items",
+            "price": 0.00
+          }
+        ]
       }
       
       Instructions:
@@ -68,7 +74,8 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
          - Category: House_Exterior_&_Yard (Phases: Stucco & Masonry, Garage Doors, Driveway & Sidewalks, Cantera Stone Detail, Fencing & Gates, Landscaping & Irrigation)
          - Category: Project_Overhead_&_Bills (Phases: Monthly Utility Bills, Dumpsters & Cleaning, Extra Costs & Misc)
       
-      6. Output ONLY the JSON block. Do not wrap in markdown or backticks.
+      6. For invoices/receipts, extract the individual line items with their item names and prices, placing them in the lineItems array.
+      7. Output ONLY the JSON block. Do not wrap in markdown or backticks.
     `;
 
     const result = await model.generateContent({
@@ -125,7 +132,13 @@ function simulateOCRExtraction(filename) {
           date: new Date().toISOString().split('T')[0],
           checkNumber: null,
           tradeCategory: 'Mechanicals_&_Utilities',
-          tradePhase: 'Plumbing Rough-In'
+          tradePhase: 'Plumbing Rough-In',
+          lineItems: [
+            { description: 'Copper Pipes 1/2 inch 10ft', price: 156.60 },
+            { description: 'PVC Elbow Fittings Pack', price: 50.32 },
+            { description: 'Fittings & Plumbing Connectors', price: 111.83 },
+            { description: 'PVC Adhesive Glue', price: 100.00 }
+          ]
         });
       }
     }, 1500);
