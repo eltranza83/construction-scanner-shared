@@ -64,7 +64,7 @@ function parseSummaryDashboard(rows) {
 /**
  * Analyzes all rows in a phase block to extract the contractor payee, quote, paid, balance, status, and payments.
  */
-function finalizeBlock(block) {
+function finalizeBlock(block, phaseStatuses = {}) {
   let payee = '';
   let originalQuote = '$0.00';
   let totalPaid = '$0.00';
@@ -113,7 +113,7 @@ function finalizeBlock(block) {
       remainingBalance = colJ;
     }
 
-    // 5. Status
+    // 5. Status fallback (from category tab Column K)
     if (colK && colK !== '') {
       status = colK;
     }
@@ -130,6 +130,12 @@ function finalizeBlock(block) {
       });
     }
   });
+
+  // Overwrite status using the Summary_Dashboard master dropdown if mapped
+  const cleanPhaseKey = block.phase.toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (phaseStatuses && phaseStatuses[cleanPhaseKey]) {
+    status = phaseStatuses[cleanPhaseKey];
+  }
 
   // Fallback to placeholder payee if no custom payee is filled in
   if (!payee && block.rows.length > 0) {
@@ -156,7 +162,7 @@ function finalizeBlock(block) {
 /**
  * Parses a subcontractor category tab (e.g. Paint_Tile).
  */
-function parseCategorySheet(sheetName, rows) {
+function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
   const contractors = [];
   if (!rows || rows.length <= 1) return contractors;
 
@@ -175,7 +181,7 @@ function parseCategorySheet(sheetName, rows) {
 
     if (isPhaseHeader) {
       if (currentBlock) {
-        contractors.push(finalizeBlock(currentBlock));
+        contractors.push(finalizeBlock(currentBlock, phaseStatuses));
       }
 
       const phaseName = colA.replace(/^[→\-—\s]+/, '').trim();
@@ -191,7 +197,7 @@ function parseCategorySheet(sheetName, rows) {
   }
 
   if (currentBlock) {
-    contractors.push(finalizeBlock(currentBlock));
+    contractors.push(finalizeBlock(currentBlock, phaseStatuses));
   }
 
   return contractors;
@@ -234,8 +240,9 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
   let projectInfo = {};
   let subcontractorsList = [];
   const categorySummaries = [];
+  const phaseStatuses = {};
 
-  // Loop through valueRanges and parse them
+  // First pass: Find Summary_Dashboard to parse project info and collect statuses
   for (let i = 0; i < valueRanges.length; i++) {
     const vRange = valueRanges[i];
     const rangeName = vRange.range || '';
@@ -243,15 +250,34 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
 
     if (rangeName.includes('Summary_Dashboard')) {
       projectInfo = parseSummaryDashboard(rows);
-    } else {
-      // Get the sheet name from the range string (e.g. "Paint_Tile!A1:K80" -> "Paint_Tile")
+      
+      // Collect statuses for each phase
+      rows.forEach(row => {
+        if (!row || row.length < 5) return;
+        const colA = String(row[0] || '').trim();
+        const colE = String(row[4] || '').trim();
+        
+        const cleanPhase = colA.toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (cleanPhase && colE && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
+          phaseStatuses[cleanPhase] = colE;
+        }
+      });
+    }
+  }
+
+  // Second pass: Parse all category sheets using the collected statuses
+  for (let i = 0; i < valueRanges.length; i++) {
+    const vRange = valueRanges[i];
+    const rangeName = vRange.range || '';
+    const rows = vRange.values || [];
+
+    if (!rangeName.includes('Summary_Dashboard')) {
       const sheetName = rangeName.split('!')[0].replace(/'/g, '');
-      const parsedSubs = parseCategorySheet(sheetName, rows);
+      const parsedSubs = parseCategorySheet(sheetName, rows, phaseStatuses);
       
       if (parsedSubs.length > 0) {
         subcontractorsList = [...subcontractorsList, ...parsedSubs];
         
-        // Sum category totals for general accordion info
         let catQuote = 0;
         let catPaid = 0;
         let catOwed = 0;
