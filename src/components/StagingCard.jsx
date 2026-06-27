@@ -108,6 +108,34 @@ export default function StagingCard({
         </div>
       </div>
 
+      {/* Category & Phase AI Classification Badges */}
+      {!metadata.splits && (
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '-2px', marginBottom: '2px' }}>
+          <span style={{ 
+            fontSize: '0.65rem', 
+            padding: '3px 8px', 
+            borderRadius: '4px', 
+            fontWeight: 700, 
+            backgroundColor: 'rgba(113, 113, 122, 0.15)', 
+            color: 'var(--color-zinc-300)', 
+            border: '1px solid var(--color-zinc-800)' 
+          }}>
+            Cat: {metadata.tradeCategory ? metadata.tradeCategory.replace(/_/g, ' ').replace(/&/g, '&') : 'None'}
+          </span>
+          <span style={{ 
+            fontSize: '0.65rem', 
+            padding: '3px 8px', 
+            borderRadius: '4px', 
+            fontWeight: 700, 
+            backgroundColor: 'rgba(197, 160, 89, 0.1)', 
+            color: '#C5A059', 
+            border: '1px solid rgba(197, 160, 89, 0.25)' 
+          }}>
+            Phase: {metadata.tradePhase || 'None'}
+          </span>
+        </div>
+      )}
+
       {/* Row 1: Description & Lot / Address Inputs or Splits Table */}
       {metadata.splits && metadata.splits.length > 0 ? (
         <div style={{ 
