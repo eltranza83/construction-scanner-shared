@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database } from 'lucide-react';
+import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database, TrendingUp } from 'lucide-react';
 import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
 import EditForm from './components/EditForm';
 import Settings from './components/Settings';
 import InviteScreen from './components/InviteScreen';
+import Dashboard from './components/Dashboard';
 import { generateDocumentPDF } from './services/pdfGenerator';
 import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet } from './services/googleDrive';
 import { getFirebaseDb } from './services/firebase';
@@ -964,6 +965,12 @@ export default function App() {
               </div>
             )}
           </div>
+        ) : activeTab === 'dashboard' ? (
+          <Dashboard 
+            googleToken={googleToken}
+            activeProject={activeProject}
+            selectedFolder={selectedFolder}
+          />
         ) : activeTab === 'history' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Sync Log & History</h2>
@@ -1055,6 +1062,13 @@ export default function App() {
                 {stagedItems.length}
               </span>
             )}
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <TrendingUp size={20} />
+            <span>Dashboard</span>
           </button>
           <button 
             className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
