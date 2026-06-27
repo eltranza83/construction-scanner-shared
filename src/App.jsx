@@ -519,14 +519,6 @@ export default function App() {
         localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
       } else {
         // Online Sync to Google Drive
-        // Generate clean and safe file name based on: LotNumber - Description - CostCategory.pdf
-        const lot = (metadata.lotNumber || 'No_Lot').trim();
-        const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
-        const category = (metadata.costCategory || 'material').trim().toLowerCase();
-        const rawName = `${lot} - ${desc} - ${category}.pdf`;
-        const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
-        
-        // A. Upload PDF to Google Drive Folder (handling multi-project split routing if splits exist)
         let mainUploadResult = null;
         if (metadata.splits && metadata.splits.length > 0) {
           // Identify all unique lot names involved in this split
@@ -537,10 +529,17 @@ export default function App() {
             const matchingProj = projects.find(p => p.name.trim().toLowerCase() === lotName);
             const targetFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
             
+            // Format specific filename for this lot
+            const resolvedLotName = matchingProj ? matchingProj.name : lotName;
+            const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
+            const category = (metadata.costCategory || 'material').trim().toLowerCase();
+            const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
+            const lotSpecificFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+
             const result = await uploadFileToDrive(
               googleToken, 
               targetFolderId, 
-              safeFileName, 
+              lotSpecificFileName, 
               'application/pdf', 
               pdfBlob
             );
@@ -550,6 +549,13 @@ export default function App() {
             }
           }
         } else {
+          // Single upload filename
+          const lot = (metadata.lotNumber || 'No_Lot').trim();
+          const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
+          const category = (metadata.costCategory || 'material').trim().toLowerCase();
+          const rawName = `${lot} - ${desc} - ${category}.pdf`;
+          const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+
           mainUploadResult = await uploadFileToDrive(
             googleToken, 
             selectedFolder.id, 
@@ -941,6 +947,7 @@ export default function App() {
             onCancel={() => setEditingItemId(null)}
             history={history}
             stagedItems={stagedItems}
+            projects={projects}
           />
         ) : activeTab === 'scanner' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>

@@ -84,7 +84,7 @@ const TRADE_SECTIONS_CONFIG = {
   }
 };
 
-export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [] }) {
+export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [], projects = [] }) {
   const [formData, setFormData] = useState({
     type: stagedItem.metadata.type || 'invoice',
     description: stagedItem.metadata.description || '',
@@ -510,16 +510,21 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               <MapPin size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
               Lot / Address
             </label>
-            <input 
-              type="text"
+            <select
               id="edit-lot-number"
               name="lotNumber"
               className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)' }}
               value={formData.lotNumber || ''}
               onChange={handleChange}
-              placeholder="e.g. Lot 102"
-            />
+            >
+              <option value="">Select Lot</option>
+              {projects.map(p => (
+                <option key={p.id} value={p.name}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
@@ -748,15 +753,20 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
                     {/* Split Row 2: Lot Number & Description */}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
-                      <input 
-                        type="text"
+                      <select
                         required
                         className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                        style={{ padding: '6px 8px', fontSize: '0.8rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)', boxSizing: 'border-box', margin: 0 }}
                         value={split.lotNumber}
                         onChange={(e) => handleSplitChange(split.id, 'lotNumber', e.target.value)}
-                        placeholder="Lot / Address"
-                      />
+                      >
+                        <option value="">Select Lot</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.name}>
+                            {p.name}
+                          </option>
+                        ))}
+                      </select>
                       <input 
                         type="text"
                         className="form-input"
