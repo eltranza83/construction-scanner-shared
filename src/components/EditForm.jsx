@@ -674,14 +674,36 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               onClick={() => {
                 const nextSplit = !isSplit;
                 setIsSplit(nextSplit);
-                if (nextSplit && splits.length === 1 && splits[0].amount === '') {
-                  setSplits([{
-                    id: 'split_init',
-                    amount: formData.amount || '',
-                    costCategory: formData.costCategory || 'material',
-                    lotNumber: formData.lotNumber || '',
-                    description: formData.description || ''
-                  }]);
+                if (nextSplit) {
+                  const activeName = formData.lotNumber || '';
+                  let otherName = '';
+                  if (projects && projects.length === 2) {
+                    const otherProj = projects.find(p => p.name !== activeName);
+                    if (otherProj) {
+                      otherName = otherProj.name;
+                    }
+                  }
+                  
+                  setSplits([
+                    {
+                      id: 'split_init_1',
+                      amount: '',
+                      costCategory: formData.costCategory || 'material',
+                      lotNumber: activeName,
+                      description: '',
+                      tradeCategory: formData.tradeCategory || 'Mechanicals_&_Utilities',
+                      tradePhase: formData.tradePhase || 'Plumbing Rough-In'
+                    },
+                    {
+                      id: 'split_init_2',
+                      amount: '',
+                      costCategory: formData.costCategory || 'material',
+                      lotNumber: otherName,
+                      description: '',
+                      tradeCategory: formData.tradeCategory || 'Mechanicals_&_Utilities',
+                      tradePhase: formData.tradePhase || 'Plumbing Rough-In'
+                    }
+                  ]);
                 }
               }}
               className={`cost-toggle-btn ${isSplit ? 'active material' : ''}`}
