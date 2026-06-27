@@ -205,36 +205,36 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
       {data && (
         <>
           {/* KPI Financial Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '10px' }}>
-            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase' }}>Gross Budget</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-zinc-100)', letterSpacing: '-0.02em' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '8px 4px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, textAlign: 'center' }}>
+              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Gross Budget</span>
+              <span style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-zinc-100)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatCurrency(data.projectInfo.budgetGross)}
               </span>
-              <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-600)' }}>
+              <span style={{ fontSize: '0.55rem', color: 'var(--color-zinc-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 Build: {formatCurrency(data.projectInfo.budgetBuild)}
               </span>
             </div>
             
-            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase' }}>Total Draws Paid</span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--color-amber-500)', letterSpacing: '-0.02em' }}>
+            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '8px 4px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, textAlign: 'center' }}>
+              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Draws Paid</span>
+              <span style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-amber-500)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatCurrency(data.projectInfo.totalSpent)}
               </span>
-              <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-600)' }}>
-                Deposits: {formatCurrency(data.projectInfo.deposits)}
+              <span style={{ fontSize: '0.55rem', color: 'var(--color-zinc-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Dep: {formatCurrency(data.projectInfo.deposits)}
               </span>
             </div>
 
-            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '12px', display: 'flex', flexDirection: 'column', gap: '4px', background: 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(0,0,0,0) 100%)' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, color: 'var(--color-emerald-500)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <Wallet size={10} /> Net Capital
+            <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '8px 4px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, textAlign: 'center', background: 'linear-gradient(135deg, rgba(16,185,129,0.04) 0%, rgba(0,0,0,0) 100%)' }}>
+              <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-emerald-500)', textTransform: 'uppercase', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <Wallet size={8} /> Net Capital
               </span>
-              <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em' }}>
+              <span style={{ fontSize: '0.98rem', fontWeight: 800, color: '#10b981', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatCurrency(data.projectInfo.capitalBalance)}
               </span>
-              <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-600)' }}>
-                Real-Time Liquidity
+              <span style={{ fontSize: '0.55rem', color: 'var(--color-zinc-600)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                Liquidity
               </span>
             </div>
           </div>
@@ -453,22 +453,22 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
                         borderBottom: isExpanded ? '1px solid var(--color-zinc-800)' : 'none'
                       }}
                     >
-                      <div>
-                        <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, flex: 1, paddingRight: '8px' }}>
+                        <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: '1.2' }}>
                           {cat.name}
                         </span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-500)', marginLeft: '8px' }}>
-                          ({cat.phasesCount} Phase{cat.phasesCount > 1 ? 's' : ''})
-                        </span>
-                      </div>
-                      
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                        <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Total Spent</span>
-                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-zinc-200)' }}>
-                            {formatCurrency(cat.totalPaid)}
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem' }}>
+                          <span style={{ fontWeight: 700, color: 'var(--color-amber-500)' }}>
+                            Spent: {formatCurrency(cat.totalPaid)}
+                          </span>
+                          <span style={{ color: 'var(--color-zinc-700)' }}>•</span>
+                          <span style={{ color: 'var(--color-zinc-500)' }}>
+                            {cat.phasesCount} Phase{cat.phasesCount > 1 ? 's' : ''}
                           </span>
                         </div>
+                      </div>
+                      
+                      <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                         {isExpanded ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-500)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-500)' }} />}
                       </div>
                     </div>
