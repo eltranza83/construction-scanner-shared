@@ -90,52 +90,57 @@ export default function App() {
       }
     }
 
-    // Load Google Identity Services Script dynamically
-    if (!document.getElementById('google-gis-script')) {
-      const script = document.createElement('script');
-      script.id = 'google-gis-script';
+    // Load Google Identity Services Script dynamically and pre-initialize token client
+    const scriptId = 'google-gis-script';
+    let script = document.getElementById(scriptId);
+
+    const initClient = () => {
+      if (googleClientId && window.google?.accounts?.oauth2 && !window.googleTokenClient) {
+        try {
+          const client = window.google.accounts.oauth2.initTokenClient({
+            client_id: googleClientId,
+            scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile',
+            callback: async (tokenResponse) => {
+              if (tokenResponse.access_token) {
+                setGoogleToken(tokenResponse.access_token);
+                localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
+                
+                // Refetch user details quietly to ensure profile stays in sync
+                try {
+                  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                  });
+                  if (res.ok) {
+                    const info = await res.json();
+                    setGoogleUser(info);
+                    localStorage.setItem('jobscan_google_user', JSON.stringify(info));
+                  }
+                } catch (e) {
+                  console.error("Quiet user info update failed:", e);
+                }
+              }
+            }
+          });
+          window.googleTokenClient = client;
+          console.log("Google token client pre-initialized successfully.");
+        } catch (err) {
+          console.error("Failed to pre-initialize GIS token client:", err);
+        }
+      }
+    };
+
+    if (!script) {
+      script = document.createElement('script');
+      script.id = scriptId;
       script.src = 'https://accounts.google.com/gsi/client';
       script.async = true;
       script.defer = true;
+      script.onload = initClient;
       document.body.appendChild(script);
+    } else {
+      initClient();
     }
-  }, []);
-
-  // Pre-initialize Google tokenClient for silent background token refreshing
-  useEffect(() => {
-    if (googleClientId && window.google?.accounts?.oauth2 && !window.googleTokenClient) {
-      try {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: googleClientId,
-          scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile',
-          callback: async (tokenResponse) => {
-            if (tokenResponse.access_token) {
-              setGoogleToken(tokenResponse.access_token);
-              localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
-              
-              // Refetch user details quietly to ensure profile stays in sync
-              try {
-                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                });
-                if (res.ok) {
-                  const info = await res.json();
-                  setGoogleUser(info);
-                  localStorage.setItem('jobscan_google_user', JSON.stringify(info));
-                }
-              } catch (e) {
-                console.error("Quiet user info update failed:", e);
-              }
-            }
-          }
-        });
-        window.googleTokenClient = client;
-        console.log("Google token client pre-initialized successfully.");
-      } catch (err) {
-        console.error("Failed to pre-initialize GIS token client:", err);
-      }
-    }
-  }, [googleClientId, googleToken]);
+  }, [googleClientId]);
 
   // Fetch shared Gemini key from Firestore if unlocked
   useEffect(() => {
