@@ -1,5 +1,6 @@
 // --- CONFIGURATION ---
-const GEMINI_API_KEY = 'AIzaSyBhma9-ksHdTI791VcoryEUI_xRMSvbw2I';
+// Store your Gemini API Key in: File > Project Settings > Script Properties as GEMINI_API_KEY
+const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
 const INVOICE_FOLDER_ID = '16yDqZ5lhfoSCY-J8wRuZl0_9uM30wIHD'; // 'Invoice Uploads'
 const ARCHIVE_FOLDER_ID = '1jdgw6v438N3RQksN_JpvhTwyJNwuSJhf'; // 'Processed Invoices'
 const SPREADSHEET_ID = '1kaVNSq0hC4A97EtYNE_lapznWillaKigF_Nn9icSUYs'; // fallback spreadsheet ID
@@ -17,15 +18,22 @@ function parseNewInvoices() {
   const archiveFolder = DriveApp.getFolderById(ARCHIVE_FOLDER_ID);
   const files = folder.getFiles();
   
-  // Use active spreadsheet if bound, fallback to ID
-  let ss;
-  try {
-    ss = SpreadsheetApp.getActiveSpreadsheet();
-  } catch (e) {
-    console.log("Not running in container. Falling back to spreadsheet ID.");
-  }
-  if (!ss) {
-    ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+  // Use spreadsheet inside folder if present, fallback to container or ID
+  let ss = null;
+  const folderSpreadsheets = folder.getFilesByType('application/vnd.google-apps.spreadsheet');
+  if (folderSpreadsheets.hasNext()) {
+    const ssFile = folderSpreadsheets.next();
+    console.log(`Detected project spreadsheet inside folder: ${ssFile.getName()} (${ssFile.getId()})`);
+    ss = SpreadsheetApp.openById(ssFile.getId());
+  } else {
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (e) {
+      console.log("Not running in container. Falling back to spreadsheet ID.");
+    }
+    if (!ss) {
+      ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    }
   }
   
   const masterLogSheet = ss.getSheetByName(MASTER_LOG_SHEET);
@@ -37,8 +45,8 @@ function parseNewInvoices() {
     const fileName = file.getName();
     const fileUrl = file.getUrl();
     
-    // Skip subfolders
-    if (mimeType === MimeType.FOLDER) {
+    // Skip subfolders and Google Spreadsheets
+    if (mimeType === MimeType.FOLDER || mimeType === 'application/vnd.google-apps.spreadsheet') {
       continue;
     }
     
@@ -260,6 +268,10 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
 function extractDataWithGemini(file, mimeType) {
   const blob = file.getBlob();
   const base64Data = Utilities.base64Encode(blob.getBytes());
+  
+  if (!GEMINI_API_KEY) {
+    throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY under Script Properties.");
+  }
   
   // Using the stable Gemini 3.1 Flash-Lite model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
