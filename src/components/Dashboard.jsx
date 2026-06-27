@@ -610,24 +610,47 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
                     </button>
                   </div>
                   
-                  {/* Status Badge */}
-                  {(() => {
-                    const style = getStatusStyle(selectedSub.status);
-                    return (
-                      <span style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 'bold',
-                        padding: '4px 8px',
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                    {/* Status Badge */}
+                    {(() => {
+                      const style = getStatusStyle(selectedSub.status);
+                      return (
+                        <span style={{
+                          fontSize: '0.68rem',
+                          fontWeight: 'bold',
+                          padding: '4px 8px',
+                          borderRadius: '4px',
+                          backgroundColor: style.bg,
+                          color: style.text,
+                          border: `1px solid ${style.border}`,
+                          textTransform: 'uppercase'
+                        }}>
+                          {selectedSub.status || 'Not Started'}
+                        </span>
+                      );
+                    })()}
+
+                    {/* Close/Dismiss Button */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedSub(null)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--color-zinc-500)',
+                        cursor: 'pointer',
+                        padding: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         borderRadius: '4px',
-                        backgroundColor: style.bg,
-                        color: style.text,
-                        border: `1px solid ${style.border}`,
-                        textTransform: 'uppercase'
-                      }}>
-                        {selectedSub.status || 'Not Started'}
-                      </span>
-                    );
-                  })()}
+                        transition: 'all 0.15s'
+                      }}
+                      title="Clear Selection"
+                    >
+                      <X size={16} />
+                    </button>
+                  </div>
                 </div>
 
                 {/* Quote, Paid, Balance Grid */}
