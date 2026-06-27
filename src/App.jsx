@@ -447,7 +447,9 @@ export default function App() {
               vendor: metadata.vendor,
               costCategory: split.costCategory || 'material',
               amount: split.amount,
-              link: null
+              link: null,
+              tradeCategory: split.tradeCategory || metadata.tradeCategory,
+              tradePhase: split.tradePhase || metadata.tradePhase
             });
           });
         } else {
@@ -460,6 +462,8 @@ export default function App() {
             costCategory: metadata.costCategory,
             amount: metadata.amount,
             link: null, // local only
+            tradeCategory: metadata.tradeCategory,
+            tradePhase: metadata.tradePhase
           });
         }
 
@@ -505,6 +509,8 @@ export default function App() {
               costCategory: split.costCategory || 'material',
               amount: split.amount,
               link: uploadResult.webViewLink,
+              tradeCategory: split.tradeCategory || metadata.tradeCategory,
+              tradePhase: split.tradePhase || metadata.tradePhase
             });
           }
         } else {
@@ -517,6 +523,8 @@ export default function App() {
             costCategory: metadata.costCategory,
             amount: metadata.amount,
             link: uploadResult.webViewLink,
+            tradeCategory: metadata.tradeCategory,
+            tradePhase: metadata.tradePhase
           });
         }
         
@@ -987,6 +995,11 @@ export default function App() {
                       <div className="history-meta">
                         {item.vendor} • {item.dateTransaction || 'N/A'}
                       </div>
+                      {item.tradeCategory && item.tradePhase && (
+                        <div style={{ fontSize: '0.7rem', color: 'var(--color-amber-400)', marginTop: '2px', fontWeight: 500 }}>
+                          Logged: {item.tradeCategory.replace(/_/g, ' ').replace(/&/g, '&')} → {item.tradePhase}
+                        </div>
+                      )}
                       <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
                         <span style={{ fontSize: '0.65rem', fontWeight: 600, color: item.costCategory === 'labor' ? 'var(--color-blue-500)' : 'var(--color-amber-500)', textTransform: 'uppercase' }}>
                           {item.costCategory}
