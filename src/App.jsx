@@ -101,6 +101,42 @@ export default function App() {
     }
   }, []);
 
+  // Pre-initialize Google tokenClient for silent background token refreshing
+  useEffect(() => {
+    if (googleClientId && window.google?.accounts?.oauth2 && !window.googleTokenClient) {
+      try {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile',
+          callback: async (tokenResponse) => {
+            if (tokenResponse.access_token) {
+              setGoogleToken(tokenResponse.access_token);
+              localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
+              
+              // Refetch user details quietly to ensure profile stays in sync
+              try {
+                const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+                  headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
+                });
+                if (res.ok) {
+                  const info = await res.json();
+                  setGoogleUser(info);
+                  localStorage.setItem('jobscan_google_user', JSON.stringify(info));
+                }
+              } catch (e) {
+                console.error("Quiet user info update failed:", e);
+              }
+            }
+          }
+        });
+        window.googleTokenClient = client;
+        console.log("Google token client pre-initialized successfully.");
+      } catch (err) {
+        console.error("Failed to pre-initialize GIS token client:", err);
+      }
+    }
+  }, [googleClientId, googleToken]);
+
   // Fetch shared Gemini key from Firestore if unlocked
   useEffect(() => {
     const fetchSharedGeminiKey = async () => {
@@ -196,6 +232,7 @@ export default function App() {
           setError(`Google Sign In failed: ${err.message}`);
         }
       });
+      window.googleTokenClient = client;
       client.requestAccessToken();
     } catch (err) {
       console.error(err);
@@ -638,6 +675,17 @@ export default function App() {
   };
 
   const handleSessionExpired = () => {
+    console.warn("Session expired. Attempting silent token refresh...");
+    // Try to silently refresh the access token in the background using the Google GIS token client
+    try {
+      if (window.googleTokenClient) {
+        window.googleTokenClient.requestAccessToken({ prompt: '' });
+        return;
+      }
+    } catch (e) {
+      console.error("Silent token refresh failed:", e);
+    }
+
     setGoogleToken(null);
     setGoogleUser(null);
     localStorage.removeItem('jobscan_google_token');

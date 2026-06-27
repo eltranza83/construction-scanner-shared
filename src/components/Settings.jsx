@@ -14,7 +14,8 @@ import {
   X,
   Plus,
   Database,
-  Share2
+  Share2,
+  Pencil
 } from 'lucide-react';
 import { listFolders, createFolder } from '../services/googleDrive';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
@@ -248,6 +249,7 @@ export default function Settings({
   const [showProjectsAccordion, setShowProjectsAccordion] = useState(false);
   const [tempSelectedFolder, setTempSelectedFolder] = useState(null);
   const [projectToDelete, setProjectToDelete] = useState(null);
+  const [editingProject, setEditingProject] = useState(null);
 
   const handleSaveProject = (e) => {
     if (e && e.preventDefault) e.preventDefault();
@@ -260,44 +262,84 @@ export default function Settings({
       return;
     }
 
-    if (projects.some(p => p.name.toLowerCase() === projectNameInput.trim().toLowerCase())) {
-      setError(`A project named "${projectNameInput.trim()}" already exists.`);
-      return;
+    if (editingProject) {
+      // Edit existing project
+      const updatedProjects = projects.map(p => {
+        if (p.id === editingProject.id) {
+          return {
+            ...p,
+            name: projectNameInput.trim(),
+            folderId: tempSelectedFolder.id,
+            folderName: tempSelectedFolder.name,
+            appsScriptUrl: appsScriptUrlInput.trim() || ''
+          };
+        }
+        return p;
+      });
+      setProjects(updatedProjects);
+      localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
+
+      const updatedProj = updatedProjects.find(p => p.id === editingProject.id);
+
+      // If the edited project is the active one, update it in activeProject state/localStorage
+      if (activeProject && activeProject.id === editingProject.id) {
+        setActiveProject(updatedProj);
+        localStorage.setItem('jobscan_active_project', JSON.stringify(updatedProj));
+        
+        setSelectedFolder({ id: updatedProj.folderId, name: updatedProj.folderName });
+        localStorage.setItem('jobscan_folder_id', updatedProj.folderId);
+        localStorage.setItem('jobscan_folder_name', updatedProj.folderName);
+      }
+
+      setProjectNameInput('');
+      setAppsScriptUrlInput('');
+      setTempSelectedFolder(null);
+      setEditingProject(null);
+      setShowCreateModal(false);
+      setSuccess(`Project "${updatedProj.name}" updated successfully!`);
+      setTimeout(() => setSuccess(null), 3000);
+    } else {
+      // Create new project
+      if (projects.some(p => p.name.toLowerCase() === projectNameInput.trim().toLowerCase())) {
+        setError(`A project named "${projectNameInput.trim()}" already exists.`);
+        return;
+      }
+
+      const newProj = {
+        id: `proj_${Date.now()}`,
+        name: projectNameInput.trim(),
+        folderId: tempSelectedFolder.id,
+        folderName: tempSelectedFolder.name,
+        appsScriptUrl: appsScriptUrlInput.trim() || ''
+      };
+
+      const updatedProjects = [...projects, newProj];
+      setProjects(updatedProjects);
+      localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
+
+      // Automatically set the new project as active
+      setActiveProject(newProj);
+      localStorage.setItem('jobscan_active_project', JSON.stringify(newProj));
+
+      // Update global selected folder to match active project
+      setSelectedFolder({ id: newProj.folderId, name: newProj.folderName });
+      localStorage.setItem('jobscan_folder_id', newProj.folderId);
+      localStorage.setItem('jobscan_folder_name', newProj.folderName);
+
+      setProjectNameInput('');
+      setAppsScriptUrlInput('');
+      setTempSelectedFolder(null);
+      setShowCreateModal(false);
+      setSuccess(`Project "${newProj.name}" saved and set as active!`);
+      setTimeout(() => setSuccess(null), 3000);
     }
-
-    const newProj = {
-      id: `proj_${Date.now()}`,
-      name: projectNameInput.trim(),
-      folderId: tempSelectedFolder.id,
-      folderName: tempSelectedFolder.name,
-      appsScriptUrl: appsScriptUrlInput.trim() || ''
-    };
-
-    const updatedProjects = [...projects, newProj];
-    setProjects(updatedProjects);
-    localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
-
-    // Automatically set the new project as active
-    setActiveProject(newProj);
-    localStorage.setItem('jobscan_active_project', JSON.stringify(newProj));
-
-    // Update global selected folder to match active project
-    setSelectedFolder({ id: newProj.folderId, name: newProj.folderName });
-    localStorage.setItem('jobscan_folder_id', newProj.folderId);
-    localStorage.setItem('jobscan_folder_name', newProj.folderName);
-
-    setProjectNameInput('');
-    setAppsScriptUrlInput('');
-    setTempSelectedFolder(null);
-    setShowCreateModal(false);
-    setSuccess(`Project "${newProj.name}" saved and set as active!`);
-    setTimeout(() => setSuccess(null), 3000);
   };
 
   const handleCancelCreateProject = () => {
     setProjectNameInput('');
     setAppsScriptUrlInput('');
     setTempSelectedFolder(null);
+    setEditingProject(null);
     setShowCreateModal(false);
     setError(null);
   };
@@ -496,17 +538,34 @@ export default function Settings({
                             Folder: {proj.folderName} {proj.appsScriptUrl ? ' • Script Linked' : ''}
                           </div>
                         </div>
-                        <button 
-                          type="button" 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setProjectToDelete(proj);
-                          }}
-                          className="nav-item" 
-                          style={{ width: 'auto', padding: '4px', color: 'var(--color-rose-500)', flex: 'none' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 'none' }} onClick={(e) => e.stopPropagation()}>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setEditingProject(proj);
+                              setProjectNameInput(proj.name);
+                              setAppsScriptUrlInput(proj.appsScriptUrl || '');
+                              setTempSelectedFolder({ id: proj.folderId, name: proj.folderName });
+                              setShowCreateModal(true);
+                            }}
+                            className="nav-item" 
+                            style={{ width: 'auto', padding: '4px', color: 'var(--color-amber-500)' }}
+                            title="Edit Project Profile"
+                          >
+                            <Pencil size={14} />
+                          </button>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              setProjectToDelete(proj);
+                            }}
+                            className="nav-item" 
+                            style={{ width: 'auto', padding: '4px', color: 'var(--color-rose-500)' }}
+                            title="Delete Project Profile"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
                       </div>
                     );
                   })}
@@ -872,7 +931,7 @@ export default function Settings({
             <div style={{ display: 'flex', alignItems: 'center', justifycontent: 'space-between', borderBottom: '1px solid var(--color-zinc-800)', paddingBottom: '12px' }}>
               <h3 style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '1.05rem', margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FolderPlus size={18} style={{ color: 'var(--color-amber-500)' }} />
-                Create New Project
+                {editingProject ? 'Edit Project Profile' : 'Create New Project'}
               </h3>
               <button 
                 type="button" 
@@ -984,7 +1043,7 @@ export default function Settings({
                 onClick={handleSaveProject}
                 disabled={!projectNameInput.trim() || !tempSelectedFolder}
               >
-                Save Project
+                {editingProject ? 'Update Project' : 'Save Project'}
               </button>
             </div>
           </div>
