@@ -582,8 +582,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
                 marginTop: '4px'
               }}>
                 {/* Payee & Phase Headers */}
-                <div style={{ display: 'flex', justifycontent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-zinc-900)', paddingBottom: '8px' }}>
-                  <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-zinc-900)', paddingBottom: '8px', position: 'relative' }}>
+                  <div style={{ flex: 1, minWidth: 0, paddingRight: '140px' }}>
                     <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{selectedSub.payee}</h4>
                     <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
                       Phase: <strong>{selectedSub.phase}</strong> ({selectedSub.category})
@@ -610,7 +610,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
                     </button>
                   </div>
                   
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                  {/* Status Badge & Close button aligned to the far right */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'absolute', right: '0', top: '0', height: '100%', maxHeight: '32px' }}>
                     {/* Status Badge */}
                     {(() => {
                       const style = getStatusStyle(selectedSub.status);
@@ -623,7 +624,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
                           backgroundColor: style.bg,
                           color: style.text,
                           border: `1px solid ${style.border}`,
-                          textTransform: 'uppercase'
+                          textTransform: 'uppercase',
+                          whiteSpace: 'nowrap'
                         }}>
                           {selectedSub.status || 'Not Started'}
                         </span>
