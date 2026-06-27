@@ -117,7 +117,15 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   // Splits state
   const [isSplit, setIsSplit] = useState(stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0);
   const [splits, setSplits] = useState(stagedItem.metadata.splits || [
-    { id: 'split_1', amount: stagedItem.metadata.amount || '', costCategory: stagedItem.metadata.costCategory || 'material', lotNumber: stagedItem.metadata.lotNumber || '', description: stagedItem.metadata.description || '' }
+    { 
+      id: 'split_1', 
+      amount: stagedItem.metadata.amount || '', 
+      costCategory: stagedItem.metadata.costCategory || 'material', 
+      lotNumber: stagedItem.metadata.lotNumber || '', 
+      description: stagedItem.metadata.description || '',
+      tradeCategory: stagedItem.metadata.tradeCategory || 'Mechanicals_&_Utilities',
+      tradePhase: stagedItem.metadata.tradePhase || 'Plumbing Rough-In'
+    }
   ]);
 
   // Run real-time duplicate check
@@ -167,7 +175,9 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         amount: '', 
         costCategory: 'material', 
         lotNumber: formData.lotNumber || '', 
-        description: '' 
+        description: '',
+        tradeCategory: formData.tradeCategory || 'Mechanicals_&_Utilities',
+        tradePhase: formData.tradePhase || 'Plumbing Rough-In'
       }
     ]);
   };
@@ -331,7 +341,9 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         amount: parseFloat(s.amount) || 0,
         costCategory: s.costCategory,
         lotNumber: s.lotNumber.trim(),
-        description: s.description.trim() || formData.description
+        description: s.description.trim() || formData.description,
+        tradeCategory: s.tradeCategory || formData.tradeCategory,
+        tradePhase: s.tradePhase || formData.tradePhase
       }));
     }
 
@@ -753,6 +765,40 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                         onChange={(e) => handleSplitChange(split.id, 'description', e.target.value)}
                         placeholder="Split description..."
                       />
+                    </div>
+
+                    {/* Split Row 3: Trade Category & Phase */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '8px' }}>
+                      <select
+                        className="form-input"
+                        style={{ padding: '6px 8px', fontSize: '0.75rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)', margin: 0 }}
+                        value={split.tradeCategory || 'Mechanicals_&_Utilities'}
+                        onChange={(e) => {
+                          const cat = e.target.value;
+                          const defPhase = TRADE_SECTIONS_CONFIG[cat]?.phases[0] || '';
+                          handleSplitChange(split.id, 'tradeCategory', cat);
+                          handleSplitChange(split.id, 'tradePhase', defPhase);
+                        }}
+                      >
+                        {Object.keys(TRADE_SECTIONS_CONFIG).map(catKey => (
+                          <option key={catKey} value={catKey}>
+                            {TRADE_SECTIONS_CONFIG[catKey].label}
+                          </option>
+                        ))}
+                      </select>
+
+                      <select
+                        className="form-input"
+                        style={{ padding: '6px 8px', fontSize: '0.75rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)', margin: 0 }}
+                        value={split.tradePhase || ''}
+                        onChange={(e) => handleSplitChange(split.id, 'tradePhase', e.target.value)}
+                      >
+                        {(TRADE_SECTIONS_CONFIG[split.tradeCategory || 'Mechanicals_&_Utilities']?.phases || []).map(p => (
+                          <option key={p} value={p}>
+                            {p}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </div>
                 ))}

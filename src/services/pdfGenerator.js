@@ -232,10 +232,12 @@ export async function generateDocumentPDF(metadata, imageUrls) {
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(24, 24, 27);
       
-      // Description
-      const desc = split.description || metadata.description || 'N/A';
-      const truncatedDesc = desc.length > 35 ? desc.substring(0, 32) + '...' : desc;
-      pdf.text(truncatedDesc, colDescX, rowY);
+      // Trade Phase + Description
+      const phase = split.tradePhase || metadata.tradePhase || 'N/A';
+      const desc = split.description || metadata.description || '';
+      const displayText = desc ? `${phase} (${desc})` : phase;
+      const truncatedText = displayText.length > 40 ? displayText.substring(0, 37) + '...' : displayText;
+      pdf.text(truncatedText, colDescX, rowY);
       
       // Amount
       pdf.setFont('helvetica', 'bold');

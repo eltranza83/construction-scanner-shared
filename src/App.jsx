@@ -521,14 +521,39 @@ export default function App() {
         const rawName = `${lot} - ${desc} - ${category}.pdf`;
         const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
         
-        // A. Upload PDF to Google Drive Folder
-        const uploadResult = await uploadFileToDrive(
-          googleToken, 
-          selectedFolder.id, 
-          safeFileName, 
-          'application/pdf', 
-          pdfBlob
-        );
+        // A. Upload PDF to Google Drive Folder (handling multi-project split routing if splits exist)
+        let mainUploadResult = null;
+        if (metadata.splits && metadata.splits.length > 0) {
+          // Identify all unique lot names involved in this split
+          const uniqueLots = [...new Set(metadata.splits.map(s => String(s.lotNumber || '').trim().toLowerCase()))];
+          
+          for (const lotName of uniqueLots) {
+            // Find a matching project profile folder ID
+            const matchingProj = projects.find(p => p.name.trim().toLowerCase() === lotName);
+            const targetFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
+            
+            const result = await uploadFileToDrive(
+              googleToken, 
+              targetFolderId, 
+              safeFileName, 
+              'application/pdf', 
+              pdfBlob
+            );
+            
+            if (!mainUploadResult) {
+              mainUploadResult = result;
+            }
+          }
+        } else {
+          mainUploadResult = await uploadFileToDrive(
+            googleToken, 
+            selectedFolder.id, 
+            safeFileName, 
+            'application/pdf', 
+            pdfBlob
+          );
+        }
+        const uploadResult = mainUploadResult;
 
         // B. Update local history log items (Google Sheets log appending disabled per user request)
         const dateLoggedStr = new Date().toLocaleDateString();
