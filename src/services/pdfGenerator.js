@@ -80,7 +80,7 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   
   // Calculate height needed for splits table
   const splitsHeight = hasSplits ? (15 + (metadata.splits.length * 6)) : 0;
-  const boxHeight = (hasCheck ? 67 : 59) + splitsHeight;
+  const boxHeight = (hasCheck ? 83 : 75) + splitsHeight;
 
   // Draw Box Container for Metadata
   pdf.setFillColor(244, 244, 245); // Zinc 100
@@ -150,19 +150,35 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   pdf.text(`$${Number(metadata.amount || 0).toFixed(2)}`, margin + 55, currentY + 50);
   pdf.setFontSize(10); // reset
 
-  // Row 7 (Check Number if present)
+  // Row 7 (Subcontractor Category)
+  pdf.setTextColor(82, 82, 91);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('SUBCONTRACTOR CATEGORY:', margin + 5, currentY + 58);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(24, 24, 27);
+  pdf.text(metadata.tradeCategory || 'N/A', margin + 55, currentY + 58);
+
+  // Row 8 (Project Phase)
+  pdf.setTextColor(82, 82, 91);
+  pdf.setFont('helvetica', 'bold');
+  pdf.text('PROJECT PHASE BLOCK:', margin + 5, currentY + 66);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setTextColor(24, 24, 27);
+  pdf.text(metadata.tradePhase || 'N/A', margin + 55, currentY + 66);
+
+  // Row 9 (Check Number if present)
   if (hasCheck) {
     pdf.setTextColor(82, 82, 91);
     pdf.setFont('helvetica', 'bold');
-    pdf.text('CHECK NUMBER:', margin + 5, currentY + 58);
+    pdf.text('CHECK NUMBER:', margin + 5, currentY + 74);
     pdf.setFont('helvetica', 'normal');
     pdf.setTextColor(24, 24, 27);
-    pdf.text(metadata.checkNumber, margin + 55, currentY + 58);
+    pdf.text(metadata.checkNumber, margin + 55, currentY + 74);
   }
 
   // Draw Splits Table if present
   if (hasSplits) {
-    const splitsStartY = currentY + (hasCheck ? 66 : 58);
+    const splitsStartY = currentY + (hasCheck ? 82 : 74);
     
     // Divider line
     pdf.setDrawColor(200, 200, 204);

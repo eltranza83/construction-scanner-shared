@@ -37,7 +37,7 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
 
     const prompt = `
       You are an OCR and data extraction assistant for a construction company.
-      Analyze the attached image of a check, receipt, or invoice and extract the following details in JSON format.
+      Analyze the attached image of a check, receipt, or invoice and extract the details in JSON format.
       
       Response JSON Schema:
       {
@@ -47,7 +47,9 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
         "costCategory": "material" | "labor",
         "amount": 0.00 (the total cost or check amount as a decimal number),
         "date": "YYYY-MM-DD (format the date found on the document, or empty string)",
-        "checkNumber": "Check number (only if the document is a check, otherwise null)"
+        "checkNumber": "Check number (only if the document is a check, otherwise null)",
+        "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills",
+        "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes')"
       }
       
       Instructions:
@@ -55,7 +57,18 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
       2. If it is a check, extract the "payee" as the vendor, classify the costCategory (usually "labor" for subcontractors, "material" if specified for materials), extract the date, check number, and amount.
       3. If it is an invoice/receipt, extract the store/vendor name, the total amount, the date, and describe the items. Classify as "material" unless it is an invoice for labor services.
       4. Make a best effort to write a concise "description" of the job or items (e.g. "Electrical wiring for Plot 14", "Lumber and drywalls").
-      5. Output ONLY the JSON block. Do not wrap in markdown or backticks.
+      
+      5. Subcontractor Trade Classification:
+         Identify which Trade Category sheet name and Phase block name this transaction belongs to:
+         - Category: Site_Prep_&_Structure (Phases: Foundation & Flatwork, Roofing, Windows & Exterior Doors)
+         - Category: Framing_&_Lumber (Phases: Framing & Lumber)
+         - Category: Mechanicals_&_Utilities (Phases: Plumbing Rough-In, Electrical & Lighting, HVAC / AC Systems, Insulation & Alarms)
+         - Category: Interior_Finishes (Phases: Drywall & Sheetrock, Cabinets & Trim Carpentry, Quartz & Countertops, Glass Work)
+         - Category: Paint_Tile (Phases: Tile & Flooring, Paint & Finishes)
+         - Category: House_Exterior_&_Yard (Phases: Stucco & Masonry, Garage Doors, Driveway & Sidewalks, Cantera Stone Detail, Fencing & Gates, Landscaping & Irrigation)
+         - Category: Project_Overhead_&_Bills (Phases: Monthly Utility Bills, Dumpsters & Cleaning, Extra Costs & Misc)
+      
+      6. Output ONLY the JSON block. Do not wrap in markdown or backticks.
     `;
 
     const result = await model.generateContent({
@@ -98,7 +111,9 @@ function simulateOCRExtraction(filename) {
           costCategory: 'labor',
           amount: 2450.00,
           date: new Date().toISOString().split('T')[0],
-          checkNumber: Math.floor(1000 + Math.random() * 9000).toString()
+          checkNumber: Math.floor(1000 + Math.random() * 9000).toString(),
+          tradeCategory: 'Mechanicals_&_Utilities',
+          tradePhase: 'Plumbing Rough-In'
         });
       } else {
         resolve({
@@ -108,7 +123,9 @@ function simulateOCRExtraction(filename) {
           costCategory: 'material',
           amount: 418.75,
           date: new Date().toISOString().split('T')[0],
-          checkNumber: null
+          checkNumber: null,
+          tradeCategory: 'Mechanicals_&_Utilities',
+          tradePhase: 'Plumbing Rough-In'
         });
       }
     }, 1500);

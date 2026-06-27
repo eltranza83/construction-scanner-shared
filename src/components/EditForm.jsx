@@ -53,6 +53,37 @@ function compressImage(file, maxWidth = 1200, maxHeight = 1200) {
   });
 }
 
+const TRADE_SECTIONS_CONFIG = {
+  'Site_Prep_&_Structure': {
+    label: 'Site Prep & Structure',
+    phases: ['Foundation & Flatwork', 'Roofing', 'Windows & Exterior Doors']
+  },
+  'Framing_&_Lumber': {
+    label: 'Framing & Lumber',
+    phases: ['Framing & Lumber']
+  },
+  'Mechanicals_&_Utilities': {
+    label: 'Mechanicals & Utilities',
+    phases: ['Plumbing Rough-In', 'Electrical & Lighting', 'HVAC / AC Systems', 'Insulation & Alarms']
+  },
+  'Interior_Finishes': {
+    label: 'Interior Finishes',
+    phases: ['Drywall & Sheetrock', 'Cabinets & Trim Carpentry', 'Quartz & Countertops', 'Glass Work']
+  },
+  'Paint_Tile': {
+    label: 'Paint & Tile',
+    phases: ['Tile & Flooring', 'Paint & Finishes']
+  },
+  'House_Exterior_&_Yard': {
+    label: 'House Exterior & Yard',
+    phases: ['Stucco & Masonry', 'Garage Doors', 'Driveway & Sidewalks', 'Cantera Stone Detail', 'Fencing & Gates', 'Landscaping & Irrigation']
+  },
+  'Project_Overhead_&_Bills': {
+    label: 'Project Overhead & Bills',
+    phases: ['Monthly Utility Bills', 'Dumpsters & Cleaning', 'Extra Costs & Misc']
+  }
+};
+
 export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [] }) {
   const [formData, setFormData] = useState({
     type: stagedItem.metadata.type || 'invoice',
@@ -63,7 +94,19 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
     amount: stagedItem.metadata.amount || '',
     date: stagedItem.metadata.date || '',
     checkNumber: stagedItem.metadata.checkNumber || '',
+    tradeCategory: stagedItem.metadata.tradeCategory || 'Mechanicals_&_Utilities',
+    tradePhase: stagedItem.metadata.tradePhase || 'Plumbing Rough-In',
   });
+
+  const handleCategoryChange = (e) => {
+    const newCat = e.target.value;
+    const defaultPhase = TRADE_SECTIONS_CONFIG[newCat]?.phases[0] || '';
+    setFormData(prev => ({
+      ...prev,
+      tradeCategory: newCat,
+      tradePhase: defaultPhase
+    }));
+  };
 
   const [mainImageBase64, setMainImageBase64] = useState(stagedItem.mainImageBase64 || null);
   const [secondaryImageBase64, setSecondaryImageBase64] = useState(stagedItem.secondaryImageBase64 || null);
@@ -465,6 +508,49 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               onChange={handleChange}
               placeholder="e.g. Lot 102"
             />
+          </div>
+        </div>
+
+        {/* Trade Section & Phase AI Classification */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-trade-category" style={{ fontSize: '0.72rem' }}>
+              Subcontractor Category
+            </label>
+            <select
+              id="edit-trade-category"
+              name="tradeCategory"
+              className="form-input"
+              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)' }}
+              value={formData.tradeCategory || 'Mechanicals_&_Utilities'}
+              onChange={handleCategoryChange}
+            >
+              {Object.keys(TRADE_SECTIONS_CONFIG).map(catKey => (
+                <option key={catKey} value={catKey}>
+                  {TRADE_SECTIONS_CONFIG[catKey].label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="edit-trade-phase" style={{ fontSize: '0.72rem' }}>
+              Project Phase Block
+            </label>
+            <select
+              id="edit-trade-phase"
+              name="tradePhase"
+              className="form-input"
+              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff', border: '1px solid var(--color-zinc-800)' }}
+              value={formData.tradePhase || ''}
+              onChange={handleChange}
+            >
+              {(TRADE_SECTIONS_CONFIG[formData.tradeCategory || 'Mechanicals_&_Utilities']?.phases || []).map(p => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
