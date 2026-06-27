@@ -283,8 +283,9 @@ export default function App() {
     setTriggeringSync(true);
     setError(null);
     try {
-      // Trigger Apps Script webhook POST sync action
-      await fetch(`${activeProject.appsScriptUrl}?action=sync`, {
+      // Trigger Apps Script webhook POST sync action with dynamic project folder routing
+      const syncUrl = `${activeProject.appsScriptUrl}?action=sync&folderId=${activeProject.folderId}`;
+      await fetch(syncUrl, {
         method: 'POST',
         mode: 'no-cors'
       });
