@@ -117,7 +117,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
       
     return data.subcontractors.filter(sub => {
       const status = String(sub.status || '').trim().toLowerCase();
-      const isActive = status.includes('progress') || status.includes('started');
+      const isActive = status.includes('progress') || (status.includes('started') && !status.includes('not'));
       if (!isActive) return false;
       
       // If drywall is active/done, silence rough-ins
@@ -279,7 +279,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
     if (clean.includes('complete') || clean.includes('done')) {
       return { bg: 'rgba(16, 185, 129, 0.15)', text: '#10b981', border: 'rgba(16, 185, 129, 0.3)' };
     }
-    if (clean.includes('progress') || clean.includes('started')) {
+    if (clean.includes('progress') || (clean.includes('started') && !clean.includes('not'))) {
       return { bg: 'rgba(245, 158, 11, 0.15)', text: '#f59e0b', border: 'rgba(245, 158, 11, 0.3)' };
     }
     return { bg: 'rgba(113, 113, 122, 0.15)', text: '#a1a1aa', border: 'rgba(113, 113, 122, 0.3)' };
