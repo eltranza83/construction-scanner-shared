@@ -116,8 +116,8 @@ export async function createFolder(accessToken, folderName, parentId = null) {
  * Finds the tracking Google Sheet (JobScan_Expense_Log) in the folder, or creates one if it doesn't exist.
  */
 export async function findOrCreateTrackingSheet(accessToken, folderId) {
-  // Query to find the spreadsheet
-  const query = `name='JobScan_Expense_Log' and '${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+  // Query to find any spreadsheet in the project folder
+  const query = `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
   const searchUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
 
   const searchResponse = await fetch(searchUrl, {
@@ -133,7 +133,9 @@ export async function findOrCreateTrackingSheet(accessToken, folderId) {
   const searchData = await searchResponse.json();
   
   if (searchData.files && searchData.files.length > 0) {
-    return searchData.files[0].id;
+    // Prefer the one named 'JobScan_Expense_Log' if there are multiple, otherwise return the first one
+    const preferred = searchData.files.find(f => f.name === 'JobScan_Expense_Log');
+    return preferred ? preferred.id : searchData.files[0].id;
   }
 
   // If not found, create a new Google Sheet

@@ -28,8 +28,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
       let spreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
       
       if (!spreadsheetId) {
-        // Search for the JobScan_Expense_Log spreadsheet in Drive
-        const query = `name='JobScan_Expense_Log' and '${selectedFolder.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+        // Search for any spreadsheet inside the project folder
+        const query = `'${selectedFolder.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
         const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
         
         const response = await fetch(searchUrl, {
@@ -37,15 +37,17 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
         });
         
         if (!response.ok) {
-          throw new Error('Failed to find spreadsheet in Google Drive. Make sure you have synced at least once.');
+          throw new Error('Failed to search project folder in Google Drive.');
         }
         
         const searchResult = await response.json();
         if (searchResult.files && searchResult.files.length > 0) {
-          spreadsheetId = searchResult.files[0].id;
+          // Prefer a spreadsheet named 'JobScan_Expense_Log' if multiple exist, otherwise use the first one
+          const preferred = searchResult.files.find(f => f.name === 'JobScan_Expense_Log');
+          spreadsheetId = preferred ? preferred.id : searchResult.files[0].id;
           localStorage.setItem(`jobscan_sheet_id_${activeProject.id}`, spreadsheetId);
         } else {
-          throw new Error("Tracking spreadsheet 'JobScan_Expense_Log' not found in project folder. Please sync a receipt first to create the sheet.");
+          throw new Error("No spreadsheet found in your project folder. Please move your project spreadsheet (e.g. 'test project spreadsheet') into this folder.");
         }
       }
 
