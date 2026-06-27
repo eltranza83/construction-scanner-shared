@@ -200,3 +200,110 @@ export async function appendRowToSheet(accessToken, sheetId, rowData) {
 
   return await response.json();
 }
+
+/**
+ * Find or create a subfolder inside a parent folder in Google Drive.
+ */
+export async function findOrCreateFolder(accessToken, folderName, parentId) {
+  const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to search for folder ${folderName}`);
+  }
+
+  const data = await response.json();
+  if (data.files && data.files.length > 0) {
+    return data.files[0].id;
+  }
+
+  // Create it
+  const created = await createFolder(accessToken, folderName, parentId);
+  return created.id;
+}
+
+/**
+ * Creates and uploads a photo file into a dynamically resolved subfolder hierarchy in Google Drive.
+ */
+export async function uploadPhotoToPhaseFolder(accessToken, rootFolderId, categoryName, phaseName, fileName, mimeType, fileBlob) {
+  // 1. Find or create "Project_Photos" folder inside the root project folder
+  const photosFolderId = await findOrCreateFolder(accessToken, 'Project_Photos', rootFolderId);
+  
+  // 2. Find or create category folder inside "Project_Photos"
+  const cleanCategoryName = categoryName.replace(/[^a-zA-Z0-9_]/g, '_');
+  const categoryFolderId = await findOrCreateFolder(accessToken, cleanCategoryName, photosFolderId);
+  
+  // 3. Find or create phase folder inside category folder
+  const cleanPhaseName = phaseName.replace(/[^a-zA-Z0-9_]/g, '_');
+  const phaseFolderId = await findOrCreateFolder(accessToken, cleanPhaseName, categoryFolderId);
+  
+  // 4. Upload file to phase folder
+  return await uploadFileToDrive(accessToken, phaseFolderId, fileName, mimeType, fileBlob);
+}
+
+/**
+ * Finds a folder ID by name and parent ID. Returns null if not found.
+ */
+export async function findFolder(accessToken, folderName, parentId) {
+  const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to search for folder ${folderName}`);
+  }
+
+  const data = await response.json();
+  if (data.files && data.files.length > 0) {
+    return data.files[0].id;
+  }
+  return null;
+}
+
+/**
+ * Lists all image files inside a specific phase folder in Google Drive.
+ */
+export async function listPhotosInPhase(accessToken, rootFolderId, categoryName, phaseName) {
+  try {
+    const photosFolderId = await findFolder(accessToken, 'Project_Photos', rootFolderId);
+    if (!photosFolderId) return [];
+
+    const cleanCategoryName = categoryName.replace(/[^a-zA-Z0-9_]/g, '_');
+    const categoryFolderId = await findFolder(accessToken, cleanCategoryName, photosFolderId);
+    if (!categoryFolderId) return [];
+
+    const cleanPhaseName = phaseName.replace(/[^a-zA-Z0-9_]/g, '_');
+    const phaseFolderId = await findFolder(accessToken, cleanPhaseName, categoryFolderId);
+    if (!phaseFolderId) return [];
+
+    const query = `'${phaseFolderId}' in parents and mimeType contains 'image/' and trashed=false`;
+    const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink,thumbnailLink)&pageSize=100`;
+
+    const response = await fetch(url, {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error('Failed to list files in phase folder');
+    }
+
+    const data = await response.json();
+    return data.files || [];
+  } catch (error) {
+    console.error('Failed to list photos in phase:', error);
+    return [];
+  }
+}
