@@ -1,184 +1,52 @@
 // --- CONFIGURATION ---
-// Store your Gemini API Key in: File > Project Settings > Script Properties as GEMINI_API_KEY
-const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY');
+// Securely retrieve Gemini API Key from project properties to prevent public code leak blocks
+const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
 const INVOICE_FOLDER_ID = '16yDqZ5lhfoSCY-J8wRuZl0_9uM30wIHD'; // 'Invoice Uploads'
 const ARCHIVE_FOLDER_ID = '1jdgw6v438N3RQksN_JpvhTwyJNwuSJhf'; // 'Processed Invoices'
-const SPREADSHEET_ID = '1kaVNSq0hC4A97EtYNE_lapznWillaKigF_Nn9icSUYs'; // fallback spreadsheet ID
-const MASTER_LOG_SHEET = 'New_Invoices';
+const SPREADSHEET_ID = '1kaVNSq0hC4A97EtYNE_lapznWillaKigF_Nn9icSUYs'; // 'test project spreadsheet'
+const SHEET_NAME = 'New_Invoices';
 // ---------------------
 
+// Global logging buffer
+let currentLogBuffer = "";
+
 /**
- * Main function to check and process new files in the Invoice Uploads folder.
+ * Custom logger helper to output to both console and Google Drive log.
  */
-function parseNewInvoices() {
-  // Wait 4 seconds for Google Drive's search index to register the new file
-  Utilities.sleep(4000);
-  
-  const folder = DriveApp.getFolderById(INVOICE_FOLDER_ID);
-  const archiveFolder = DriveApp.getFolderById(ARCHIVE_FOLDER_ID);
-  const files = folder.getFiles();
-  
-  // Use spreadsheet inside folder if present, fallback to container or ID
-  let ss = null;
-  const folderSpreadsheets = folder.getFilesByType('application/vnd.google-apps.spreadsheet');
-  if (folderSpreadsheets.hasNext()) {
-    const ssFile = folderSpreadsheets.next();
-    console.log(`Detected project spreadsheet inside folder: ${ssFile.getName()} (${ssFile.getId()})`);
-    ss = SpreadsheetApp.openById(ssFile.getId());
-  } else {
-    try {
-      ss = SpreadsheetApp.getActiveSpreadsheet();
-    } catch (e) {
-      console.log("Not running in container. Falling back to spreadsheet ID.");
-    }
-    if (!ss) {
-      ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    }
-  }
-  
-  const masterLogSheet = ss.getSheetByName(MASTER_LOG_SHEET);
-  let processedCount = 0;
-  
-  while (files.hasNext()) {
-    const file = files.next();
-    const mimeType = file.getMimeType();
-    const fileName = file.getName();
-    const fileUrl = file.getUrl();
-    
-    // Skip subfolders and Google Spreadsheets
-    if (mimeType === MimeType.FOLDER || mimeType === 'application/vnd.google-apps.spreadsheet') {
-      continue;
-    }
-    
-    console.log(`Processing file: ${fileName} (${mimeType})...`);
-    
-    // 1. Check filename for classification hint ("material" or "labor")
-    const dotIndex = fileName.lastIndexOf('.');
-    const nameWithoutExt = (dotIndex !== -1 ? fileName.substring(0, dotIndex) : fileName).trim().toLowerCase();
-    
-    let forceMaterial = false;
-    let forceLabor = false;
-    
-    if (nameWithoutExt.includes('material')) {
-      forceMaterial = true;
-      console.log(`Filename hint detected: Classifying as Material Cost.`);
-    } else if (nameWithoutExt.includes('labor')) {
-      forceLabor = true;
-      console.log(`Filename hint detected: Classifying as Labor Cost.`);
-    }
-    
-    try {
-      // 2. Extract data using Gemini API
-      const parsedData = extractDataWithGemini(file, mimeType);
-      
-      if (parsedData) {
-        console.log(`Successfully parsed: ${JSON.stringify(parsedData)}`);
-        
-        let finalMaterialCost = '';
-        let finalLaborCost = '';
-        
-        // 3. Determine category: filename hint takes priority, otherwise use Gemini's classification
-        let categoryType = 'material'; // default fallback
-        if (forceMaterial) {
-          categoryType = 'material';
-        } else if (forceLabor) {
-          categoryType = 'labor';
-        } else if (parsedData.costCategory) {
-          categoryType = parsedData.costCategory.toLowerCase();
-        }
-        
-        // Write the complete grand total into the single appropriate category column
-        if (categoryType === 'material') {
-          finalMaterialCost = typeof parsedData.totalCost === 'number' ? parsedData.totalCost : '';
-        } else {
-          finalLaborCost = typeof parsedData.totalCost === 'number' ? parsedData.totalCost : '';
-        }
-        
-        const paymentDate = parsedData.paymentDate || '';
-        
-        // Ensure check number defaults to 0 if null, undefined, "null", or "N/A"
-        let finalCheckNumber = 0;
-        if (parsedData.checkNumber !== undefined && parsedData.checkNumber !== null) {
-          const checkStr = String(parsedData.checkNumber).trim();
-          if (checkStr !== '' && checkStr.toLowerCase() !== 'null' && checkStr.toLowerCase() !== 'n/a') {
-            finalCheckNumber = checkStr;
-          }
-        }
-        
-        // 4. Create Hyperlink formulas for the cost columns
-        const materialValue = (typeof finalMaterialCost === 'number' && finalMaterialCost !== 0) 
-            ? `=HYPERLINK("${fileUrl}", ${finalMaterialCost})` 
-            : '';
-        const laborValue = (typeof finalLaborCost === 'number' && finalLaborCost !== 0) 
-            ? `=HYPERLINK("${fileUrl}", ${finalLaborCost})` 
-            : '';
-        
-        // Formulate row data
-        // Columns: ['Task Description', 'Contractor / Vendor', 'Material Cost', 'Labor Cost', 'Payment Date', 'Check or Trans #']
-        const rowData = [
-          parsedData.taskDescription,
-          parsedData.contractorVendor,
-          materialValue,
-          laborValue,
-          paymentDate,
-          finalCheckNumber
-        ];
-        
-        // A. Append row to Master chronological log tab
-        if (masterLogSheet) {
-          masterLogSheet.appendRow(rowData);
-          const lastRow = masterLogSheet.getLastRow();
-          const mCell = masterLogSheet.getRange(lastRow, 3);
-          const lCell = masterLogSheet.getRange(lastRow, 4);
-          
-          if (typeof finalMaterialCost === 'number' && finalMaterialCost !== 0) {
-            mCell.setNumberFormat("$#,##0.00");
-            mCell.setFontColor("#1155cc");
-            mCell.setFontLine("underline");
-          }
-          if (typeof finalLaborCost === 'number' && finalLaborCost !== 0) {
-            lCell.setNumberFormat("$#,##0.00");
-            lCell.setFontColor("#1155cc");
-            lCell.setFontLine("underline");
-          }
-        }
-        
-        // B. Log row directly into the correct subcontractor tab and phase block
-        if (parsedData.tradeCategory && parsedData.tradePhase) {
-          logTransactionToCategorySheet(
-            ss, 
-            parsedData.tradeCategory, 
-            parsedData.tradePhase, 
-            rowData, 
-            categoryType
-          );
-        } else {
-          console.log("No subcontractor classification found. Skipping direct block append.");
-        }
-        
-        // 5. Move the file to the archive folder
-        file.moveTo(archiveFolder);
-        console.log(`Archived ${fileName} to Processed Invoices.`);
-        processedCount++;
-      } else {
-        console.log(`Failed to parse data for ${fileName}`);
-      }
-      
-    } catch (e) {
-      console.log(`Error processing ${fileName}: ${e.message}`);
-    }
-  }
-  
-  console.log(`Finished checking folder. Processed ${processedCount} new files.`);
+function addLog(message) {
+  console.log(message);
+  currentLogBuffer += message + "\n";
 }
 
 /**
- * Appends the transaction row directly into the correct subcontractor sheet and block.
+ * Writes the global log buffer to a file named sync_log.txt in the active folder.
+ */
+function writeLogFile(folderId) {
+  try {
+    const folder = DriveApp.getFolderById(folderId);
+    const files = folder.getFilesByName("sync_log.txt");
+    const timestamp = new Date().toLocaleString();
+    const formattedBuffer = `--- Sync Execution at ${timestamp} ---\n${currentLogBuffer}\n`;
+    
+    if (files.hasNext()) {
+      const file = files.next();
+      const currentContent = file.getAs("text/plain").getDataAsString();
+      file.setContent(currentContent + "\n" + formattedBuffer);
+    } else {
+      folder.createFile("sync_log.txt", formattedBuffer, MimeType.PLAIN_TEXT);
+    }
+  } catch (err) {
+    console.log("Failed to write sync_log.txt: " + err.message);
+  }
+}
+
+/**
+ * Logs a transaction directly into the matching category sheet under the correct phase block.
  */
 function logTransactionToCategorySheet(ss, category, phase, rowData, categoryType) {
   const sheet = ss.getSheetByName(category);
   if (!sheet) {
-    console.log(`Subcontractor sheet tab '${category}' not found. Direct log skipped.`);
+    addLog(`Subcontractor sheet tab '${category}' not found. Direct log skipped.`);
     return;
   }
 
@@ -200,7 +68,7 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
   }
 
   if (blockHeaderRowIdx === -1) {
-    console.log(`Phase block '${phase}' not found inside '${category}' sheet. Direct log skipped.`);
+    addLog(`Phase block '${phase}' not found inside '${category}' sheet. Direct log skipped.`);
     return;
   }
 
@@ -231,7 +99,7 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
   if (targetRowIdx === -1) {
     targetRowIdx = nextBlockHeaderRowIdx;
     sheet.insertRowBefore(targetRowIdx + 1); // 1-indexed insertion
-    console.log(`No empty slot. Inserting new row at index ${targetRowIdx + 1} inside block.`);
+    addLog(`No empty slot. Inserting new row at index ${targetRowIdx + 1} inside block.`);
   }
 
   // Write values into columns A to F of target row
@@ -259,53 +127,364 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
     labCostCell.setFontLine("underline");
   }
 
-  console.log(`Successfully logged transaction directly to sheet '${category}' row ${rowNumber}.`);
+  addLog(`Successfully logged transaction directly to sheet '${category}' row ${rowNumber}.`);
+}
+
+/**
+ * Main function to check and process new files in the Invoice Uploads folder.
+ */
+function parseNewInvoices(mainFolderId) {
+  // Wait 4 seconds for Google Drive's search index to register the new file
+  Utilities.sleep(4000);
+  
+  let folderId = INVOICE_FOLDER_ID;
+  let archiveFolderId = ARCHIVE_FOLDER_ID;
+  let spreadsheetId = SPREADSHEET_ID;
+  
+  currentLogBuffer = ""; // Reset log buffer for this execution
+  
+  try {
+    if (mainFolderId) {
+      folderId = mainFolderId; // Default to using the passed folder itself as the uploads folder
+      try {
+        const mainFolder = DriveApp.getFolderById(mainFolderId);
+        
+        // Find "Invoice Uploads" and "Processed Invoices" subfolders
+        const subfolders = mainFolder.getFolders();
+        while (subfolders.hasNext()) {
+          const sub = subfolders.next();
+          const name = sub.getName().toLowerCase();
+          if (name.includes("uploads") || name.includes("invoice uploads")) {
+            folderId = sub.getId();
+          } else if (name.includes("processed") || name.includes("processed invoices") || name.includes("archive")) {
+            archiveFolderId = sub.getId();
+          }
+        }
+        
+        // Find the Google Spreadsheet inside the main project folder
+        const filesInMain = mainFolder.getFiles();
+        while (filesInMain.hasNext()) {
+          const f = filesInMain.next();
+          if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
+            spreadsheetId = f.getId();
+            break;
+          }
+        }
+        
+        // Fallback: search within the uploads folder if not found in main folder
+        if (spreadsheetId === SPREADSHEET_ID && folderId !== INVOICE_FOLDER_ID) {
+          const uploadsFolder = DriveApp.getFolderById(folderId);
+          const filesInUploads = uploadsFolder.getFiles();
+          while (filesInUploads.hasNext()) {
+            const f = filesInUploads.next();
+            if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
+              spreadsheetId = f.getId();
+              break;
+            }
+          }
+        }
+        
+        addLog(`Resolved project IDs dynamically: Uploads folder = ${folderId}, Archive = ${archiveFolderId}, Spreadsheet = ${spreadsheetId}`);
+      } catch (e) {
+        addLog(`Error resolving dynamic folders for mainFolderId ${mainFolderId}: ${e.message}. Falling back to default constants.`);
+      }
+    }
+    
+    const folder = DriveApp.getFolderById(folderId);
+    const archiveFolder = DriveApp.getFolderById(archiveFolderId);
+    const files = folder.getFiles();
+    
+    const ss = SpreadsheetApp.openById(spreadsheetId);
+    const masterLogSheet = ss.getSheetByName(SHEET_NAME);
+    
+    let processedCount = 0;
+    
+    while (files.hasNext()) {
+      const file = files.next();
+      const mimeType = file.getMimeType();
+      const fileName = file.getName();
+      const fileUrl = file.getUrl();
+      
+      // Skip subfolders, Google Sheets, and non-invoice file types
+      if (mimeType === MimeType.FOLDER || mimeType.includes('spreadsheet') || mimeType.includes('sheet') || mimeType.includes('excel')) {
+        addLog(`Skipping spreadsheet/non-invoice file: ${fileName} (${mimeType})`);
+        continue;
+      }
+      
+      // Only process PDFs and Images
+      if (mimeType !== 'application/pdf' && !mimeType.startsWith('image/')) {
+        addLog(`Skipping unsupported file format: ${fileName} (${mimeType})`);
+        continue;
+      }
+      
+      addLog(`Processing file: ${fileName} (${mimeType})...`);
+      
+      // 1. Check filename for classification hint ("material" or "labor")
+      const dotIndex = fileName.lastIndexOf('.');
+      const nameWithoutExt = (dotIndex !== -1 ? fileName.substring(0, dotIndex) : fileName).trim().toLowerCase();
+      
+      let forceMaterial = false;
+      let forceLabor = false;
+      
+      if (nameWithoutExt.includes('material')) {
+        forceMaterial = true;
+        addLog(`Filename hint detected: Classifying as Material Cost.`);
+      } else if (nameWithoutExt.includes('labor')) {
+        forceLabor = true;
+        addLog(`Filename hint detected: Classifying as Labor Cost.`);
+      }
+      
+      try {
+        // 2. Extract data: Check description first, fallback to Gemini API
+        let parsedData = null;
+        const fileDescription = file.getDescription();
+        addLog(`File description retrieved: ${fileDescription}`);
+        if (fileDescription && fileDescription.trim().startsWith('{')) {
+          try {
+            const rawMetadata = JSON.parse(fileDescription);
+            parsedData = {
+              taskDescription: rawMetadata.description || rawMetadata.taskDescription || '',
+              contractorVendor: rawMetadata.vendor || rawMetadata.contractorVendor || '',
+              totalCost: parseFloat(rawMetadata.amount !== undefined ? rawMetadata.amount : rawMetadata.totalCost) || 0,
+              costCategory: rawMetadata.costCategory || 'material',
+              paymentDate: rawMetadata.date || rawMetadata.paymentDate || '',
+              checkNumber: rawMetadata.checkNumber || null,
+              splits: rawMetadata.splits || null,
+              tradeCategory: rawMetadata.tradeCategory || '',
+              tradePhase: rawMetadata.tradePhase || ''
+            };
+            addLog(`Successfully parsed and normalized metadata from Drive file description.`);
+          } catch (e) {
+            addLog(`Failed to parse metadata from description, falling back to Gemini OCR: ${e.message}`);
+          }
+        }
+        
+        if (!parsedData) {
+          parsedData = extractDataWithGemini(file, mimeType);
+        }
+        
+        if (parsedData) {
+          addLog(`Successfully parsed: ${JSON.stringify(parsedData)}`);
+          
+          let finalMaterialCost = '';
+          let finalLaborCost = '';
+          
+          // 3. Determine category: filename hint takes priority, otherwise use Gemini's classification
+          let category = 'material'; // default fallback
+          if (forceMaterial) {
+            category = 'material';
+          } else if (forceLabor) {
+            category = 'labor';
+          } else if (parsedData.costCategory) {
+            category = parsedData.costCategory.toLowerCase();
+          }
+          
+          // Write the complete grand total into the single appropriate category column
+          if (category === 'material') {
+            finalMaterialCost = typeof parsedData.totalCost === 'number' ? parsedData.totalCost : '';
+          } else {
+            finalLaborCost = typeof parsedData.totalCost === 'number' ? parsedData.totalCost : '';
+          }
+          
+          const paymentDate = parsedData.paymentDate || '';
+          
+          // Ensure check number defaults to 0 if null, undefined, "null", or "N/A"
+          let finalCheckNumber = 0;
+          if (parsedData.checkNumber !== undefined && parsedData.checkNumber !== null) {
+            const checkStr = String(parsedData.checkNumber).trim();
+            if (checkStr !== '' && checkStr.toLowerCase() !== 'null' && checkStr.toLowerCase() !== 'n/a') {
+              finalCheckNumber = checkStr;
+            }
+          }
+          
+          // 4. Write data to the spreadsheet (handling multiple splits or single grand total)
+          if (parsedData.splits && parsedData.splits.length > 0) {
+            // Identify current project/lot name from folder name or parent (if folder name is "Invoice Uploads")
+            let currentLotName = "";
+            try {
+              if (mainFolderId) {
+                const folder = DriveApp.getFolderById(mainFolderId);
+                const folderName = folder.getName().toLowerCase();
+                if (folderName.includes("uploads") || folderName.includes("invoice uploads")) {
+                  const parents = folder.getParents();
+                  if (parents.hasNext()) {
+                    currentLotName = parents.next().getName().toLowerCase();
+                  } else {
+                    currentLotName = folderName;
+                  }
+                } else {
+                  currentLotName = folderName;
+                }
+              }
+            } catch (err) {
+              addLog("Could not resolve folder name: " + err.message);
+            }
+
+            // Loop through each split
+            parsedData.splits.forEach(split => {
+              // Check if this split matches the current lot
+              const splitLot = String(split.lotNumber || '').trim().toLowerCase();
+              const isMatch = !currentLotName || currentLotName.includes(splitLot) || splitLot.includes(currentLotName);
+              
+              addLog(`Evaluating split for lot "${splitLot}" against current resolved lot "${currentLotName}". Match = ${isMatch}`);
+              
+              if (isMatch) {
+                let finalMaterialCost = '';
+                let finalLaborCost = '';
+                
+                if (split.costCategory === 'material') {
+                  finalMaterialCost = typeof split.amount === 'number' ? split.amount : '';
+                } else {
+                  finalLaborCost = typeof split.amount === 'number' ? split.amount : '';
+                }
+                
+                const materialValue = (typeof finalMaterialCost === 'number' && finalMaterialCost !== 0) 
+                    ? `=HYPERLINK("${fileUrl}", ${finalMaterialCost})` 
+                    : '';
+                const laborValue = (typeof finalLaborCost === 'number' && finalLaborCost !== 0) 
+                    ? `=HYPERLINK("${fileUrl}", ${finalLaborCost})` 
+                    : '';
+                
+                // Include project phase dynamically inside task description for downstream formula processing
+                const finalDesc = `[Split - ${split.tradePhase || 'General'}] ${split.description || parsedData.taskDescription}`;
+                
+                const rowData = [
+                  finalDesc,
+                  parsedData.contractorVendor,
+                  materialValue,
+                  laborValue,
+                  paymentDate,
+                  finalCheckNumber
+                ];
+                
+                // A. Append to Master chronological log tab
+                if (masterLogSheet) {
+                  masterLogSheet.appendRow(rowData);
+                  addLog(`Appended split row to Master Log: ${JSON.stringify(rowData)}`);
+                  const lastRow = masterLogSheet.getLastRow();
+                  const mCell = masterLogSheet.getRange(lastRow, 3);
+                  const lCell = masterLogSheet.getRange(lastRow, 4);
+                  if (materialValue) {
+                    mCell.setNumberFormat("$#,##0.00");
+                    mCell.setFontColor("#1155cc");
+                    mCell.setFontLine("underline");
+                  }
+                  if (laborValue) {
+                    lCell.setNumberFormat("$#,##0.00");
+                    lCell.setFontColor("#1155cc");
+                    lCell.setFontLine("underline");
+                  }
+                }
+                
+                // B. Log row directly into the correct subcontractor tab and phase block
+                const tradeCat = split.tradeCategory || parsedData.tradeCategory;
+                const tradePh = split.tradePhase || parsedData.tradePhase;
+                if (tradeCat && tradePh) {
+                  const categoryType = split.costCategory || 'material';
+                  const categoryDesc = split.description || parsedData.taskDescription;
+                  const categoryRowData = [
+                    categoryDesc,
+                    parsedData.contractorVendor,
+                    materialValue,
+                    laborValue,
+                    paymentDate,
+                    finalCheckNumber
+                  ];
+                  logTransactionToCategorySheet(ss, tradeCat, tradePh, categoryRowData, categoryType);
+                } else {
+                  addLog(`Skipping category log for split: tradeCategory or tradePhase is missing.`);
+                }
+              }
+            });
+            
+            processedCount++;
+          } else {
+            // Fallback: log single grand total row
+            const materialValue = (typeof finalMaterialCost === 'number' && finalMaterialCost !== 0) 
+                ? `=HYPERLINK("${fileUrl}", ${finalMaterialCost})` 
+                : '';
+            const laborValue = (typeof finalLaborCost === 'number' && finalLaborCost !== 0) 
+                ? `=HYPERLINK("${fileUrl}", ${finalLaborCost})` 
+                : '';
+            
+            const rowData = [
+              parsedData.taskDescription,
+              parsedData.contractorVendor,
+              materialValue,
+              laborValue,
+              paymentDate,
+              finalCheckNumber
+            ];
+            
+            // A. Append to Master chronological log tab
+            if (masterLogSheet) {
+              masterLogSheet.appendRow(rowData);
+              addLog(`Appended fallback row to Master Log: ${JSON.stringify(rowData)}`);
+              const lastRow = masterLogSheet.getLastRow();
+              const mCell = masterLogSheet.getRange(lastRow, 3);
+              const lCell = masterLogSheet.getRange(lastRow, 4);
+              if (materialValue) {
+                mCell.setNumberFormat("$#,##0.00");
+                mCell.setFontColor("#1155cc");
+                mCell.setFontLine("underline");
+              }
+              if (laborValue) {
+                lCell.setNumberFormat("$#,##0.00");
+                lCell.setFontColor("#1155cc");
+                lCell.setFontLine("underline");
+              }
+            }
+            
+            // B. Log row directly into the correct subcontractor tab and phase block
+            if (parsedData.tradeCategory && parsedData.tradePhase) {
+              logTransactionToCategorySheet(
+                ss, 
+                parsedData.tradeCategory, 
+                parsedData.tradePhase, 
+                rowData, 
+                category
+              );
+            } else {
+              addLog("No subcontractor classification found. Skipping direct block append.");
+            }
+            
+            processedCount++;
+          }
+
+          // 5. Move the file to the archive folder
+          file.moveTo(archiveFolder);
+          addLog(`Archived ${fileName} to Processed Invoices.`);
+        } else {
+          addLog(`Failed to parse data for ${fileName}`);
+        }
+        
+      } catch (e) {
+        addLog(`Error processing ${fileName}: ${e.message}`);
+      }
+    }
+    
+    addLog(`Finished checking folder. Processed ${processedCount} new files.`);
+  } catch (err) {
+    addLog(`Fatal Execution Error: ${err.message}`);
+  } finally {
+    writeLogFile(folderId);
+  }
 }
 
 /**
  * Sends the file to the Gemini API and returns the parsed JSON data.
  */
 function extractDataWithGemini(file, mimeType) {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing GEMINI_API_KEY script property. Please open Project Settings (Gear Icon) and add your key under 'Script Properties' using name: GEMINI_API_KEY");
+  }
   const blob = file.getBlob();
   const base64Data = Utilities.base64Encode(blob.getBytes());
-  
-  if (!GEMINI_API_KEY) {
-    throw new Error("Gemini API key is not configured. Please add GEMINI_API_KEY under Script Properties.");
-  }
   
   // Using the stable Gemini 3.1 Flash-Lite model
   const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${GEMINI_API_KEY}`;
   
-  const prompt = `
-    Extract details from this invoice, payment receipt, or work statement. Be precise. 
-    Find the single grand total value (at the bottom of the invoice/receipt) and place it in totalCost. Do not split it. 
-    Classify the entire document as either 'material' (if physical goods/supplies) or 'labor' (if work/services/installation). 
-    Format dates as YYYY-MM-DD. 
-    ONLY extract a check number if the payment document is a physical check or explicitly lists a check payment.
-    
-    Choose the most appropriate subcontractor tradeCategory (sheet tab name) and tradePhase (block name) from this exact list:
-    
-    1. Category: Site_Prep_&_Structure
-       Phases: Foundation & Flatwork, Roofing, Windows & Exterior Doors
-       
-    2. Category: Framing_&_Lumber
-       Phases: Framing & Lumber
-       
-    3. Category: Mechanicals_&_Utilities
-       Phases: Plumbing Rough-In, Electrical & Lighting, HVAC / AC Systems, Insulation & Alarms
-       
-    4. Category: Interior_Finishes
-       Phases: Drywall & Sheetrock, Cabinets & Trim Carpentry, Quartz & Countertops, Glass Work
-       
-    5. Category: Paint_Tile
-       Phases: Tile & Flooring, Paint & Finishes
-       
-    6. Category: House_Exterior_&_Yard
-       Phases: Stucco & Masonry, Garage Doors, Driveway & Sidewalks, Cantera Stone Detail, Fencing & Gates, Landscaping & Irrigation
-       
-    7. Category: Project_Overhead_&_Bills
-       Phases: Monthly Utility Bills, Dumpsters & Cleaning, Extra Costs & Misc
-  `;
+  const prompt = "Extract details from this invoice, payment receipt, or work statement. Be precise. Find the single grand total value (at the bottom of the invoice/receipt) and place it in totalCost. If the document has an 'ALLOTMENT SPLITS' table on the first page, extract each split in detail into the splits array, mapping its amount, costCategory ('material' or 'labor'), lotNumber, tradeCategory, tradePhase, and description. Format dates as YYYY-MM-DD. ONLY extract a check number if the payment document is a physical check or explicitly lists a check payment. Do NOT extract order IDs, transaction reference numbers, or receipt barcodes as check numbers.";
   
   const payload = {
     contents: [{
@@ -332,25 +511,24 @@ function extractDataWithGemini(file, mimeType) {
           costCategory: { type: "STRING", enum: ["material", "labor"], description: "Classify the entire invoice as either 'material' (physical goods/supplies) or 'labor' (work/services/installation)" },
           paymentDate: { type: "STRING", description: "Date of invoice/payment/receipt in YYYY-MM-DD" },
           checkNumber: { type: "STRING", description: "Only the check number if payment was made via check. Otherwise null." },
-          tradeCategory: { 
-            type: "STRING", 
-            enum: [
-              "Site_Prep_&_Structure",
-              "Framing_&_Lumber",
-              "Mechanicals_&_Utilities",
-              "Interior_Finishes",
-              "Paint_Tile",
-              "House_Exterior_&_Yard",
-              "Project_Overhead_&_Bills"
-            ],
-            description: "Select the most appropriate subcontractor category sheet name based on the invoice details." 
-          },
-          tradePhase: {
-            type: "STRING",
-            description: "Select the exact matching phase block name (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes', etc.)."
+          splits: {
+            type: "ARRAY",
+            description: "List of split cost allotments if present in the ALLOTMENT SPLITS table on the first page",
+            items: {
+              type: "OBJECT",
+              properties: {
+                lotNumber: { type: "STRING", description: "Lot address or lot label for this split row" },
+                costCategory: { type: "STRING", enum: ["material", "labor"] },
+                tradeCategory: { type: "STRING", description: "Subcontractor Category key name" },
+                tradePhase: { type: "STRING", description: "Project Phase Block name" },
+                description: { type: "STRING", description: "Split item description details" },
+                amount: { type: "NUMBER", description: "Split cost amount" }
+              },
+              required: ["amount", "costCategory", "lotNumber", "tradeCategory", "tradePhase"]
+            }
           }
         },
-        required: ["taskDescription", "contractorVendor", "totalCost", "costCategory", "tradeCategory", "tradePhase"]
+        required: ["taskDescription", "contractorVendor", "totalCost", "costCategory"]
       }
     }
   };
@@ -380,6 +558,10 @@ function extractDataWithGemini(file, mimeType) {
   }
 }
 
+// ==========================================
+// NEW WEBHOOK & FILE-ARRIVAL TRIGGER LOGIC
+// ==========================================
+
 /**
  * Endpoint for Google Drive folder change webhook notification POST requests.
  */
@@ -387,12 +569,14 @@ function doPost(e) {
   console.log("doPost triggered.");
   
   let action = null;
-  if (e && e.parameter && e.parameter.action) {
+  let mainFolderId = null;
+  if (e && e.parameter) {
     action = e.parameter.action;
+    mainFolderId = e.parameter.folderId;
   }
   
   if (action === "sync") {
-    parseNewInvoices();
+    parseNewInvoices(mainFolderId);
     const serviceUrl = ScriptApp.getService().getUrl();
     return HtmlService.createHtmlOutput(`
       <script>
@@ -411,7 +595,7 @@ function doPost(e) {
     `);
   } else {
     // Normal drive notification (something changed in the folder)
-    parseNewInvoices();
+    parseNewInvoices(mainFolderId);
     return ContentService.createTextOutput("OK");
   }
 }
