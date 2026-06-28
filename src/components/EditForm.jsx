@@ -202,6 +202,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   const [itemAllocations, setItemAllocations] = useState({});
   // Track manual allocations by the user so suggestions don't override them
   const [manualAllocations, setManualAllocations] = useState({});
+  // Track manual split descriptions so auto-generator doesn't override them
+  const [manualDescriptions, setManualDescriptions] = useState({});
 
   useEffect(() => {
     if (stagedItem.metadata.lineItems && splits.length > 0) {
@@ -231,19 +233,26 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   // Run initial allocation calculation if itemAllocations is populated
   useEffect(() => {
     if (stagedItem.metadata.lineItems && splits.length > 0 && Object.keys(itemAllocations).length > 0) {
-      // Calculate sums based on current allocations
+      // Calculate sums and descriptions based on current allocations
       setSplits(currentSplits => {
         let changed = false;
         const updated = currentSplits.map(s => {
           const itemsForThisSplit = (stagedItem.metadata.lineItems || []).filter((_, idx) => itemAllocations[idx] === s.id);
           const sum = itemsForThisSplit.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0);
           const amtStr = sum > 0 ? sum.toFixed(2) : '';
-          if (s.amount !== amtStr) {
+          
+          let descStr = s.description;
+          if (!manualDescriptions[s.id]) {
+            descStr = itemsForThisSplit.map(item => item.description).join(', ');
+          }
+
+          if (s.amount !== amtStr || s.description !== descStr) {
             changed = true;
           }
           return {
             ...s,
-            amount: amtStr
+            amount: amtStr,
+            description: descStr
           };
         });
         
@@ -255,7 +264,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         return currentSplits;
       });
     }
-  }, [itemAllocations, stagedItem.metadata.lineItems]);
+  }, [itemAllocations, stagedItem.metadata.lineItems, manualDescriptions]);
 
   const handleAllocateItem = (itemIdx, splitId) => {
     setManualAllocations(prev => ({ ...prev, [itemIdx]: true }));
@@ -266,9 +275,16 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         const updated = currentSplits.map(s => {
           const itemsForThisSplit = (stagedItem.metadata.lineItems || []).filter((_, idx) => next[idx] === s.id);
           const sum = itemsForThisSplit.reduce((acc, item) => acc + (parseFloat(item.price) || 0), 0);
+          
+          let descStr = s.description;
+          if (!manualDescriptions[s.id]) {
+            descStr = itemsForThisSplit.map(item => item.description).join(', ');
+          }
+
           return {
             ...s,
-            amount: sum > 0 ? sum.toFixed(2) : ''
+            amount: sum > 0 ? sum.toFixed(2) : '',
+            description: descStr
           };
         });
         
@@ -342,6 +358,9 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   };
 
   const handleSplitChange = (id, field, value) => {
+    if (field === 'description') {
+      setManualDescriptions(prev => ({ ...prev, [id]: true }));
+    }
     setSplits(prev => prev.map(s => {
       if (s.id === id) {
         const updated = { ...s, [field]: value };
@@ -916,6 +935,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                 if (nextSplit) {
                   setManualAllocations({});
                   setItemAllocations({});
+                  setManualDescriptions({});
                   const activeName = formData.lotNumber || '';
                   let otherName = '';
                   if (projects && projects.length === 2) {
