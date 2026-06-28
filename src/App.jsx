@@ -105,6 +105,7 @@ export default function App() {
               if (tokenResponse.access_token) {
                 setGoogleToken(tokenResponse.access_token);
                 localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
+                setError(null); // Clear any previous auth errors
                 
                 // Refetch user details quietly to ensure profile stays in sync
                 try {
@@ -118,6 +119,17 @@ export default function App() {
                   }
                 } catch (e) {
                   console.error("Quiet user info update failed:", e);
+                }
+              } else if (tokenResponse.error) {
+                console.warn("Google authentication failed or was cancelled:", tokenResponse);
+                setGoogleToken(null);
+                setGoogleUser(null);
+                localStorage.removeItem('jobscan_google_token');
+                localStorage.removeItem('jobscan_google_user');
+                if (tokenResponse.error === 'user_logged_out' || tokenResponse.error === 'immediate_failed') {
+                  setError('Google Drive session expired. Please sign in again.');
+                } else {
+                  setError(`Google Sign-In failed: ${tokenResponse.error}`);
                 }
               }
             }
@@ -729,7 +741,15 @@ export default function App() {
   const isAuthError = (err) => {
     if (!err || !err.message) return false;
     const msg = err.message.toLowerCase();
-    return msg.includes('401') || msg.includes('unauthenticated') || msg.includes('auth') || msg.includes('credential');
+    return (
+      msg.includes('401') || 
+      msg.includes('unauthenticated') || 
+      msg.includes('unauthorized') || 
+      msg.includes('invalid credentials') || 
+      msg.includes('invalid token') || 
+      msg.includes('session expired') ||
+      msg.includes('invalid_grant')
+    );
   };
 
   const handleSessionExpired = () => {
@@ -738,12 +758,13 @@ export default function App() {
     try {
       if (window.googleTokenClient) {
         window.googleTokenClient.requestAccessToken({ prompt: '' });
-        return;
+        return; // Wait for callback to handle success or failure
       }
     } catch (e) {
       console.error("Silent token refresh failed:", e);
     }
 
+    // Fallback: only clear token if the token client is not initialized
     setGoogleToken(null);
     setGoogleUser(null);
     localStorage.removeItem('jobscan_google_token');

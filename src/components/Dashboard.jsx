@@ -261,7 +261,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       setData(null);
       setError('Please select an active project in Settings to load the dashboard.');
     }
-  }, [activeProject, selectedFolder]);
+  }, [activeProject, selectedFolder, googleToken]);
 
   // Autocomplete suggestions for contractor search
   const suggestions = data?.subcontractors
