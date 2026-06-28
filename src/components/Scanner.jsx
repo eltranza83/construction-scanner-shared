@@ -282,7 +282,9 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
       
       if (!warpedCanvas) {
         setLoading(false);
-        setLocalError('Failed to crop the document. Try adjusting the corners.');
+        const cropErr = 'Failed to crop the document. Try adjusting the corners.';
+        setLocalError(cropErr);
+        if (onError) onError(cropErr);
         return;
       }
       
@@ -300,7 +302,9 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
           await analyzeCroppedFile(croppedFile);
         } else {
           setLoading(false);
-          setLocalError('Failed to capture cropped canvas.');
+          const captureErr = 'Failed to capture cropped canvas.';
+          setLocalError(captureErr);
+          if (onError) onError(captureErr);
         }
       }, 'image/jpeg', 0.85);
     };
@@ -389,13 +393,17 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
           stopCamera();
           await processFile(file);
         } else {
-          setLocalError('Failed to capture canvas frame.');
+          const frameErr = 'Failed to capture canvas frame.';
+          setLocalError(frameErr);
+          if (onError) onError(frameErr);
         }
       }, 'image/jpeg', 0.85);
       
     } catch (err) {
       console.error('Capture failed:', err);
-      setLocalError(`Capture failed: ${err.message}`);
+      const capErr = `Capture failed: ${err.message}`;
+      setLocalError(capErr);
+      if (onError) onError(capErr);
     }
   };
 
@@ -438,7 +446,9 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
       ]);
     } catch (err) {
       console.error('File preparation failed:', err);
-      setLocalError(err.message || 'Failed to load file.');
+      const prepErr = err.message || 'Failed to load file.';
+      setLocalError(prepErr);
+      if (onError) onError(prepErr);
     } finally {
       setLoading(false);
       setStatusMessage('');
@@ -604,11 +614,7 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Scan Invoice or Check</h2>
 
-      {localError && (
-        <div className="alert-box alert-error">
-          <strong>Scan Error:</strong> {localError}
-        </div>
-      )}
+      {/* Errors are handled globally and displayed in App.jsx toast */}
 
       {loading ? (
         <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '40px 20px', gap: '16px' }}>
