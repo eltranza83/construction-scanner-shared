@@ -5,7 +5,8 @@ import {
   getFileContent, 
   uploadFileToDrive, 
   updateFileContent, 
-  uploadPhotoToPhaseFolder 
+  uploadPhotoToPhaseFolder,
+  findOrCreateFolder
 } from '../services/googleDrive';
 
 // Subcontractor categories and phases matching EditForm config
@@ -109,8 +110,11 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     }
 
     try {
-      // 1. Search for blueprint_data.json
-      const configJsonFile = await findFileInFolder(googleToken, selectedFolder.id, 'blueprint_data.json');
+      // 1. Get or create X-Ray subfolder
+      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray_Files', selectedFolder.id);
+
+      // 2. Search for blueprint_data.json inside X-Ray_Files subfolder
+      const configJsonFile = await findFileInFolder(googleToken, xRayFolder.id, 'blueprint_data.json');
       
       if (configJsonFile) {
         setBlueprintDataFileId(configJsonFile.id);
@@ -121,7 +125,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           setBlueprintFileName(data.blueprintFileName || 'Blueprint.png');
           setPins(data.pins || []);
           
-          // 2. Fetch the blueprint image content as a private binary blob
+          // 3. Fetch the blueprint image content as a private binary blob
           const imgUrl = `https://www.googleapis.com/drive/v3/files/${data.blueprintFileId}?alt=media`;
           const response = await fetch(imgUrl, {
             headers: { Authorization: `Bearer ${googleToken}` }
@@ -167,11 +171,14 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setError(null);
 
     try {
-      // 1. Upload blueprint image to project folder
+      // 1. Get or create X-Ray subfolder
+      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray_Files', selectedFolder.id);
+
+      // 2. Upload blueprint image to X-Ray_Files subfolder
       const imgFileName = `${activeProject?.name || 'Project'}_Blueprint_${Date.now()}.${file.name.split('.').pop()}`;
-      const imgUpload = await uploadFileToDrive(googleToken, selectedFolder.id, imgFileName, file.type, file);
+      const imgUpload = await uploadFileToDrive(googleToken, xRayFolder.id, imgFileName, file.type, file);
       
-      // 2. Create the configuration data payload
+      // 3. Create the configuration data payload
       const configPayload = {
         blueprintFileId: imgUpload.id,
         blueprintFileName: imgFileName,
@@ -180,11 +187,11 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
       const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
       
-      // 3. Save blueprint_data.json to project folder
+      // 4. Save blueprint_data.json to X-Ray_Files subfolder
       if (blueprintDataFileId) {
         await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
       } else {
-        await uploadFileToDrive(googleToken, selectedFolder.id, 'blueprint_data.json', 'application/json', blob);
+        await uploadFileToDrive(googleToken, xRayFolder.id, 'blueprint_data.json', 'application/json', blob);
       }
 
       await loadBlueprintData();
