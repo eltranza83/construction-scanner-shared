@@ -54,6 +54,28 @@ export async function uploadFileToDrive(accessToken, folderId, fileName, mimeTyp
     }
 
     const result = await uploadResponse.json();
+
+    // Step 3: Update description metadata separately to guarantee it persists
+    if (description) {
+      try {
+        const updateResponse = await fetch(`${GOOGLE_DRIVE_API_BASE}/files/${fileId}`, {
+          method: 'PATCH',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            description: description
+          }),
+        });
+        if (!updateResponse.ok) {
+          console.warn("Failed to set file description property:", await updateResponse.text());
+        }
+      } catch (err) {
+        console.warn("Error setting description metadata:", err);
+      }
+    }
+
     return {
       id: fileId,
       name: fileName,
