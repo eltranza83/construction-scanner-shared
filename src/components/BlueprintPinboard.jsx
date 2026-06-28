@@ -114,7 +114,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
 
       // 2. Search for blueprint_data.json inside X-Ray_Files subfolder
-      const configJsonFile = await findFileInFolder(googleToken, xRayFolder.id, 'blueprint_data.json');
+      const configJsonFile = await findFileInFolder(googleToken, xRayFolder, 'blueprint_data.json');
       
       if (configJsonFile) {
         setBlueprintDataFileId(configJsonFile.id);
@@ -176,7 +176,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
       // 2. Upload blueprint image to X-Ray_Files subfolder
       const imgFileName = `${activeProject?.name || 'Project'}_Blueprint_${Date.now()}.${file.name.split('.').pop()}`;
-      const imgUpload = await uploadFileToDrive(googleToken, xRayFolder.id, imgFileName, file.type, file);
+      const imgUpload = await uploadFileToDrive(googleToken, xRayFolder, imgFileName, file.type, file);
       
       // 3. Create the configuration data payload
       const configPayload = {
@@ -191,7 +191,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       if (blueprintDataFileId) {
         await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
       } else {
-        await uploadFileToDrive(googleToken, xRayFolder.id, 'blueprint_data.json', 'application/json', blob);
+        await uploadFileToDrive(googleToken, xRayFolder, 'blueprint_data.json', 'application/json', blob);
       }
 
       await loadBlueprintData();
@@ -270,7 +270,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
         const photoFileName = `${formData.tradePhase.replace(/[^a-zA-Z0-9_]/g, '_')}_Pin_${Date.now()}.${selectedPhoto.name.split('.').pop()}`;
         const uploadResult = await uploadPhotoToPhaseFolder(
           googleToken,
-          xRayFolder.id, // Nest subcontractor photo folders inside X-Ray Photos subfolder
+          xRayFolder, // Nest subcontractor photo folders inside X-Ray Photos subfolder
           formData.tradeCategory,
           formData.tradePhase,
           photoFileName,

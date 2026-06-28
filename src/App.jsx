@@ -669,7 +669,7 @@ export default function App() {
             // 6. Upload split file with its metadata in the Invoice Uploads subfolder
             const result = await uploadFileToDrive(
               googleToken, 
-              uploadsFolder.id, 
+              uploadsFolder, 
               splitFileName, 
               'application/pdf', 
               splitPdfBlob,
@@ -693,7 +693,7 @@ export default function App() {
 
           mainUploadResult = await uploadFileToDrive(
             googleToken, 
-            uploadsFolder.id, 
+            uploadsFolder, 
             safeFileName, 
             'application/pdf', 
             pdfBlob,
