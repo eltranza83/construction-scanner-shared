@@ -1325,17 +1325,19 @@ export default function App() {
             <span>Scanner</span>
           </button>
           <button 
-            className={`nav-item ${activeTab === 'invoices' ? 'active' : ''} ${animateBadge ? 'badge-bounce-pop' : ''}`}
+            className={`nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('invoices');
               setInvoicesSubTab('staged'); // Default to staged drafts on tab switch
             }}
             style={{ position: 'relative' }}
           >
-            <FileText size={20} />
-            <span>Invoices</span>
+            <div key={stagedItems.length} className={`nav-item-inner ${animateBadge ? 'badge-bounce-pop' : ''}`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', width: '100%' }}>
+              <FileText size={20} />
+              <span>Invoices</span>
+            </div>
             {stagedItems.length > 0 && (
-              <span className={`nav-badge ${animateBadge ? 'badge-bounce-pop' : ''}`}>
+              <span key={`badge-${stagedItems.length}`} className={`nav-badge ${animateBadge ? 'badge-bounce-pop' : ''}`}>
                 {stagedItems.length}
               </span>
             )}
