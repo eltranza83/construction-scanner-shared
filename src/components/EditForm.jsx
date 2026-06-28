@@ -922,7 +922,14 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                 </button>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+              <div style={{ 
+                display: 'flex', 
+                flexDirection: 'column', 
+                gap: '12px', 
+                maxHeight: splits.length > 2 ? '320px' : 'none', 
+                overflowY: splits.length > 2 ? 'auto' : 'visible', 
+                paddingRight: '4px' 
+              }}>
                 {splits.map((split, index) => (
                   <div key={split.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '8px', borderRadius: '6px' }}>
                     {/* Split Row 1: Amount & Category Toggle & Remove */}
