@@ -33,6 +33,7 @@ export default function App() {
     if (stagedItems.length > prevStagedCount) {
       setAnimateBadge(true);
       const timer = setTimeout(() => setAnimateBadge(false), 500);
+      setPrevStagedCount(stagedItems.length);
       return () => clearTimeout(timer);
     }
     setPrevStagedCount(stagedItems?.length || 0);
@@ -1324,7 +1325,7 @@ export default function App() {
             <span>Scanner</span>
           </button>
           <button 
-            className={`nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+            className={`nav-item ${activeTab === 'invoices' ? 'active' : ''} ${animateBadge ? 'badge-bounce-pop' : ''}`}
             onClick={() => {
               setActiveTab('invoices');
               setInvoicesSubTab('staged'); // Default to staged drafts on tab switch
