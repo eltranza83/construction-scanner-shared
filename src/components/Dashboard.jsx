@@ -3,7 +3,7 @@ import { Search, DollarSign, Wallet, TrendingUp, ChevronDown, ChevronUp, Refresh
 import { fetchProjectDashboardData } from '../services/sheetsDataService';
 import { uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
 
-export default function Dashboard({ googleToken, activeProject, selectedFolder }) {
+export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -197,6 +197,13 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
           headers: { Authorization: `Bearer ${googleToken}` }
         });
         
+        if (response.status === 401) {
+          if (onSessionExpired) {
+            onSessionExpired();
+            return;
+          }
+        }
+        
         if (!response.ok) {
           throw new Error('Failed to search project folder in Google Drive.');
         }
@@ -221,6 +228,13 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder }
       
     } catch (err) {
       console.error(err);
+      const errMsg = err.message.toLowerCase();
+      if (errMsg.includes('401') || errMsg.includes('unauthenticated') || errMsg.includes('auth') || errMsg.includes('credential')) {
+        if (onSessionExpired) {
+          onSessionExpired();
+          return;
+        }
+      }
       // Try to load cached data offline
       const cached = localStorage.getItem(`jobscan_cached_dashboard_${activeProject?.id}`);
       if (cached) {

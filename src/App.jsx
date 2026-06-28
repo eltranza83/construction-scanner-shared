@@ -1087,6 +1087,7 @@ export default function App() {
             googleToken={googleToken}
             activeProject={activeProject}
             selectedFolder={selectedFolder}
+            onSessionExpired={handleSessionExpired}
           />
         ) : activeTab === 'history' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
