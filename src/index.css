@@ -340,6 +340,19 @@ button, input, select, textarea {
   box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.2); /* Soft Gold focus glow */
 }
 
+/* Make native calendar date picker icon highly visible and golden-themed */
+input[type="date"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  filter: invert(0.7) sepia(1) saturate(5) hue-rotate(15deg); /* Tint it bright gold/amber */
+  opacity: 0.8;
+  transition: opacity 0.2s;
+  padding: 2px;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 .form-input::placeholder, .form-textarea::placeholder {
   color: var(--color-zinc-600);
 }
