@@ -9,8 +9,17 @@ const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
  * Creates a file metadata resource and then uploads the media content.
  * This two-step process is highly reliable client-side and avoids multipart assembly.
  */
-export async function uploadFileToDrive(accessToken, folderId, fileName, mimeType, fileBlob) {
+export async function uploadFileToDrive(accessToken, folderId, fileName, mimeType, fileBlob, description = null) {
   try {
+    const body = {
+      name: fileName,
+      mimeType: mimeType,
+      parents: folderId ? [folderId] : [],
+    };
+    if (description) {
+      body.description = description;
+    }
+
     // Step 1: Create file metadata
     const metadataResponse = await fetch(`${GOOGLE_DRIVE_API_BASE}/files`, {
       method: 'POST',
@@ -18,11 +27,7 @@ export async function uploadFileToDrive(accessToken, folderId, fileName, mimeTyp
         Authorization: `Bearer ${accessToken}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        name: fileName,
-        mimeType: mimeType,
-        parents: folderId ? [folderId] : [],
-      }),
+      body: JSON.stringify(body),
     });
 
     if (!metadataResponse.ok) {

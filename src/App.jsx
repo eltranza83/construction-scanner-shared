@@ -541,7 +541,8 @@ export default function App() {
               targetFolderId, 
               lotSpecificFileName, 
               'application/pdf', 
-              pdfBlob
+              pdfBlob,
+              JSON.stringify(metadata)
             );
             
             if (!mainUploadResult) {
@@ -561,7 +562,8 @@ export default function App() {
             selectedFolder.id, 
             safeFileName, 
             'application/pdf', 
-            pdfBlob
+            pdfBlob,
+            JSON.stringify(metadata)
           );
         }
         const uploadResult = mainUploadResult;
