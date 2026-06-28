@@ -190,15 +190,25 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   const [isSplit, setIsSplit] = useState(stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0);
   const [splits, setSplits] = useState(() => {
     if (stagedItem.metadata.splits && stagedItem.metadata.splits.length > 0) {
-      return stagedItem.metadata.splits.map((s, idx) => ({
-        id: s.id || `split_loaded_${idx}_${Date.now()}`,
-        amount: s.amount || '',
-        costCategory: s.costCategory || 'material',
-        lotNumber: s.lotNumber || '',
-        description: s.description || '',
-        tradeCategory: s.tradeCategory || 'Mechanicals_&_Utilities',
-        tradePhase: s.tradePhase || 'Plumbing Rough-In'
-      }));
+      return stagedItem.metadata.splits.map((s, idx) => {
+        let cat = s.tradeCategory || 'Mechanicals_&_Utilities';
+        let phase = s.tradePhase || 'Plumbing Rough-In';
+        
+        // Normalize legacy database names
+        if (cat === 'Structural_Frame') cat = 'Framing_&_Lumber';
+        if (phase === 'HVAC Rough-In') phase = 'HVAC / AC Systems';
+        if (phase === 'Framing') phase = 'Framing & Lumber';
+        
+        return {
+          id: s.id || `split_loaded_${idx}_${Date.now()}`,
+          amount: s.amount || '',
+          costCategory: s.costCategory || 'material',
+          lotNumber: s.lotNumber || '',
+          description: s.description || '',
+          tradeCategory: cat,
+          tradePhase: phase
+        };
+      });
     }
     return [
       { 
