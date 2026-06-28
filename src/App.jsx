@@ -25,6 +25,7 @@ export default function App() {
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
   const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
+  const [stagedItems, setStagedItems] = useState([]);
   const [animateBadge, setAnimateBadge] = useState(false);
   const [prevStagedCount, setPrevStagedCount] = useState(0);
 
@@ -34,10 +35,9 @@ export default function App() {
       const timer = setTimeout(() => setAnimateBadge(false), 500);
       return () => clearTimeout(timer);
     }
-    setPrevStagedCount(stagedItems.length);
+    setPrevStagedCount(stagedItems?.length || 0);
   }, [stagedItems.length, prevStagedCount]);
 
-  const [stagedItems, setStagedItems] = useState([]);
   const [editingItemId, setEditingItemId] = useState(null);
   const [draftToDelete, setDraftToDelete] = useState(null);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
