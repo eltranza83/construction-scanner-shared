@@ -111,7 +111,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
     try {
       // 1. Get or create X-Ray subfolder
-      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray_Files', selectedFolder.id);
+      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
 
       // 2. Search for blueprint_data.json inside X-Ray_Files subfolder
       const configJsonFile = await findFileInFolder(googleToken, xRayFolder.id, 'blueprint_data.json');
@@ -172,7 +172,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
     try {
       // 1. Get or create X-Ray subfolder
-      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray_Files', selectedFolder.id);
+      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
 
       // 2. Upload blueprint image to X-Ray_Files subfolder
       const imgFileName = `${activeProject?.name || 'Project'}_Blueprint_${Date.now()}.${file.name.split('.').pop()}`;
@@ -266,10 +266,11 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
       // 1. If photo is selected, upload it to the proper folder inside Google Drive
       if (selectedPhoto) {
+        const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
         const photoFileName = `${formData.tradePhase.replace(/[^a-zA-Z0-9_]/g, '_')}_Pin_${Date.now()}.${selectedPhoto.name.split('.').pop()}`;
         const uploadResult = await uploadPhotoToPhaseFolder(
           googleToken,
-          selectedFolder.id,
+          xRayFolder.id, // Nest subcontractor photo folders inside X-Ray Photos subfolder
           formData.tradeCategory,
           formData.tradePhase,
           photoFileName,

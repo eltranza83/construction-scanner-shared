@@ -8,7 +8,7 @@ import InviteScreen from './components/InviteScreen';
 import Dashboard from './components/Dashboard';
 import BlueprintPinboard from './components/BlueprintPinboard';
 import { generateDocumentPDF } from './services/pdfGenerator';
-import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet, findFileInFolder, getFileContent, updateFileContent } from './services/googleDrive';
+import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
 import { getFirebaseDb } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -654,19 +654,22 @@ export default function App() {
             // 3. Resolve target folder ID for this split's lot
             const lotName = String(split.lotNumber || '').trim().toLowerCase();
             const matchingProj = projects.find(p => p.name.trim().toLowerCase() === lotName);
-            const targetFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
+            const parentFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
 
-            // 4. Format filename
+            // 4. Find or create the "Invoice Uploads" folder inside the project folder
+            const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', parentFolderId);
+
+            // 5. Format filename
             const resolvedLotName = matchingProj ? matchingProj.name : split.lotNumber;
             const desc = (splitMetadata.description || 'Expense').trim().substring(0, 30).trim();
             const category = (splitMetadata.costCategory || 'material').trim().toLowerCase();
             const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
             const splitFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
 
-            // 5. Upload split file with its metadata in the description
+            // 6. Upload split file with its metadata in the Invoice Uploads subfolder
             const result = await uploadFileToDrive(
               googleToken, 
-              targetFolderId, 
+              uploadsFolder.id, 
               splitFileName, 
               'application/pdf', 
               splitPdfBlob,
@@ -685,9 +688,12 @@ export default function App() {
           const rawName = `${lot} - ${desc} - ${category}.pdf`;
           const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
 
+          // Find or create "Invoice Uploads" folder inside the project folder
+          const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', selectedFolder.id);
+
           mainUploadResult = await uploadFileToDrive(
             googleToken, 
-            selectedFolder.id, 
+            uploadsFolder.id, 
             safeFileName, 
             'application/pdf', 
             pdfBlob,
