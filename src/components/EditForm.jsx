@@ -91,10 +91,20 @@ const ALLOCATION_COLORS = [
   { text: '#c084fc', border: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', darkBg: 'rgba(192, 132, 252, 0.04)' }  // Purple
 ];
 
+// Helper to check if description contains any of the keywords as a whole word
+function hasWholeWord(desc, keywords) {
+  if (!desc) return false;
+  const lowerDesc = desc.toLowerCase();
+  return keywords.some(word => {
+    const escaped = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
+    return regex.test(lowerDesc);
+  });
+}
+
 // Helper to suggest the best split ID for a given line item description based on keywords
 function suggestSplitId(description, splits) {
   if (!description || !splits || splits.length === 0) return null;
-  const desc = description.toLowerCase();
   
   const keywords = {
     plumbing: ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'],
@@ -106,13 +116,13 @@ function suggestSplitId(description, splits) {
     paint: ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']
   };
 
-  const isPlumbingItem = keywords.plumbing.some(k => desc.includes(k));
-  const isElectricalItem = keywords.electrical.some(k => desc.includes(k));
-  const isHVACItem = keywords.hvac.some(k => desc.includes(k));
-  const isFramingItem = keywords.framing.some(k => desc.includes(k));
-  const isCabinetItem = keywords.cabinets.some(k => desc.includes(k));
-  const isDrywallItem = keywords.drywall.some(k => desc.includes(k));
-  const isPaintItem = keywords.paint.some(k => desc.includes(k));
+  const isPlumbingItem = hasWholeWord(description, keywords.plumbing);
+  const isElectricalItem = hasWholeWord(description, keywords.electrical);
+  const isHVACItem = hasWholeWord(description, keywords.hvac);
+  const isFramingItem = hasWholeWord(description, keywords.framing);
+  const isCabinetItem = hasWholeWord(description, keywords.cabinets);
+  const isDrywallItem = hasWholeWord(description, keywords.drywall);
+  const isPaintItem = hasWholeWord(description, keywords.paint);
 
   // Find a split that matches the category of the item
   for (const s of splits) {
@@ -973,32 +983,32 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                   // Scan line items for trade categories
                   const detectedTrades = [];
                   (stagedItem.metadata.lineItems || []).forEach(item => {
-                    const desc = (item.description || '').toLowerCase();
-                    const isPlumb = ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'].some(k => desc.includes(k));
+                    const desc = item.description || '';
+                    const isPlumb = hasWholeWord(desc, ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout']);
                     if (isPlumb && !detectedTrades.some(t => t.tradePhase === 'Plumbing Rough-In')) {
                       detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' });
                     }
-                    const isElect = ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction'].some(k => desc.includes(k));
+                    const isElect = hasWholeWord(desc, ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction']);
                     if (isElect && !detectedTrades.some(t => t.tradePhase === 'Electrical & Lighting')) {
                       detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' });
                     }
-                    const isHvac = ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'].some(k => desc.includes(k));
+                    const isHvac = hasWholeWord(desc, ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle']);
                     if (isHvac && !detectedTrades.some(t => t.tradePhase === 'HVAC / AC Systems')) {
                       detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'HVAC / AC Systems' });
                     }
-                    const isFrame = ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie'].some(k => desc.includes(k));
+                    const isFrame = hasWholeWord(desc, ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie']);
                     if (isFrame && !detectedTrades.some(t => t.tradeCategory === 'Framing_&_Lumber')) {
                       detectedTrades.push({ tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing & Lumber' });
                     }
-                    const isCabinet = ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity'].some(k => desc.includes(k));
+                    const isCabinet = hasWholeWord(desc, ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity']);
                     if (isCabinet && !detectedTrades.some(t => t.tradePhase === 'Cabinets & Trim Carpentry')) {
                       detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Cabinets & Trim Carpentry' });
                     }
-                    const isDrywall = ['drywall', 'sheetrock', 'mud', 'joint', 'compound', 'plaster', 'gypsum'].some(k => desc.includes(k));
+                    const isDrywall = hasWholeWord(desc, ['drywall', 'sheetrock', 'mud', 'joint', 'compound', 'plaster', 'gypsum']);
                     if (isDrywall && !detectedTrades.some(t => t.tradePhase === 'Drywall & Sheetrock')) {
                       detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Drywall & Sheetrock' });
                     }
-                    const isPaint = ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent'].some(k => desc.includes(k));
+                    const isPaint = hasWholeWord(desc, ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']);
                     if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint & Finishes')) {
                       detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint & Finishes' });
                     }
