@@ -837,7 +837,17 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         )}
 
         {/* Split Expense Configuration Block */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--color-zinc-800)', padding: '10px 12px', borderRadius: '8px', backgroundColor: 'var(--color-zinc-900)' }}>
+        <div style={{ 
+          display: 'flex', 
+          flexDirection: 'column', 
+          gap: '8px', 
+          border: '1px solid var(--color-zinc-800)', 
+          borderLeft: isSplit ? '3px solid #C5A059' : '3px solid var(--color-zinc-700)', /* Highlight left border */
+          padding: '10px 12px', 
+          borderRadius: '8px', 
+          backgroundColor: 'var(--color-zinc-900)',
+          transition: 'border-left-color 0.25s ease'
+        }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-zinc-200)' }}>Split Expense Allocations</span>
@@ -880,8 +890,19 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                   ]);
                 }
               }}
-              className={`cost-toggle-btn ${isSplit ? 'active material' : ''}`}
-              style={{ width: 'auto', padding: '5px 10px', fontSize: '0.72rem', border: '1px solid var(--color-zinc-800)', borderRadius: '6px' }}
+              style={{
+                width: 'auto',
+                padding: '6px 12px',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                borderRadius: '6px',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease-in-out',
+                backgroundColor: isSplit ? '#C5A059' : 'rgba(197, 160, 89, 0.08)',
+                color: isSplit ? '#000000' : '#C5A059',
+                border: isSplit ? '1px solid #C5A059' : '1px solid rgba(197, 160, 89, 0.4)',
+                boxShadow: isSplit ? '0 2px 8px rgba(197, 160, 89, 0.25)' : 'none',
+              }}
             >
               {isSplit ? 'Split Active' : 'Enable Split'}
             </button>

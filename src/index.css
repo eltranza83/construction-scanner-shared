@@ -343,7 +343,7 @@ button, input, select, textarea {
 /* Make native calendar date picker icon highly visible and golden-themed */
 input[type="date"]::-webkit-calendar-picker-indicator {
   cursor: pointer;
-  filter: invert(0.7) sepia(1) saturate(5) hue-rotate(15deg); /* Tint it bright gold/amber */
+  filter: invert(0.7) sepia(1) saturate(3) hue-rotate(-5deg) brightness(1.1); /* Match brand warm gold */
   opacity: 0.8;
   transition: opacity 0.2s;
   padding: 2px;
