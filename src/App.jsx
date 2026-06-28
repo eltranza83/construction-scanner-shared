@@ -521,30 +521,48 @@ export default function App() {
         // Online Sync to Google Drive
         let mainUploadResult = null;
         if (metadata.splits && metadata.splits.length > 0) {
-          // Identify all unique lot names involved in this split
-          const uniqueLots = [...new Set(metadata.splits.map(s => String(s.lotNumber || '').trim().toLowerCase()))];
-          
-          for (const lotName of uniqueLots) {
-            // Find a matching project profile folder ID
+          // Generate and upload a separate PDF for each split item
+          for (const split of metadata.splits) {
+            const splitAmount = parseFloat(split.amount) || 0;
+            if (splitAmount <= 0) continue;
+
+            // 1. Construct single-split metadata
+            const splitMetadata = {
+              ...metadata,
+              amount: splitAmount,
+              description: split.description || metadata.description,
+              lotNumber: split.lotNumber || metadata.lotNumber,
+              tradeCategory: split.tradeCategory || metadata.tradeCategory,
+              tradePhase: split.tradePhase || metadata.tradePhase,
+              costCategory: split.costCategory || metadata.costCategory,
+              splits: null // Clear splits array so it gets logged as a single invoice
+            };
+
+            // 2. Generate PDF for this split
+            const splitPdfBlob = await generateDocumentPDF(splitMetadata, images);
+
+            // 3. Resolve target folder ID for this split's lot
+            const lotName = String(split.lotNumber || '').trim().toLowerCase();
             const matchingProj = projects.find(p => p.name.trim().toLowerCase() === lotName);
             const targetFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
-            
-            // Format specific filename for this lot
-            const resolvedLotName = matchingProj ? matchingProj.name : lotName;
-            const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
-            const category = (metadata.costCategory || 'material').trim().toLowerCase();
-            const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
-            const lotSpecificFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
 
+            // 4. Format filename
+            const resolvedLotName = matchingProj ? matchingProj.name : split.lotNumber;
+            const desc = (splitMetadata.description || 'Expense').trim().substring(0, 30).trim();
+            const category = (splitMetadata.costCategory || 'material').trim().toLowerCase();
+            const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
+            const splitFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+
+            // 5. Upload split file with its metadata in the description
             const result = await uploadFileToDrive(
               googleToken, 
               targetFolderId, 
-              lotSpecificFileName, 
+              splitFileName, 
               'application/pdf', 
-              pdfBlob,
-              JSON.stringify(metadata)
+              splitPdfBlob,
+              JSON.stringify(splitMetadata)
             );
-            
+
             if (!mainUploadResult) {
               mainUploadResult = result;
             }
