@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database, TrendingUp } from 'lucide-react';
+import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database, TrendingUp, MapPin } from 'lucide-react';
 import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
 import EditForm from './components/EditForm';
 import Settings from './components/Settings';
 import InviteScreen from './components/InviteScreen';
 import Dashboard from './components/Dashboard';
+import BlueprintPinboard from './components/BlueprintPinboard';
 import { generateDocumentPDF } from './services/pdfGenerator';
 import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet } from './services/googleDrive';
 import { getFirebaseDb } from './services/firebase';
@@ -1089,6 +1090,12 @@ export default function App() {
             selectedFolder={selectedFolder}
             onSessionExpired={handleSessionExpired}
           />
+        ) : activeTab === 'xray' ? (
+          <BlueprintPinboard
+            googleToken={googleToken}
+            activeProject={activeProject}
+            selectedFolder={selectedFolder}
+          />
         ) : activeTab === 'history' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Sync Log & History</h2>
@@ -1192,6 +1199,13 @@ export default function App() {
           >
             <TrendingUp size={20} />
             <span>Dashboard</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'xray' ? 'active' : ''}`}
+            onClick={() => setActiveTab('xray')}
+          >
+            <MapPin size={20} />
+            <span>X-Ray</span>
           </button>
           <button 
             className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}

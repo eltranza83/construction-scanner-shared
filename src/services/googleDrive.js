@@ -334,3 +334,53 @@ export async function listPhotosInPhase(accessToken, rootFolderId, categoryName,
     return [];
   }
 }
+
+/**
+ * Searches for a specific file by name inside a target Google Drive folder.
+ */
+export async function findFileInFolder(accessToken, folderId, fileName) {
+  const query = `'${folderId}' in parents and name='${fileName}' and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name,webViewLink)`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to find file in folder: ${await response.text()}`);
+  }
+  const result = await response.json();
+  return result.files && result.files.length > 0 ? result.files[0] : null;
+}
+
+/**
+ * Downloads and parses JSON content of a specific Google Drive file.
+ */
+export async function getFileContent(accessToken, fileId) {
+  const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?alt=media`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to get file content: ${await response.text()}`);
+  }
+  return await response.json();
+}
+
+/**
+ * Overwrites the binary content of an existing Google Drive file.
+ */
+export async function updateFileContent(accessToken, fileId, fileBlob, mimeType) {
+  const url = `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': mimeType
+    },
+    body: fileBlob
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to update file content: ${await response.text()}`);
+  }
+  return await response.json();
+}
+
