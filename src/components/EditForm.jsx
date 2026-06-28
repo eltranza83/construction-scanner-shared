@@ -1149,37 +1149,42 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                             </span>
                           </div>
                           
-                          <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
+                          <select
+                            value={allocatedSplitId || ''}
+                            onChange={(e) => handleAllocateItem(idx, e.target.value)}
+                            className="form-input"
+                            style={{
+                              width: 'auto',
+                              minWidth: '150px',
+                              maxWidth: '220px',
+                              padding: '4px 8px',
+                              fontSize: '0.72rem',
+                              margin: 0,
+                              borderColor: (() => {
+                                const sIdx = splits.findIndex(s => s.id === allocatedSplitId);
+                                return sIdx !== -1 ? ALLOCATION_COLORS[sIdx % ALLOCATION_COLORS.length].border : 'var(--color-zinc-800)';
+                              })(),
+                              backgroundColor: 'var(--color-zinc-900)',
+                              color: '#fff',
+                              borderRadius: '4px',
+                              cursor: 'pointer',
+                              fontWeight: 700,
+                              outline: 'none',
+                              transition: 'border-color 0.15s ease'
+                            }}
+                          >
                             {splits.map((s, sIdx) => {
-                              const isSelected = allocatedSplitId === s.id;
                               const allLotsSame = splits.length > 1 && splits.every(sp => sp.lotNumber === splits[0].lotNumber);
                               const label = allLotsSame 
                                 ? `#${sIdx + 1}: ${s.tradePhase || 'Trade?'}` 
-                                : (s.lotNumber || 'Lot ?');
-                              const theme = ALLOCATION_COLORS[sIdx % ALLOCATION_COLORS.length];
+                                : `${s.lotNumber || 'Lot ?'} (${s.tradePhase || 'Trade?'})`;
                               return (
-                                <button
-                                  key={s.id}
-                                  type="button"
-                                  onClick={() => handleAllocateItem(idx, s.id)}
-                                  style={{
-                                    padding: '4px 8px',
-                                    fontSize: '0.68rem',
-                                    fontWeight: 700,
-                                    borderRadius: '4px',
-                                    border: '1px solid',
-                                    borderColor: isSelected ? theme.border : 'var(--color-zinc-800)',
-                                    backgroundColor: isSelected ? theme.bg : 'transparent',
-                                    color: isSelected ? theme.text : 'var(--color-zinc-400)',
-                                    cursor: 'pointer',
-                                    transition: 'all 0.15s ease'
-                                  }}
-                                >
+                                <option key={s.id} value={s.id} style={{ backgroundColor: 'var(--color-zinc-900)', color: '#fff' }}>
                                   {label}
-                                </button>
+                                </option>
                               );
                             })}
-                          </div>
+                          </select>
                         </div>
                       );
                     })}
