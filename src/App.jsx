@@ -8,7 +8,7 @@ import InviteScreen from './components/InviteScreen';
 import Dashboard from './components/Dashboard';
 import BlueprintPinboard from './components/BlueprintPinboard';
 import { generateDocumentPDF } from './services/pdfGenerator';
-import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet } from './services/googleDrive';
+import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet, findFileInFolder, getFileContent, updateFileContent } from './services/googleDrive';
 import { getFirebaseDb } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -200,6 +200,89 @@ export default function App() {
       document.removeEventListener('click', handleOutsideClick);
     };
   }, [showProjectDropdown]);
+
+  // Google Drive Cloud Sync for Projects
+  const syncProjectsFromCloud = async (token) => {
+    try {
+      console.log("Searching for cloud projects configuration...");
+      const configFile = await findFileInFolder(token, 'root', 'jobscan_config.json');
+      
+      if (configFile) {
+        console.log("Cloud projects configuration found. Loading...");
+        const cloudProjects = await getFileContent(token, configFile.id);
+        
+        if (Array.isArray(cloudProjects)) {
+          setProjects(cloudProjects);
+          localStorage.setItem('jobscan_projects', JSON.stringify(cloudProjects));
+          console.log("Projects loaded from Google Drive:", cloudProjects);
+          
+          // Verify active project selection matches one of the cloud projects
+          const activeProjId = localStorage.getItem('jobscan_active_project_id');
+          if (activeProjId) {
+            const match = cloudProjects.find(p => p.id === activeProjId);
+            if (match) {
+              setActiveProject(match);
+              setSelectedFolder({ id: match.folderId, name: match.folderName });
+            } else if (cloudProjects.length > 0) {
+              const first = cloudProjects[0];
+              setActiveProject(first);
+              setSelectedFolder({ id: first.folderId, name: first.folderName });
+              localStorage.setItem('jobscan_active_project_id', first.id);
+              localStorage.setItem('jobscan_folder_id', first.folderId);
+              localStorage.setItem('jobscan_folder_name', first.folderName);
+            }
+          } else if (cloudProjects.length > 0) {
+            const first = cloudProjects[0];
+            setActiveProject(first);
+            setSelectedFolder({ id: first.folderId, name: first.folderName });
+            localStorage.setItem('jobscan_active_project_id', first.id);
+            localStorage.setItem('jobscan_folder_id', first.folderId);
+            localStorage.setItem('jobscan_folder_name', first.folderName);
+          }
+        }
+      } else {
+        console.log("No cloud projects configuration found. Uploading current local projects...");
+        const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
+        await uploadFileToDrive(token, 'root', 'jobscan_config.json', 'application/json', blob);
+      }
+    } catch (err) {
+      console.error("Failed to sync projects from Google Drive:", err);
+    }
+  };
+
+  const saveProjectsToCloud = async (updatedProjects, token = googleToken) => {
+    if (!token) return;
+    try {
+      console.log("Saving projects to Google Drive...");
+      const configFile = await findFileInFolder(token, 'root', 'jobscan_config.json');
+      const blob = new Blob([JSON.stringify(updatedProjects, null, 2)], { type: 'application/json' });
+      
+      if (configFile) {
+        await updateFileContent(token, configFile.id, blob, 'application/json');
+        console.log("Cloud projects configuration updated.");
+      } else {
+        await uploadFileToDrive(token, 'root', 'jobscan_config.json', 'application/json', blob);
+        console.log("Cloud projects configuration created.");
+      }
+    } catch (err) {
+      console.error("Failed to save projects to Google Drive:", err);
+    }
+  };
+
+  const handleUpdateProjects = (newProjects) => {
+    setProjects(newProjects);
+    localStorage.setItem('jobscan_projects', JSON.stringify(newProjects));
+    if (googleToken) {
+      saveProjectsToCloud(newProjects, googleToken);
+    }
+  };
+
+  // Sync projects list from cloud whenever user logs in or refreshes with a valid token
+  useEffect(() => {
+    if (googleToken) {
+      syncProjectsFromCloud(googleToken);
+    }
+  }, [googleToken]);
 
   // Save history to LocalStorage
   const saveHistory = (newHistory) => {
@@ -1183,7 +1266,7 @@ export default function App() {
             onSignOut={handleSignOut}
             onSignIn={handleGoogleSignIn}
             projects={projects}
-            setProjects={setProjects}
+            setProjects={handleUpdateProjects}
             activeProject={activeProject}
             setActiveProject={setActiveProject}
             handleSelectActiveProject={handleSelectActiveProject}
