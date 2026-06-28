@@ -671,96 +671,166 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
           </div>
         </div>
 
-        {/* Row 3: Vendor & Amount */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="edit-vendor" style={{ fontSize: '0.72rem' }}>
-              <User size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              Contact / Vendor
-            </label>
-            <input 
-              type="text"
-              id="edit-vendor"
-              name="vendor"
-              required
-              className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
-              value={formData.vendor}
-              onChange={handleChange}
-              placeholder="Lowe's, vendor name..."
-            />
-          </div>
+        {/* Row 3: Vendor, Amount, Date & Check Number dynamically sized */}
+        {formData.type === 'check' ? (
+          <>
+            {/* For Check Type: Two rows of two columns */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-vendor" style={{ fontSize: '0.72rem' }}>
+                  <User size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  Contact / Vendor
+                </label>
+                <input 
+                  type="text"
+                  id="edit-vendor"
+                  name="vendor"
+                  required
+                  className="form-input"
+                  style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                  value={formData.vendor}
+                  onChange={handleChange}
+                  placeholder="Lowe's, vendor name..."
+                />
+              </div>
 
-          <div className="form-group">
-            <label className="form-label" htmlFor="edit-amount" style={{ fontSize: '0.72rem' }}>
-              <DollarSign size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              {isSplit ? 'Total Amount (Split)' : 'Amount ($)'}
-            </label>
-            {isSplit ? (
-              <input 
-                type="text"
-                id="edit-amount"
-                disabled
-                className="form-input"
-                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: 'var(--color-amber-400)', fontWeight: 700, border: '1px dashed var(--color-zinc-700)', boxSizing: 'border-box' }}
-                value={`$${(splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0)).toFixed(2)}`}
-              />
-            ) : (
-              <input 
-                type="number"
-                step="0.01"
-                id="edit-amount"
-                name="amount"
-                required
-                className="form-input"
-                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
-                value={formData.amount}
-                onChange={handleChange}
-                placeholder="0.00"
-              />
-            )}
-          </div>
-        </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-amount" style={{ fontSize: '0.72rem' }}>
+                  <DollarSign size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  {isSplit ? 'Total Amount (Split)' : 'Amount ($)'}
+                </label>
+                {isSplit ? (
+                  <input 
+                    type="text"
+                    id="edit-amount"
+                    disabled
+                    className="form-input"
+                    style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: 'var(--color-amber-400)', fontWeight: 700, border: '1px dashed var(--color-zinc-700)', boxSizing: 'border-box' }}
+                    value={`$${(splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0)).toFixed(2)}`}
+                  />
+                ) : (
+                  <input 
+                    type="number"
+                    step="0.01"
+                    id="edit-amount"
+                    name="amount"
+                    required
+                    className="form-input"
+                    style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                    value={formData.amount}
+                    onChange={handleChange}
+                    placeholder="0.00"
+                  />
+                )}
+              </div>
+            </div>
 
-        {/* Row 4: Transaction Date & Check Number */}
-        <div style={{ display: 'grid', gridTemplateColumns: formData.type === 'check' ? '1.4fr 1fr' : '1fr', gap: '12px' }}>
-          <div className="form-group">
-            <label className="form-label" htmlFor="edit-date" style={{ fontSize: '0.72rem' }}>
-              <Calendar size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-              Transaction Date
-            </label>
-            <input 
-              type="date"
-              id="edit-date"
-              name="date"
-              required
-              className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
-              value={formData.date}
-              onChange={handleChange}
-            />
-          </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr', gap: '12px' }}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-date" style={{ fontSize: '0.72rem' }}>
+                  <Calendar size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  Transaction Date
+                </label>
+                <input 
+                  type="date"
+                  id="edit-date"
+                  name="date"
+                  required
+                  className="form-input"
+                  style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                  value={formData.date}
+                  onChange={handleChange}
+                />
+              </div>
 
-          {formData.type === 'check' && (
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-check-number" style={{ fontSize: '0.72rem' }}>
+                  <CheckSquare size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                  Check Number
+                </label>
+                <input 
+                  type="text"
+                  id="edit-check-number"
+                  name="checkNumber"
+                  required
+                  className="form-input"
+                  style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                  value={formData.checkNumber || ''}
+                  onChange={handleChange}
+                  placeholder="Check #"
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          /* For Invoice / Receipt Type: Single row of three columns */
+          <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 0.8fr 1fr', gap: '12px' }}>
             <div className="form-group">
-              <label className="form-label" htmlFor="edit-check-number" style={{ fontSize: '0.72rem' }}>
-                <CheckSquare size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
-                Check Number
+              <label className="form-label" htmlFor="edit-vendor" style={{ fontSize: '0.72rem' }}>
+                <User size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                Contact / Vendor
               </label>
               <input 
                 type="text"
-                id="edit-check-number"
-                name="checkNumber"
+                id="edit-vendor"
+                name="vendor"
                 required
                 className="form-input"
                 style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
-                value={formData.checkNumber || ''}
+                value={formData.vendor}
                 onChange={handleChange}
-                placeholder="Check #"
+                placeholder="Vendor name..."
               />
             </div>
-          )}
-        </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-amount" style={{ fontSize: '0.72rem' }}>
+                <DollarSign size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                {isSplit ? 'Amount' : 'Amount ($)'}
+              </label>
+              {isSplit ? (
+                <input 
+                  type="text"
+                  id="edit-amount"
+                  disabled
+                  className="form-input"
+                  style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: 'var(--color-amber-400)', fontWeight: 700, border: '1px dashed var(--color-zinc-700)', boxSizing: 'border-box' }}
+                  value={`$${(splits.reduce((sum, s) => sum + (parseFloat(s.amount) || 0), 0)).toFixed(2)}`}
+                />
+              ) : (
+                <input 
+                  type="number"
+                  step="0.01"
+                  id="edit-amount"
+                  name="amount"
+                  required
+                  className="form-input"
+                  style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                  value={formData.amount}
+                  onChange={handleChange}
+                  placeholder="0.00"
+                />
+              )}
+            </div>
+
+            <div className="form-group">
+              <label className="form-label" htmlFor="edit-date" style={{ fontSize: '0.72rem' }}>
+                <Calendar size={10} style={{ marginRight: '4px', verticalAlign: 'middle' }} />
+                Transaction Date
+              </label>
+              <input 
+                type="date"
+                id="edit-date"
+                name="date"
+                required
+                className="form-input"
+                style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
+                value={formData.date}
+                onChange={handleChange}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Split Expense Configuration Block */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', border: '1px solid var(--color-zinc-800)', padding: '10px 12px', borderRadius: '8px', backgroundColor: 'var(--color-zinc-900)' }}>
