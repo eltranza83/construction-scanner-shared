@@ -614,7 +614,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               id="edit-lot-number"
               name="lotNumber"
               className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff' }}
+              style={{ padding: '8px 12px', fontSize: '0.85rem' }}
               value={formData.lotNumber || ''}
               onChange={handleChange}
             >
@@ -638,7 +638,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               id="edit-trade-category"
               name="tradeCategory"
               className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff' }}
+              style={{ padding: '8px 12px', fontSize: '0.85rem' }}
               value={formData.tradeCategory || 'Mechanicals_&_Utilities'}
               onChange={handleCategoryChange}
             >
@@ -658,7 +658,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               id="edit-trade-phase"
               name="tradePhase"
               className="form-input"
-              style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%', backgroundColor: 'var(--color-zinc-900)', color: '#fff' }}
+              style={{ padding: '8px 12px', fontSize: '0.85rem' }}
               value={formData.tradePhase || ''}
               onChange={handleChange}
             >
@@ -952,7 +952,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       <select
                         required
                         className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.8rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', boxSizing: 'border-box', margin: 0 }}
+                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
                         value={split.lotNumber}
                         onChange={(e) => handleSplitChange(split.id, 'lotNumber', e.target.value)}
                       >
@@ -977,7 +977,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '8px' }}>
                       <select
                         className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', margin: 0 }}
+                        style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
                         value={split.tradeCategory || 'Mechanicals_&_Utilities'}
                         onChange={(e) => {
                           const cat = e.target.value;
@@ -995,7 +995,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
                       <select
                         className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', backgroundColor: 'var(--color-zinc-900)', color: '#fff', margin: 0 }}
+                        style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
                         value={split.tradePhase || ''}
                         onChange={(e) => handleSplitChange(split.id, 'tradePhase', e.target.value)}
                       >
