@@ -84,6 +84,52 @@ const TRADE_SECTIONS_CONFIG = {
   }
 };
 
+const ALLOCATION_COLORS = [
+  { text: '#C5A059', border: '#C5A059', bg: 'rgba(197, 160, 89, 0.12)', darkBg: 'rgba(197, 160, 89, 0.04)' }, // Gold
+  { text: '#38bdf8', border: '#38bdf8', bg: 'rgba(56, 189, 248, 0.12)', darkBg: 'rgba(56, 189, 248, 0.04)' }, // Blue
+  { text: '#34d399', border: '#34d399', bg: 'rgba(52, 211, 153, 0.12)', darkBg: 'rgba(52, 211, 153, 0.04)' }, // Green
+  { text: '#c084fc', border: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', darkBg: 'rgba(192, 132, 252, 0.04)' }  // Purple
+];
+
+// Helper to suggest the best split ID for a given line item description based on keywords
+function suggestSplitId(description, splits) {
+  if (!description || !splits || splits.length === 0) return null;
+  const desc = description.toLowerCase();
+  
+  const keywords = {
+    plumbing: ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'],
+    electrical: ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction'],
+    hvac: ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'],
+    framing: ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie']
+  };
+
+  const isPlumbingItem = keywords.plumbing.some(k => desc.includes(k));
+  const isElectricalItem = keywords.electrical.some(k => desc.includes(k));
+  const isHVACItem = keywords.hvac.some(k => desc.includes(k));
+  const isFramingItem = keywords.framing.some(k => desc.includes(k));
+
+  // Find a split that matches the category of the item
+  for (const s of splits) {
+    const phaseLower = (s.tradePhase || '').toLowerCase();
+    const catLower = (s.tradeCategory || '').toLowerCase();
+
+    if (isPlumbingItem && (phaseLower.includes('plumb') || phaseLower.includes('sewer') || phaseLower.includes('water') || catLower.includes('plumb'))) {
+      return s.id;
+    }
+    if (isElectricalItem && (phaseLower.includes('elect') || phaseLower.includes('light') || phaseLower.includes('power') || phaseLower.includes('wire') || catLower.includes('elect'))) {
+      return s.id;
+    }
+    if (isHVACItem && (phaseLower.includes('hvac') || phaseLower.includes('duct') || phaseLower.includes('heat') || phaseLower.includes('vent') || phaseLower.includes('air'))) {
+      return s.id;
+    }
+    if (isFramingItem && (phaseLower.includes('frame') || phaseLower.includes('lumber') || phaseLower.includes('wood') || phaseLower.includes('truss') || catLower.includes('frame') || catLower.includes('struct'))) {
+      return s.id;
+    }
+  }
+
+  return null;
+}
+
 export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [], projects = [] }) {
   // Fallback mock items for existing user drafts
   if (!stagedItem.metadata.lineItems && stagedItem.metadata.vendor?.toLowerCase().includes('home depot')) {
@@ -154,25 +200,33 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
   // itemAllocations maps: itemIndex -> split.id
   const [itemAllocations, setItemAllocations] = useState({});
+  // Track manual allocations by the user so suggestions don't override them
+  const [manualAllocations, setManualAllocations] = useState({});
 
   useEffect(() => {
     if (stagedItem.metadata.lineItems && splits.length > 0) {
       setItemAllocations(prev => {
         const next = { ...prev };
-        stagedItem.metadata.lineItems.forEach((_, idx) => {
-          if (!next[idx]) {
-            // Default first item to split 1, others to split 2 if there's exactly 2 splits
-            if (idx === 0) {
-              next[idx] = splits[0].id;
+        stagedItem.metadata.lineItems.forEach((item, idx) => {
+          // Only auto-suggest if user hasn't manually assigned this item
+          if (!manualAllocations[idx]) {
+            const suggestedId = suggestSplitId(item.description, splits);
+            if (suggestedId) {
+              next[idx] = suggestedId;
             } else {
-              next[idx] = splits[1] ? splits[1].id : splits[0].id;
+              // Default fallback
+              if (idx === 0) {
+                next[idx] = splits[0].id;
+              } else {
+                next[idx] = splits[1] ? splits[1].id : splits[0].id;
+              }
             }
           }
         });
         return next;
       });
     }
-  }, [splits, stagedItem.metadata.lineItems]);
+  }, [splits, stagedItem.metadata.lineItems, manualAllocations]);
 
   // Run initial allocation calculation if itemAllocations is populated
   useEffect(() => {
@@ -204,6 +258,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   }, [itemAllocations, stagedItem.metadata.lineItems]);
 
   const handleAllocateItem = (itemIdx, splitId) => {
+    setManualAllocations(prev => ({ ...prev, [itemIdx]: true }));
     setItemAllocations(prev => {
       const next = { ...prev, [itemIdx]: splitId };
       
@@ -859,6 +914,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                 const nextSplit = !isSplit;
                 setIsSplit(nextSplit);
                 if (nextSplit) {
+                  setManualAllocations({});
+                  setItemAllocations({});
                   const activeName = formData.lotNumber || '';
                   let otherName = '';
                   if (projects && projects.length === 2) {
@@ -930,135 +987,147 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                 overflowY: splits.length > 2 ? 'auto' : 'visible', 
                 paddingRight: '4px' 
               }}>
-                {splits.map((split, index) => (
-                  <div key={split.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '8px', borderRadius: '6px' }}>
-                    {/* Split Card Header with Allocation Number & Delete button */}
-                    <div style={{ 
+                {splits.map((split, index) => {
+                  const colorTheme = ALLOCATION_COLORS[index % ALLOCATION_COLORS.length];
+                  return (
+                    <div key={split.id} style={{ 
                       display: 'flex', 
-                      justifyContent: 'space-between', 
-                      alignItems: 'center', 
-                      borderBottom: '1px dashed var(--color-zinc-800)', 
-                      paddingBottom: '6px', 
-                      marginBottom: '2px' 
+                      flexDirection: 'column', 
+                      gap: '6px', 
+                      backgroundColor: 'var(--color-zinc-950)', 
+                      border: '1px solid var(--color-zinc-800)', 
+                      borderLeft: `3px solid ${colorTheme.border}`,
+                      padding: '8px', 
+                      borderRadius: '6px' 
                     }}>
-                      <span style={{ 
-                        fontSize: '0.65rem', 
-                        fontWeight: 800, 
-                        color: 'var(--color-zinc-400)', 
-                        letterSpacing: '0.05em', 
-                        textTransform: 'uppercase' 
+                      {/* Split Card Header with Allocation Number & Delete button */}
+                      <div style={{ 
+                        display: 'flex', 
+                        justifyContent: 'space-between', 
+                        alignItems: 'center', 
+                        borderBottom: '1px dashed var(--color-zinc-800)', 
+                        paddingBottom: '6px', 
+                        marginBottom: '2px' 
                       }}>
-                        Allocation #{index + 1}
-                      </span>
-                      {splits.length > 1 && (
-                        <button 
-                          type="button"
-                          onClick={() => handleRemoveSplit(split.id)}
-                          style={{ background: 'none', border: 'none', color: 'var(--color-rose-500)', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.8 }}
-                          title="Remove this split allocation"
-                        >
-                          <Trash2 size={12} />
-                        </button>
-                      )}
-                    </div>
+                        <span style={{ 
+                          fontSize: '0.65rem', 
+                          fontWeight: 800, 
+                          color: colorTheme.text,
+                          letterSpacing: '0.05em', 
+                          textTransform: 'uppercase' 
+                        }}>
+                          Allocation #{index + 1}
+                        </span>
+                        {splits.length > 1 && (
+                          <button 
+                            type="button"
+                            onClick={() => handleRemoveSplit(split.id)}
+                            style={{ background: 'none', border: 'none', color: 'var(--color-rose-500)', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+                            title="Remove this split allocation"
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        )}
+                      </div>
 
-                    {/* Split Row 1: Amount & Category Toggle */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', alignItems: 'center' }}>
-                      <input 
-                        type="number"
-                        step="0.01"
-                        required
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
-                        value={split.amount}
-                        onChange={(e) => handleSplitChange(split.id, 'amount', e.target.value)}
-                        placeholder="Amount ($)"
-                      />
+                      {/* Split Row 1: Amount & Category Toggle */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', alignItems: 'center' }}>
+                        <input 
+                          type="number"
+                          step="0.01"
+                          required
+                          className="form-input"
+                          style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                          value={split.amount}
+                          onChange={(e) => handleSplitChange(split.id, 'amount', e.target.value)}
+                          placeholder="Amount ($)"
+                        />
 
-                      <div className="cost-toggle-container" style={{ margin: 0, padding: '2px', height: '28px' }}>
-                        <button 
-                          type="button"
-                          onClick={() => handleSplitChange(split.id, 'costCategory', 'material')}
-                          className={`cost-toggle-btn ${split.costCategory === 'material' ? 'active material' : ''}`}
-                          style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                        <div className="cost-toggle-container" style={{ margin: 0, padding: '2px', height: '28px' }}>
+                          <button 
+                            type="button"
+                            onClick={() => handleSplitChange(split.id, 'costCategory', 'material')}
+                            className={`cost-toggle-btn ${split.costCategory === 'material' ? 'active material' : ''}`}
+                            style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                          >
+                            Mat
+                          </button>
+                          <button 
+                            type="button"
+                            onClick={() => handleSplitChange(split.id, 'costCategory', 'labor')}
+                            className={`cost-toggle-btn ${split.costCategory === 'labor' ? 'active labor' : ''}`}
+                            style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                          >
+                            Lab
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Split Row 2: Lot Number & Description */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
+                        <select
+                          required
+                          className="form-input"
+                          style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                          value={split.lotNumber}
+                          onChange={(e) => handleSplitChange(split.id, 'lotNumber', e.target.value)}
                         >
-                          Mat
-                        </button>
-                        <button 
-                          type="button"
-                          onClick={() => handleSplitChange(split.id, 'costCategory', 'labor')}
-                          className={`cost-toggle-btn ${split.costCategory === 'labor' ? 'active labor' : ''}`}
-                          style={{ padding: '2px', fontSize: '0.68rem', border: 'none', height: '100%', flex: 1 }}
+                          <option value="">Select Lot</option>
+                          {projects.map(p => (
+                            <option key={p.id} value={p.name}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                        <input 
+                          type="text"
+                          className="form-input"
+                          style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
+                          value={split.description}
+                          onChange={(e) => handleSplitChange(split.id, 'description', e.target.value)}
+                          placeholder="Split description..."
+                        />
+                      </div>
+
+                      {/* Split Row 3: Trade Category & Phase */}
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '8px' }}>
+                        <select
+                          className="form-input"
+                          style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
+                          value={split.tradeCategory || 'Mechanicals_&_Utilities'}
+                          onChange={(e) => {
+                            const cat = e.target.value;
+                            const defPhase = TRADE_SECTIONS_CONFIG[cat]?.phases[0] || '';
+                            handleSplitChange(split.id, 'tradeCategory', cat);
+                            handleSplitChange(split.id, 'tradePhase', defPhase);
+                          }}
                         >
-                          Lab
-                        </button>
+                          {Object.keys(TRADE_SECTIONS_CONFIG).map(catKey => (
+                            <option key={catKey} value={catKey}>
+                              {TRADE_SECTIONS_CONFIG[catKey].label}
+                            </option>
+                          ))}
+                        </select>
+
+                        <select
+                          className="form-input"
+                          style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
+                          value={split.tradePhase || ''}
+                          onChange={(e) => handleSplitChange(split.id, 'tradePhase', e.target.value)}
+                        >
+                          {(TRADE_SECTIONS_CONFIG[split.tradeCategory || 'Mechanicals_&_Utilities']?.phases || []).map(p => (
+                            <option key={p} value={p}>
+                              {p}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
-
-                    {/* Split Row 2: Lot Number & Description */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: '8px' }}>
-                      <select
-                        required
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
-                        value={split.lotNumber}
-                        onChange={(e) => handleSplitChange(split.id, 'lotNumber', e.target.value)}
-                      >
-                        <option value="">Select Lot</option>
-                        {projects.map(p => (
-                          <option key={p.id} value={p.name}>
-                            {p.name}
-                          </option>
-                        ))}
-                      </select>
-                      <input 
-                        type="text"
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.8rem', boxSizing: 'border-box', margin: 0 }}
-                        value={split.description}
-                        onChange={(e) => handleSplitChange(split.id, 'description', e.target.value)}
-                        placeholder="Split description..."
-                      />
-                    </div>
-
-                    {/* Split Row 3: Trade Category & Phase */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '8px' }}>
-                      <select
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
-                        value={split.tradeCategory || 'Mechanicals_&_Utilities'}
-                        onChange={(e) => {
-                          const cat = e.target.value;
-                          const defPhase = TRADE_SECTIONS_CONFIG[cat]?.phases[0] || '';
-                          handleSplitChange(split.id, 'tradeCategory', cat);
-                          handleSplitChange(split.id, 'tradePhase', defPhase);
-                        }}
-                      >
-                        {Object.keys(TRADE_SECTIONS_CONFIG).map(catKey => (
-                          <option key={catKey} value={catKey}>
-                            {TRADE_SECTIONS_CONFIG[catKey].label}
-                          </option>
-                        ))}
-                      </select>
-
-                      <select
-                        className="form-input"
-                        style={{ padding: '6px 8px', fontSize: '0.75rem', margin: 0 }}
-                        value={split.tradePhase || ''}
-                        onChange={(e) => handleSplitChange(split.id, 'tradePhase', e.target.value)}
-                      >
-                        {(TRADE_SECTIONS_CONFIG[split.tradeCategory || 'Mechanicals_&_Utilities']?.phases || []).map(p => (
-                          <option key={p} value={p}>
-                            {p}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
-
-              {/* Line Items Allocator Section */}
+            
+            {/* Line Items Allocator Section */}
               {stagedItem.metadata.lineItems && stagedItem.metadata.lineItems.length > 0 && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid var(--color-zinc-800)', paddingTop: '12px', marginTop: '8px' }}>
                   <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -1081,9 +1150,13 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                           </div>
                           
                           <div style={{ display: 'flex', gap: '4px', flexShrink: 0 }}>
-                            {splits.map(s => {
+                            {splits.map((s, sIdx) => {
                               const isSelected = allocatedSplitId === s.id;
-                              const label = s.lotNumber || 'Lot ?';
+                              const allLotsSame = splits.length > 1 && splits.every(sp => sp.lotNumber === splits[0].lotNumber);
+                              const label = allLotsSame 
+                                ? `#${sIdx + 1}: ${s.tradePhase || 'Trade?'}` 
+                                : (s.lotNumber || 'Lot ?');
+                              const theme = ALLOCATION_COLORS[sIdx % ALLOCATION_COLORS.length];
                               return (
                                 <button
                                   key={s.id}
@@ -1095,9 +1168,9 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                                     fontWeight: 700,
                                     borderRadius: '4px',
                                     border: '1px solid',
-                                    borderColor: isSelected ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
-                                    backgroundColor: isSelected ? 'rgba(245, 158, 11, 0.12)' : 'transparent',
-                                    color: isSelected ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
+                                    borderColor: isSelected ? theme.border : 'var(--color-zinc-800)',
+                                    backgroundColor: isSelected ? theme.bg : 'transparent',
+                                    color: isSelected ? theme.text : 'var(--color-zinc-400)',
                                     cursor: 'pointer',
                                     transition: 'all 0.15s ease'
                                   }}
