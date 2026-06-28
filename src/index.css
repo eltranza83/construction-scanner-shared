@@ -313,11 +313,13 @@ button, input, select, textarea {
 }
 
 .form-label {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--color-zinc-300);
-  letter-spacing: 0.3px;
+  font-size: 0.72rem !important;
+  font-weight: 700;
+  color: var(--color-zinc-500) !important;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
 }
 
 .form-input, .form-select, .form-textarea {
@@ -326,7 +328,7 @@ button, input, select, textarea {
   background-color: var(--color-zinc-950);
   border: 1px solid var(--color-zinc-800);
   border-radius: var(--border-radius);
-  color: var(--color-zinc-100);
+  color: #ffffff; /* Pure white high-contrast text */
   padding: 12px 16px;
   font-size: 0.95rem;
   transition: var(--transition-all);
@@ -334,8 +336,8 @@ button, input, select, textarea {
 }
 
 .form-input:focus, .form-select:focus, .form-textarea:focus {
-  border-color: var(--color-amber-500);
-  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.15);
+  border-color: #C5A059; /* Brand Amber/Gold border on focus */
+  box-shadow: 0 0 0 2px rgba(197, 160, 89, 0.2); /* Soft Gold focus glow */
 }
 
 .form-input::placeholder, .form-textarea::placeholder {
