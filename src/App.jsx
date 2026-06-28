@@ -787,8 +787,11 @@ export default function App() {
             <span className="logo-main-text" style={{ fontFamily: 'var(--font-syne)', fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#fff', textTransform: 'uppercase', lineHeight: 1.1 }}>
               ADEPEC
             </span>
-            <div className="header-logo-homes">
+            <div className="header-logo-homes" style={{ display: 'flex', alignItems: 'center' }}>
               HOMES
+              <span style={{ fontSize: '0.5rem', backgroundColor: '#C5A059', color: '#0a0a0a', padding: '1px 4px', borderRadius: '3px', fontWeight: 800, marginLeft: '6px', letterSpacing: '0.05em' }}>
+                V2 - SPLITS
+              </span>
             </div>
           </div>
         </div>
