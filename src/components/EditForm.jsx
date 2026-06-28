@@ -944,6 +944,42 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       otherName = otherProj.name;
                     }
                   }
+
+                  // Scan line items for trade categories
+                  const detectedTrades = [];
+                  (stagedItem.metadata.lineItems || []).forEach(item => {
+                    const desc = (item.description || '').toLowerCase();
+                    const isPlumb = ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'].some(k => desc.includes(k));
+                    if (isPlumb && !detectedTrades.some(t => t.tradePhase === 'Plumbing Rough-In')) {
+                      detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' });
+                    }
+                    const isElect = ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction'].some(k => desc.includes(k));
+                    if (isElect && !detectedTrades.some(t => t.tradePhase === 'Electrical & Lighting')) {
+                      detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' });
+                    }
+                    const isHvac = ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'].some(k => desc.includes(k));
+                    if (isHvac && !detectedTrades.some(t => t.tradePhase === 'HVAC Rough-In')) {
+                      detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'HVAC Rough-In' });
+                    }
+                    const isFrame = ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie'].some(k => desc.includes(k));
+                    if (isFrame && !detectedTrades.some(t => t.tradeCategory === 'Structural_Frame')) {
+                      const defPhase = TRADE_SECTIONS_CONFIG['Structural_Frame']?.phases[0] || 'Framing';
+                      detectedTrades.push({ tradeCategory: 'Structural_Frame', tradePhase: defPhase });
+                    }
+                  });
+
+                  // Setup defaults based on scanned items
+                  let split1Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
+                  let split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' }; // default split 2 is electrical if not specified
+
+                  if (detectedTrades.length > 0) {
+                    split1Trade = detectedTrades[0];
+                    if (detectedTrades.length > 1) {
+                      split2Trade = detectedTrades[1];
+                    } else if (split1Trade.tradePhase === 'Electrical & Lighting') {
+                      split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
+                    }
+                  }
                   
                   setSplits([
                     {
@@ -952,17 +988,17 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       costCategory: formData.costCategory || 'material',
                       lotNumber: activeName,
                       description: '',
-                      tradeCategory: formData.tradeCategory || 'Mechanicals_&_Utilities',
-                      tradePhase: formData.tradePhase || 'Plumbing Rough-In'
+                      tradeCategory: split1Trade.tradeCategory,
+                      tradePhase: split1Trade.tradePhase
                     },
                     {
                       id: 'split_init_2',
                       amount: '',
                       costCategory: formData.costCategory || 'material',
-                      lotNumber: otherName,
+                      lotNumber: otherName || activeName,
                       description: '',
-                      tradeCategory: formData.tradeCategory || 'Mechanicals_&_Utilities',
-                      tradePhase: formData.tradePhase || 'Plumbing Rough-In'
+                      tradeCategory: split2Trade.tradeCategory,
+                      tradePhase: split2Trade.tradePhase
                     }
                   ]);
                 }
