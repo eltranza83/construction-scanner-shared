@@ -932,8 +932,38 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
               }}>
                 {splits.map((split, index) => (
                   <div key={split.id} style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '8px', borderRadius: '6px' }}>
-                    {/* Split Row 1: Amount & Category Toggle & Remove */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr auto', gap: '8px', alignItems: 'center' }}>
+                    {/* Split Card Header with Allocation Number & Delete button */}
+                    <div style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      borderBottom: '1px dashed var(--color-zinc-800)', 
+                      paddingBottom: '6px', 
+                      marginBottom: '2px' 
+                    }}>
+                      <span style={{ 
+                        fontSize: '0.65rem', 
+                        fontWeight: 800, 
+                        color: 'var(--color-zinc-400)', 
+                        letterSpacing: '0.05em', 
+                        textTransform: 'uppercase' 
+                      }}>
+                        Allocation #{index + 1}
+                      </span>
+                      {splits.length > 1 && (
+                        <button 
+                          type="button"
+                          onClick={() => handleRemoveSplit(split.id)}
+                          style={{ background: 'none', border: 'none', color: 'var(--color-rose-500)', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center', opacity: 0.8 }}
+                          title="Remove this split allocation"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Split Row 1: Amount & Category Toggle */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '8px', alignItems: 'center' }}>
                       <input 
                         type="number"
                         step="0.01"
@@ -963,16 +993,6 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                           Lab
                         </button>
                       </div>
-
-                      {splits.length > 1 && (
-                        <button 
-                          type="button"
-                          onClick={() => handleRemoveSplit(split.id)}
-                          style={{ background: 'none', border: 'none', color: 'var(--color-rose-500)', padding: '2px', cursor: 'pointer', display: 'flex', alignItems: 'center' }}
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      )}
                     </div>
 
                     {/* Split Row 2: Lot Number & Description */}
