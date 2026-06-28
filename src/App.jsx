@@ -24,6 +24,19 @@ export default function App() {
 
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
+  const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
+  const [animateBadge, setAnimateBadge] = useState(false);
+  const [prevStagedCount, setPrevStagedCount] = useState(0);
+
+  useEffect(() => {
+    if (stagedItems.length > prevStagedCount) {
+      setAnimateBadge(true);
+      const timer = setTimeout(() => setAnimateBadge(false), 500);
+      return () => clearTimeout(timer);
+    }
+    setPrevStagedCount(stagedItems.length);
+  }, [stagedItems.length, prevStagedCount]);
+
   const [stagedItems, setStagedItems] = useState([]);
   const [editingItemId, setEditingItemId] = useState(null);
   const [draftToDelete, setDraftToDelete] = useState(null);
@@ -1130,60 +1143,138 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : activeTab === 'drafts' ? (
+        ) : activeTab === 'invoices' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Staged Drafts ({stagedItems.length})</h2>
-              {stagedItems.length > 0 && (
-                <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-500)', fontStyle: 'italic' }}>
-                  Saved locally on device
-                </span>
-              )}
+            {/* Sliding Pill Selector Segmented Control */}
+            <div className="sliding-toggle-container">
+              <div className={`sliding-toggle-active-bg ${invoicesSubTab === 'staged' ? 'left' : 'right'}`} />
+              <button 
+                type="button"
+                className={`sliding-toggle-btn ${invoicesSubTab === 'staged' ? 'active' : ''}`}
+                onClick={() => setInvoicesSubTab('staged')}
+              >
+                Staged ({stagedItems.length})
+              </button>
+              <button 
+                type="button"
+                className={`sliding-toggle-btn ${invoicesSubTab === 'history' ? 'active' : ''}`}
+                onClick={() => setInvoicesSubTab('history')}
+              >
+                History ({history.length})
+              </button>
             </div>
 
-            {!googleToken && stagedItems.length > 0 && (
-              <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--color-zinc-800)', marginBottom: '4px' }}>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <Folder size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
-                  <div>
-                    <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>Connect Google Drive to Sync</h4>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-500)', lineHeight: '1.4', marginTop: '2px' }}>
-                      Sign in to sync your staged documents directly to your active project's Google Drive folder.
-                    </p>
-                  </div>
+            {/* Sliding Sub Tab Panels */}
+            {invoicesSubTab === 'staged' ? (
+              <div key="staged-subtab" className="slide-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Staged Drafts ({stagedItems.length})</h2>
+                  {stagedItems.length > 0 && (
+                    <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-500)', fontStyle: 'italic' }}>
+                      Saved locally on device
+                    </span>
+                  )}
                 </div>
-                <button onClick={handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
-                  <LogIn size={16} /> Sign In with Google
-                </button>
-              </div>
-            )}
-            {stagedItems.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.9rem', border: '1px dashed var(--color-zinc-800)', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                <FileText size={24} style={{ color: 'var(--color-zinc-700)' }} />
-                No staged documents. Scanned checks and receipts waiting for sync will appear here.
-                <button className="btn btn-secondary" onClick={() => setActiveTab('scanner')} style={{ width: 'auto', marginTop: '8px', fontSize: '0.8rem' }}>
-                  Go Scan Document
-                </button>
+
+                {!googleToken && stagedItems.length > 0 && (
+                  <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--color-zinc-800)', marginBottom: '4px' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                      <Folder size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
+                      <div>
+                        <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>Connect Google Drive to Sync</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-500)', lineHeight: '1.4', marginTop: '2px' }}>
+                          Sign in to sync your staged documents directly to your active project's Google Drive folder.
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
+                      <LogIn size={16} /> Sign In with Google
+                    </button>
+                  </div>
+                )}
+                
+                {stagedItems.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.9rem', border: '1px dashed var(--color-zinc-800)', borderRadius: '12px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                    <FileText size={24} style={{ color: 'var(--color-zinc-700)' }} />
+                    No staged documents. Scanned checks and receipts waiting for sync will appear here.
+                    <button className="btn btn-secondary" onClick={() => setActiveTab('scanner')} style={{ width: 'auto', marginTop: '8px', fontSize: '0.8rem' }}>
+                      Go Scan Document
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                    {stagedItems.map(item => (
+                      <StagingCard 
+                        key={item.id}
+                        stagedItem={item}
+                        onEditClick={() => setEditingItemId(item.id)}
+                        onUploadClick={() => handleSyncToDrive(item.id)}
+                        onDeleteClick={() => handleDeleteStaged(item.id)}
+                        onAdjustTimer={(minutes) => handleAdjustTimer(item.id, minutes)}
+                        onResetTimer={() => handleResetTimer(item.id)}
+                        onDescriptionChange={(val) => handleUpdateDraftField(item.id, 'description', val)}
+                        onCostCategoryChange={(val) => handleUpdateDraftField(item.id, 'costCategory', val)}
+                        onLotNumberChange={(val) => handleUpdateDraftField(item.id, 'lotNumber', val)}
+                        uploading={uploading === item.id}
+                        googleToken={googleToken}
+                        selectedFolder={selectedFolder}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {stagedItems.map(item => (
-                  <StagingCard 
-                    key={item.id}
-                    stagedItem={item}
-                    onEditClick={() => setEditingItemId(item.id)}
-                    onUploadClick={() => handleSyncToDrive(item.id)}
-                    onDeleteClick={() => handleDeleteStaged(item.id)}
-                    onAdjustTimer={(minutes) => handleAdjustTimer(item.id, minutes)}
-                    onResetTimer={() => handleResetTimer(item.id)}
-                    onDescriptionChange={(val) => handleUpdateDraftField(item.id, 'description', val)}
-                    onCostCategoryChange={(val) => handleUpdateDraftField(item.id, 'costCategory', val)}
-                    onLotNumberChange={(val) => handleUpdateDraftField(item.id, 'lotNumber', val)}
-                    uploading={uploading === item.id}
-                    googleToken={googleToken}
-                    selectedFolder={selectedFolder}
-                  />
-                ))}
+              <div key="history-subtab" className="slide-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Sync Log & History ({history.length})</h2>
+                
+                {history.length === 0 ? (
+                  <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.9rem', border: '1px dashed var(--color-zinc-800)', borderRadius: '12px' }}>
+                    No documents uploaded yet. Scans will be logged here.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                    {history.map(item => (
+                      <div key={item.id} className="history-item">
+                        <div className="history-info" style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
+                          <div className="history-title-text" style={{ wordBreak: 'break-word' }}>{item.description}</div>
+                          <div className="history-meta">
+                            {item.vendor} • {item.dateTransaction || 'N/A'}
+                          </div>
+                          {item.tradeCategory && item.tradePhase && (
+                            <div style={{ fontSize: '0.7rem', color: 'var(--color-amber-400)', marginTop: '2px', fontWeight: 500 }}>
+                              Logged: {item.tradeCategory.replace(/_/g, ' ').replace(/&/g, '&')} → {item.tradePhase}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
+                            <span style={{ fontSize: '0.65rem', fontWeight: 600, color: item.costCategory === 'labor' ? 'var(--color-blue-500)' : 'var(--color-amber-500)', textTransform: 'uppercase' }}>
+                              {item.costCategory}
+                            </span>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--color-zinc-600)' }}>•</span>
+                            <span style={{ fontSize: '0.65rem', color: 'var(--color-zinc-500)' }}>Logged {item.dateLogged}</span>
+                          </div>
+                        </div>
+
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
+                          <div className="history-price">${Number(item.amount).toFixed(2)}</div>
+                          {item.link ? (
+                            <button 
+                              type="button"
+                              onClick={() => handleViewPDF(item)}
+                              className="btn btn-secondary" 
+                              style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', borderRadius: '6px', whiteSpace: 'nowrap' }}
+                            >
+                              View PDF
+                            </button>
+                          ) : (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                              Downloaded
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -1200,58 +1291,6 @@ export default function App() {
             activeProject={activeProject}
             selectedFolder={selectedFolder}
           />
-        ) : activeTab === 'history' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Sync Log & History</h2>
-            {history.length === 0 ? (
-              <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.9rem', border: '1px dashed var(--color-zinc-800)', borderRadius: '12px' }}>
-                No documents uploaded yet. Scans will be logged here.
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {history.map(item => (
-                  <div key={item.id} className="history-item">
-                    <div className="history-info" style={{ flex: 1, minWidth: 0, paddingRight: '12px' }}>
-                      <div className="history-title-text" style={{ wordBreak: 'break-word' }}>{item.description}</div>
-                      <div className="history-meta">
-                        {item.vendor} • {item.dateTransaction || 'N/A'}
-                      </div>
-                      {item.tradeCategory && item.tradePhase && (
-                        <div style={{ fontSize: '0.7rem', color: 'var(--color-amber-400)', marginTop: '2px', fontWeight: 500 }}>
-                          Logged: {item.tradeCategory.replace(/_/g, ' ').replace(/&/g, '&')} → {item.tradePhase}
-                        </div>
-                      )}
-                      <div style={{ display: 'flex', gap: '6px', marginTop: '2px' }}>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 600, color: item.costCategory === 'labor' ? 'var(--color-blue-500)' : 'var(--color-amber-500)', textTransform: 'uppercase' }}>
-                          {item.costCategory}
-                        </span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--color-zinc-600)' }}>•</span>
-                        <span style={{ fontSize: '0.65rem', color: 'var(--color-zinc-500)' }}>Logged {item.dateLogged}</span>
-                      </div>
-                    </div>
-
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
-                      <div className="history-price">${Number(item.amount).toFixed(2)}</div>
-                      {item.link ? (
-                        <button 
-                          type="button"
-                          onClick={() => handleViewPDF(item)}
-                          className="btn btn-secondary" 
-                          style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', borderRadius: '6px', whiteSpace: 'nowrap' }}
-                        >
-                          View PDF
-                        </button>
-                      ) : (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                          Downloaded
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
         ) : (
           <Settings 
             geminiKey={geminiKey}
@@ -1285,14 +1324,17 @@ export default function App() {
             <span>Scanner</span>
           </button>
           <button 
-            className={`nav-item ${activeTab === 'drafts' ? 'active' : ''}`}
-            onClick={() => setActiveTab('drafts')}
+            className={`nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('invoices');
+              setInvoicesSubTab('staged'); // Default to staged drafts on tab switch
+            }}
             style={{ position: 'relative' }}
           >
             <FileText size={20} />
-            <span>Drafts</span>
+            <span>Invoices</span>
             {stagedItems.length > 0 && (
-              <span className="nav-badge">
+              <span className={`nav-badge ${animateBadge ? 'badge-bounce-pop' : ''}`}>
                 {stagedItems.length}
               </span>
             )}
@@ -1310,13 +1352,6 @@ export default function App() {
           >
             <MapPin size={20} />
             <span>X-Ray</span>
-          </button>
-          <button 
-            className={`nav-item ${activeTab === 'history' ? 'active' : ''}`}
-            onClick={() => setActiveTab('history')}
-          >
-            <History size={20} />
-            <span>History</span>
           </button>
           <button 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
