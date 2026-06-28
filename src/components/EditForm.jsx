@@ -100,13 +100,19 @@ function suggestSplitId(description, splits) {
     plumbing: ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'],
     electrical: ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction'],
     hvac: ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'],
-    framing: ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie']
+    framing: ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie'],
+    cabinets: ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity'],
+    drywall: ['drywall', 'sheetrock', 'mud', 'joint', 'compound', 'plaster', 'gypsum'],
+    paint: ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']
   };
 
   const isPlumbingItem = keywords.plumbing.some(k => desc.includes(k));
   const isElectricalItem = keywords.electrical.some(k => desc.includes(k));
   const isHVACItem = keywords.hvac.some(k => desc.includes(k));
   const isFramingItem = keywords.framing.some(k => desc.includes(k));
+  const isCabinetItem = keywords.cabinets.some(k => desc.includes(k));
+  const isDrywallItem = keywords.drywall.some(k => desc.includes(k));
+  const isPaintItem = keywords.paint.some(k => desc.includes(k));
 
   // Find a split that matches the category of the item
   for (const s of splits) {
@@ -119,10 +125,19 @@ function suggestSplitId(description, splits) {
     if (isElectricalItem && (phaseLower.includes('elect') || phaseLower.includes('light') || phaseLower.includes('power') || phaseLower.includes('wire') || catLower.includes('elect'))) {
       return s.id;
     }
-    if (isHVACItem && (phaseLower.includes('hvac') || phaseLower.includes('duct') || phaseLower.includes('heat') || phaseLower.includes('vent') || phaseLower.includes('air'))) {
+    if (isHVACItem && (phaseLower.includes('hvac') || phaseLower.includes('duct') || phaseLower.includes('heat') || phaseLower.includes('vent') || phaseLower.includes('air') || phaseLower.includes('ac '))) {
       return s.id;
     }
-    if (isFramingItem && (phaseLower.includes('frame') || phaseLower.includes('lumber') || phaseLower.includes('wood') || phaseLower.includes('truss') || catLower.includes('frame') || catLower.includes('struct'))) {
+    if (isFramingItem && (phaseLower.includes('frame') || phaseLower.includes('lumber') || phaseLower.includes('wood') || phaseLower.includes('truss') || catLower.includes('frame') || catLower.includes('lumb'))) {
+      return s.id;
+    }
+    if (isCabinetItem && (phaseLower.includes('cabinet') || phaseLower.includes('trim') || phaseLower.includes('closet') || phaseLower.includes('rod') || phaseLower.includes('bracket') || phaseLower.includes('shelf') || phaseLower.includes('molding') || phaseLower.includes('door') || catLower.includes('finish'))) {
+      return s.id;
+    }
+    if (isDrywallItem && (phaseLower.includes('drywall') || phaseLower.includes('sheetrock') || phaseLower.includes('mud') || phaseLower.includes('joint') || phaseLower.includes('compound') || catLower.includes('finish'))) {
+      return s.id;
+    }
+    if (isPaintItem && (phaseLower.includes('paint') || phaseLower.includes('brush') || phaseLower.includes('roller') || phaseLower.includes('primer') || catLower.includes('paint') || catLower.includes('tile'))) {
       return s.id;
     }
   }
@@ -958,25 +973,47 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' });
                     }
                     const isHvac = ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'].some(k => desc.includes(k));
-                    if (isHvac && !detectedTrades.some(t => t.tradePhase === 'HVAC Rough-In')) {
-                      detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'HVAC Rough-In' });
+                    if (isHvac && !detectedTrades.some(t => t.tradePhase === 'HVAC / AC Systems')) {
+                      detectedTrades.push({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'HVAC / AC Systems' });
                     }
                     const isFrame = ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie'].some(k => desc.includes(k));
-                    if (isFrame && !detectedTrades.some(t => t.tradeCategory === 'Structural_Frame')) {
-                      const defPhase = TRADE_SECTIONS_CONFIG['Structural_Frame']?.phases[0] || 'Framing';
-                      detectedTrades.push({ tradeCategory: 'Structural_Frame', tradePhase: defPhase });
+                    if (isFrame && !detectedTrades.some(t => t.tradeCategory === 'Framing_&_Lumber')) {
+                      detectedTrades.push({ tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing & Lumber' });
+                    }
+                    const isCabinet = ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity'].some(k => desc.includes(k));
+                    if (isCabinet && !detectedTrades.some(t => t.tradePhase === 'Cabinets & Trim Carpentry')) {
+                      detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Cabinets & Trim Carpentry' });
+                    }
+                    const isDrywall = ['drywall', 'sheetrock', 'mud', 'joint', 'compound', 'plaster', 'gypsum'].some(k => desc.includes(k));
+                    if (isDrywall && !detectedTrades.some(t => t.tradePhase === 'Drywall & Sheetrock')) {
+                      detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Drywall & Sheetrock' });
+                    }
+                    const isPaint = ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent'].some(k => desc.includes(k));
+                    if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint & Finishes')) {
+                      detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint & Finishes' });
                     }
                   });
 
-                  // Setup defaults based on scanned items
-                  let split1Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
-                  let split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' }; // default split 2 is electrical if not specified
+                  // Setup defaults based on main settings and detected trades
+                  const mainTradeCategory = formData.tradeCategory || 'Mechanicals_&_Utilities';
+                  const mainTradePhase = formData.tradePhase || 'Plumbing Rough-In';
 
-                  if (detectedTrades.length > 0) {
-                    split1Trade = detectedTrades[0];
-                    if (detectedTrades.length > 1) {
-                      split2Trade = detectedTrades[1];
-                    } else if (split1Trade.tradePhase === 'Electrical & Lighting') {
+                  let split1Trade = { tradeCategory: mainTradeCategory, tradePhase: mainTradePhase };
+                  let split2Trade = null;
+
+                  // Find a detected trade that is different from the main trade for Split 2
+                  const diffTrade = detectedTrades.find(t => t.tradePhase !== mainTradePhase);
+                  if (diffTrade) {
+                    split2Trade = diffTrade;
+                  } else {
+                    // Fallbacks if no different trade detected
+                    if (mainTradePhase === 'Plumbing Rough-In') {
+                      split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Electrical & Lighting' };
+                    } else if (mainTradePhase === 'Electrical & Lighting') {
+                      split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
+                    } else if (mainTradeCategory === 'Interior_Finishes') {
+                      split2Trade = { tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing & Lumber' };
+                    } else {
                       split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
                     }
                   }
