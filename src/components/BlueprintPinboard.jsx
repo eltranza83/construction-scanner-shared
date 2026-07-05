@@ -1,12 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Camera, Image, X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Eye, Loader2 } from 'lucide-react';
+import { 
+  MapPin, Camera, Image, X, ZoomIn, ZoomOut, RotateCcw, 
+  AlertTriangle, Eye, Loader2, Folder, FolderOpen, 
+  ChevronDown, ChevronUp, Plus, ArrowLeft, Trash2 
+} from 'lucide-react';
 import { 
   findFileInFolder, 
   getFileContent, 
   uploadFileToDrive, 
   updateFileContent, 
   uploadPhotoToPhaseFolder,
-  findOrCreateFolder
+  findOrCreateFolder,
+  listPhotosInPhase
 } from '../services/googleDrive';
 
 // Subcontractor categories and phases matching EditForm config
@@ -45,6 +50,16 @@ export const TRADE_SECTIONS_CONFIG = {
     label: 'Project Overhead & Bills',
     color: '#71717a', // Zinc
     phases: ['Monthly Utility Bills', 'Dumpsters & Cleaning', 'Extra Costs & Misc']
+  },
+  'Paperwork_&_Permits': {
+    label: 'Paperwork & Permits',
+    color: '#14b8a6', // Teal
+    phases: ['Paperwork & Permits']
+  },
+  'Interior_Hardware': {
+    label: 'Interior Hardware',
+    color: '#6366f1', // Indigo
+    phases: ['Plumbing Hardware Fixtures', 'Electrical Hardware Fixtures']
   }
 };
 
@@ -77,9 +92,19 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   const [photoPreview, setPhotoPreview] = useState(null);
   const [savingPin, setSavingPin] = useState(false);
 
+  // View mode and album states
+  const [viewMode, setViewMode] = useState('blueprint');
+  const [expandedCategory, setExpandedCategory] = useState(null);
+  const [activeAlbumPhase, setActiveAlbumPhase] = useState(null);
+  const [albumPhotos, setAlbumPhotos] = useState([]);
+  const [loadingAlbumPhotos, setLoadingAlbumPhotos] = useState(false);
+  const [uploadingAlbumPhoto, setUploadingAlbumPhoto] = useState(false);
+  const [fullscreenAlbumPhoto, setFullscreenAlbumPhoto] = useState(null);
+
   const fileInputRef = useRef(null);
   const blueprintInputRef = useRef(null);
   const imageContainerRef = useRef(null);
+  const albumFileInputRef = useRef(null);
 
   // Initialize and load blueprint data
   useEffect(() => {
@@ -87,6 +112,65 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       loadBlueprintData();
     }
   }, [googleToken, selectedFolder?.id, activeProject?.id]);
+
+  // Adjust view mode based on blueprint image presence
+  useEffect(() => {
+    if (imageSrc) {
+      setViewMode('blueprint');
+    } else {
+      setViewMode('albums');
+    }
+  }, [imageSrc]);
+
+  // Fetch photos automatically when active phase album is selected
+  useEffect(() => {
+    if (activeAlbumPhase) {
+      loadPhasePhotos(activeAlbumPhase.category, activeAlbumPhase.phase);
+    }
+  }, [activeAlbumPhase]);
+
+  // Load photos stream inside album
+  const loadPhasePhotos = async (category, phase) => {
+    setLoadingAlbumPhotos(true);
+    try {
+      const list = await listPhotosInPhase(googleToken, selectedFolder.id, category, phase);
+      setAlbumPhotos(list || []);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to load photos from Google Drive.');
+    } finally {
+      setLoadingAlbumPhotos(false);
+    }
+  };
+
+  // Upload photo from within the album view
+  const handleUploadAlbumPhoto = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !activeAlbumPhase) return;
+
+    setUploadingAlbumPhoto(true);
+    setError(null);
+    try {
+      const photoFileName = `${activeAlbumPhase.phase.replace(/[^a-zA-Z0-9_]/g, '_')}_Album_${Date.now()}.${file.name.split('.').pop()}`;
+      await uploadPhotoToPhaseFolder(
+        googleToken,
+        selectedFolder.id,
+        activeAlbumPhase.category,
+        activeAlbumPhase.phase,
+        photoFileName,
+        file.type,
+        file
+      );
+      await loadPhasePhotos(activeAlbumPhase.category, activeAlbumPhase.phase);
+      setSuccess('Progress photo uploaded successfully!');
+      setTimeout(() => setSuccess(null), 2500);
+    } catch (err) {
+      console.error(err);
+      setError('Failed to upload progress photo.');
+    } finally {
+      setUploadingAlbumPhoto(false);
+    }
+  };
 
   // Cleanup Object URL on unmount
   useEffect(() => {
@@ -266,11 +350,10 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
       // 1. If photo is selected, upload it to the proper folder inside Google Drive
       if (selectedPhoto) {
-        const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
         const photoFileName = `${formData.tradePhase.replace(/[^a-zA-Z0-9_]/g, '_')}_Pin_${Date.now()}.${selectedPhoto.name.split('.').pop()}`;
         const uploadResult = await uploadPhotoToPhaseFolder(
           googleToken,
-          xRayFolder, // Nest subcontractor photo folders inside X-Ray Photos subfolder
+          selectedFolder.id, // Nest subcontractor photo folders inside root photos folder for consistency
           formData.tradeCategory,
           formData.tradePhase,
           photoFileName,
@@ -380,11 +463,193 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       {success && <div className="alert-box alert-success">{success}</div>}
       {error && <div className="alert-box alert-error">{error}</div>}
 
+      {/* View Mode Toggle (Only if blueprint exists) */}
+      {!loading && imageSrc && (
+        <div style={{ display: 'flex', gap: '8px', padding: '2px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '8px', width: 'fit-content' }}>
+          <button
+            onClick={() => setViewMode('blueprint')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              borderRadius: '6px',
+              border: 'none',
+              backgroundColor: viewMode === 'blueprint' ? 'var(--color-amber-500)' : 'transparent',
+              color: viewMode === 'blueprint' ? '#000' : 'var(--color-zinc-400)',
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+          >
+            Floor Plan View
+          </button>
+          <button
+            onClick={() => setViewMode('albums')}
+            style={{
+              padding: '6px 12px',
+              fontSize: '0.74rem',
+              fontWeight: 700,
+              borderRadius: '6px',
+              border: 'none',
+              backgroundColor: viewMode === 'albums' ? 'var(--color-amber-500)' : 'transparent',
+              color: viewMode === 'albums' ? '#000' : 'var(--color-zinc-400)',
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+          >
+            Phase Albums
+          </button>
+        </div>
+      )}
+
       {/* Loading Overlay */}
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', gap: '12px' }}>
           <Loader2 className="animate-spin" size={32} style={{ color: 'var(--color-amber-500)' }} />
           <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-400)' }}>Syncing blueprint vault...</span>
+        </div>
+      ) : viewMode === 'albums' ? (
+        /* Phase Albums View */
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
+          
+          {/* Albums Header */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '12px 14px', borderRadius: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+              <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontWeight: 600 }}>Photos & Progress Log</span>
+              <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>Browse progress photos by phase</span>
+            </div>
+            {!imageSrc && (
+              <button 
+                onClick={() => setViewMode('blueprint')}
+                className="btn btn-primary"
+                style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem', height: '32px', border: 'none' }}
+              >
+                Link Floor Plan
+              </button>
+            )}
+          </div>
+
+          {activeAlbumPhase ? (
+            /* Selected Phase Album Photos Stream */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', backgroundColor: 'var(--color-zinc-900)', border: '1px solid var(--color-zinc-800)', borderRadius: '12px', padding: '16px', flex: 1, overflowY: 'auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--color-zinc-800)', paddingBottom: '10px' }}>
+                <button
+                  onClick={() => setActiveAlbumPhase(null)}
+                  style={{ display: 'flex', alignItems: 'center', gap: '6px', background: 'transparent', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', fontSize: '0.78rem', padding: 0 }}
+                >
+                  <ArrowLeft size={16} /> Back to Albums
+                </button>
+                <div style={{ textAlign: 'right' }}>
+                  <h4 style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>{activeAlbumPhase.phase}</h4>
+                  <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase' }}>
+                    {activeAlbumPhase.category.replace(/_/g, ' ')}
+                  </span>
+                </div>
+              </div>
+
+              {/* Upload New Photo Button */}
+              <div 
+                onClick={() => !uploadingAlbumPhoto && albumFileInputRef.current?.click()}
+                style={{
+                  border: '1px dashed var(--color-zinc-700)',
+                  borderRadius: '8px',
+                  padding: '20px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '8px',
+                  cursor: uploadingAlbumPhoto ? 'not-allowed' : 'pointer',
+                  backgroundColor: 'var(--color-zinc-950)',
+                  opacity: uploadingAlbumPhoto ? 0.7 : 1
+                }}
+              >
+                {uploadingAlbumPhoto ? (
+                  <>
+                    <Loader2 className="animate-spin" size={16} style={{ color: 'var(--color-amber-500)' }} />
+                    <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-400)' }}>Uploading to Drive...</span>
+                  </>
+                ) : (
+                  <>
+                    <Camera size={16} style={{ color: 'var(--color-amber-500)' }} />
+                    <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-300)', fontWeight: 600 }}>Snap / Upload Phase Photo</span>
+                  </>
+                )}
+                <input
+                  type="file"
+                  ref={albumFileInputRef}
+                  onChange={handleUploadAlbumPhoto}
+                  accept="image/*"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                />
+              </div>
+
+              {/* Photos Grid */}
+              {loadingAlbumPhotos ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '8px' }}>
+                  <Loader2 className="animate-spin" size={24} style={{ color: 'var(--color-amber-500)' }} />
+                  <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)' }}>Fetching files...</span>
+                </div>
+              ) : albumPhotos.length === 0 ? (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.78rem' }}>
+                  <Image size={24} style={{ color: 'var(--color-zinc-700)', margin: '0 auto 8px' }} />
+                  No photos logged for this phase yet.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
+                  {albumPhotos.map(photo => (
+                    <div
+                      key={photo.id}
+                      onClick={() => setFullscreenAlbumPhoto(photo)}
+                      style={{ position: 'relative', aspectRatio: '1', borderRadius: '6px', overflow: 'hidden', cursor: 'pointer', border: '1px solid var(--color-zinc-800)', backgroundColor: 'var(--color-zinc-950)' }}
+                    >
+                      <img
+                        src={photo.thumbnailLink}
+                        alt={photo.name}
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Categories & Phases Tree List */
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1, overflowY: 'auto' }}>
+              {Object.keys(TRADE_SECTIONS_CONFIG).map(catKey => {
+                const config = TRADE_SECTIONS_CONFIG[catKey];
+                const isExpanded = expandedCategory === catKey;
+                
+                return (
+                  <div key={catKey} style={{ border: '1px solid var(--color-zinc-800)', borderRadius: '10px', overflow: 'hidden', backgroundColor: 'var(--color-zinc-950)' }}>
+                    <div
+                      onClick={() => setExpandedCategory(isExpanded ? null : catKey)}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 14px', cursor: 'pointer', userSelect: 'none', backgroundColor: isExpanded ? 'var(--color-zinc-900)' : 'transparent' }}
+                    >
+                      <span style={{ fontSize: '0.82rem', fontWeight: 800, color: config.color, textTransform: 'uppercase', letterSpacing: '0.01em' }}>
+                        {config.label}
+                      </span>
+                      {isExpanded ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-500)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-500)' }} />}
+                    </div>
+
+                    {isExpanded && (
+                      <div style={{ padding: '6px', display: 'flex', flexDirection: 'column', gap: '4px', backgroundColor: 'var(--color-zinc-900)' }}>
+                        {config.phases.map(phase => (
+                          <div
+                            key={phase}
+                            onClick={() => setActiveAlbumPhase({ category: catKey, phase })}
+                            style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', borderRadius: '6px', backgroundColor: 'var(--color-zinc-950)', fontSize: '0.78rem', cursor: 'pointer', border: '1px solid var(--color-zinc-800)' }}
+                          >
+                            <span style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>{phase}</span>
+                            <Camera size={14} style={{ color: 'var(--color-zinc-500)' }} />
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       ) : !imageSrc ? (
         /* Setup / Upload View */
@@ -767,6 +1032,41 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen Album Photo Modal */}
+      {fullscreenAlbumPhoto && (
+        <div 
+          onClick={() => setFullscreenAlbumPhoto(null)}
+          style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.95)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 3000, padding: '20px' }}
+        >
+          <button 
+            onClick={() => setFullscreenAlbumPhoto(null)}
+            style={{ position: 'absolute', top: '20px', right: '20px', background: 'transparent', border: 'none', color: '#fff', cursor: 'pointer' }}
+          >
+            <X size={24} />
+          </button>
+          
+          <img 
+            src={`https://www.googleapis.com/drive/v3/files/${fullscreenAlbumPhoto.id}?alt=media`}
+            alt={fullscreenAlbumPhoto.name}
+            style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}
+            onClick={(e) => e.stopPropagation()}
+          />
+          
+          <div style={{ marginTop: '16px', textAlign: 'center', color: '#fff', fontSize: '0.82rem' }}>
+            <p style={{ fontWeight: 600 }}>{fullscreenAlbumPhoto.name}</p>
+            <a 
+              href={fullscreenAlbumPhoto.webViewLink} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              style={{ color: 'var(--color-amber-500)', textDecoration: 'none', fontSize: '0.74rem', marginTop: '6px', display: 'inline-block', fontWeight: 600 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              Open in Google Drive ↗
+            </a>
           </div>
         </div>
       )}
