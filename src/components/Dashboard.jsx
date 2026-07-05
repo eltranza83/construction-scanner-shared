@@ -867,7 +867,18 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                                 <Camera size={13} />
                               </button>
 
-                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column' }}>
+                              {/* Material Total */}
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '65px' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-amber-500)' }}>
+                                  {formatCurrency(sub.totalMaterial || 0)}
+                                </span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-zinc-500)' }}>
+                                  Mat
+                                </span>
+                              </div>
+
+                              {/* Spent & Balance */}
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '75px' }}>
                                 <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-zinc-300)' }}>
                                   {formatCurrency(sub.totalPaid)}
                                 </span>

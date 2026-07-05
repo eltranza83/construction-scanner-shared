@@ -133,8 +133,13 @@ function finalizeBlock(block, phaseStatuses = {}) {
 
   // Overwrite status using the Summary_Dashboard master dropdown if mapped
   const cleanPhaseKey = block.phase.toLowerCase().replace(/[^a-z0-9]/g, '');
-  if (phaseStatuses && phaseStatuses[cleanPhaseKey]) {
-    status = phaseStatuses[cleanPhaseKey];
+  const meta = (phaseStatuses && phaseStatuses[cleanPhaseKey]) ? phaseStatuses[cleanPhaseKey] : null;
+  if (meta) {
+    if (typeof meta === 'object') {
+      status = meta.status || status;
+    } else {
+      status = meta;
+    }
   }
 
   // Fallback to placeholder payee if no custom payee is filled in
@@ -155,7 +160,9 @@ function finalizeBlock(block, phaseStatuses = {}) {
     totalPaid: totalPaid,
     remainingBalance: remainingBalance,
     status: status,
-    payments: payments
+    payments: payments,
+    totalMaterial: (meta && typeof meta === 'object') ? meta.materialCost : '$0.00',
+    totalLabor: (meta && typeof meta === 'object') ? meta.laborCost : '$0.00'
   };
 }
 
@@ -249,15 +256,23 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
     if (rangeName.includes('Summary_Dashboard')) {
       projectInfo = parseSummaryDashboard(rows);
       
-      // Collect statuses for each phase
+      // Collect statuses and metadata for each phase
       rows.forEach(row => {
         if (!row || row.length < 5) return;
         const colA = String(row[0] || '').trim();
-        const colE = String(row[4] || '').trim();
+        const colB = String(row[1] || '').trim(); // Material Cost
+        const colC = String(row[2] || '').trim(); // Labor Cost
+        const colD = String(row[3] || '').trim(); // Combined Spent
+        const colE = String(row[4] || '').trim(); // Status
         
         const cleanPhase = colA.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanPhase && colE && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
-          phaseStatuses[cleanPhase] = colE;
+        if (cleanPhase && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
+          phaseStatuses[cleanPhase] = {
+            status: colE,
+            materialCost: colB,
+            laborCost: colC,
+            combinedSpent: colD
+          };
         }
       });
     }
