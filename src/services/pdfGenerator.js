@@ -253,24 +253,33 @@ export async function generateDocumentPDF(metadata, imageUrls) {
   if (imageUrls && imageUrls.length > 0 && imageUrls[0]) {
     try {
       const dataUrl = imageUrls[0];
-      const dims = await loadImageDimensions(dataUrl);
-      
-      // Calculate scaling to preserve aspect ratio within margins
-      const scaleX = contentWidth / dims.width;
-      const scaleY = maxImgHeightP1 / dims.height;
-      const scale = Math.min(scaleX, scaleY);
-      
-      const imgWidth = dims.width * scale;
-      const imgHeight = dims.height * scale;
-      const imgX = margin + (contentWidth - imgWidth) / 2; // Center horizontally
       
       // Label for image
       pdf.setTextColor(113, 113, 122); // Zinc 500
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(8);
-      pdf.text('PRIMARY DOCUMENT SCAN', margin, currentY - 2);
+      pdf.text('PRIMARY DOCUMENT ATTACHMENT', margin, currentY - 2);
 
-      pdf.addImage(dataUrl, 'JPEG', imgX, currentY, imgWidth, imgHeight, undefined, 'FAST');
+      if (dataUrl.startsWith('data:application/pdf')) {
+        // PDF files cannot be embedded as images in jsPDF; show message
+        pdf.setTextColor(24, 24, 27);
+        pdf.setFont('helvetica', 'italic');
+        pdf.setFontSize(10);
+        pdf.text('Source PDF document attached to expense entry in Google Drive.', margin, currentY + 10);
+      } else {
+        const dims = await loadImageDimensions(dataUrl);
+        
+        // Calculate scaling to preserve aspect ratio within margins
+        const scaleX = contentWidth / dims.width;
+        const scaleY = maxImgHeightP1 / dims.height;
+        const scale = Math.min(scaleX, scaleY);
+        
+        const imgWidth = dims.width * scale;
+        const imgHeight = dims.height * scale;
+        const imgX = margin + (contentWidth - imgWidth) / 2; // Center horizontally
+
+        pdf.addImage(dataUrl, 'JPEG', imgX, currentY, imgWidth, imgHeight, undefined, 'FAST');
+      }
     } catch (e) {
       console.error('Failed to add primary image to PDF:', e);
       pdf.setTextColor(220, 38, 38);

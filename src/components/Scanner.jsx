@@ -422,6 +422,27 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
     setLoading(true);
     setLocalError(null);
     if (onError) onError(null);
+
+    // If PDF, bypass compression and crop editor
+    if (file.type === 'application/pdf') {
+      setStatusMessage('Analyzing PDF document with Gemini AI...');
+      try {
+        if (file.size === 0) {
+          throw new Error('Selected PDF is empty.');
+        }
+        await analyzeCroppedFile(file);
+      } catch (err) {
+        console.error('PDF preparation failed:', err);
+        const prepErr = err.message || 'Failed to load PDF.';
+        setLocalError(prepErr);
+        if (onError) onError(prepErr);
+      } finally {
+        setLoading(false);
+        setStatusMessage('');
+      }
+      return;
+    }
+
     setStatusMessage('Preparing photo...');
 
     try {
@@ -663,7 +684,7 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
               <input 
                 type="file" 
                 onChange={handleFileChange}
-                accept="image/*"
+                accept="image/*,application/pdf"
                 style={{ 
                   position: 'absolute', 
                   top: 0, 

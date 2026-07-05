@@ -1316,10 +1316,39 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
             {/* Primary Image Thumbnail */}
             {mainImageUrl && (
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', backgroundColor: 'var(--color-zinc-950)', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}>
-                <img src={mainImageUrl} alt="Primary Scan" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
+                {mainImageUrl.startsWith('data:application/pdf') ? (
+                  <div 
+                    onClick={() => window.open(mainImageUrl, '_blank')}
+                    style={{ 
+                      cursor: 'pointer', 
+                      width: '40px', 
+                      height: '40px', 
+                      borderRadius: '4px', 
+                      backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                      color: '#ef4444', 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center',
+                      fontSize: '0.62rem',
+                      fontWeight: 'bold',
+                      fontFamily: 'monospace',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      flexShrink: 0
+                    }}
+                    title="Click to view PDF in new tab"
+                  >
+                    PDF
+                  </div>
+                ) : (
+                  <img src={mainImageUrl} alt="Primary Scan" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
+                )}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Primary scan</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original receipt or check photo</div>
+                  <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>
+                    {mainImageUrl.startsWith('data:application/pdf') ? 'Primary PDF Document' : 'Primary scan'}
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {mainImageUrl.startsWith('data:application/pdf') ? 'Click PDF icon to view document' : 'Original receipt or check photo'}
+                  </div>
                 </div>
               </div>
             )}

@@ -262,9 +262,30 @@ export default function StagingCard({
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexShrink: 0 }}>
           {mainImageBase64 && (
             <div style={{ position: 'relative', width: '42px', height: '42px' }}>
-              <img src={mainImageBase64} alt="Primary" style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--color-zinc-800)' }} />
+              {mainImageBase64.startsWith('data:application/pdf') ? (
+                <div 
+                  style={{ 
+                    width: '42px', 
+                    height: '42px', 
+                    borderRadius: '6px', 
+                    border: '1px solid var(--color-zinc-800)', 
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)', 
+                    color: '#ef4444', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    fontSize: '0.62rem',
+                    fontWeight: 'bold',
+                    fontFamily: 'monospace'
+                  }}
+                >
+                  PDF
+                </div>
+              ) : (
+                <img src={mainImageBase64} alt="Primary" style={{ width: '42px', height: '42px', borderRadius: '6px', objectFit: 'cover', border: '1px solid var(--color-zinc-800)' }} />
+              )}
               <span style={{ position: 'absolute', bottom: '1px', left: '1px', backgroundColor: 'rgba(0,0,0,0.75)', fontSize: '0.5rem', padding: '1px 3px', borderRadius: '3px', color: '#fff', scale: '0.85', transformOrigin: 'bottom left' }}>
-                Prim
+                {mainImageBase64.startsWith('data:application/pdf') ? 'Doc' : 'Prim'}
               </span>
             </div>
           )}

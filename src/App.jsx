@@ -431,6 +431,18 @@ export default function App() {
     });
   };
 
+  const dataURLtoBlob = (dataUrl) => {
+    const arr = dataUrl.split(',');
+    const mime = arr[0].match(/:(.*?);/)[1];
+    const bstr = atob(arr[1]);
+    let n = bstr.length;
+    const u8arr = new Uint8Array(n);
+    while (n--) {
+      u8arr[n] = bstr.charCodeAt(n);
+    }
+    return new Blob([u8arr], { type: mime });
+  };
+
   // Staging scan callback
   const handleDataExtracted = async (scanItem) => {
     setError(null);
@@ -566,8 +578,13 @@ export default function App() {
       if (mainImageBase64) images.push(mainImageBase64);
       if (secondaryImageBase64) images.push(secondaryImageBase64);
 
-      // 1. Generate PDF
-      const pdfBlob = await generateDocumentPDF(metadata, images);
+      // 1. Generate PDF (or use original PDF if uploaded directly)
+      let pdfBlob;
+      if (mainImageBase64 && mainImageBase64.startsWith('data:application/pdf')) {
+        pdfBlob = dataURLtoBlob(mainImageBase64);
+      } else {
+        pdfBlob = await generateDocumentPDF(metadata, images);
+      }
 
       // Check if running in Offline / Download fallback
       const isOfflineMode = !googleToken || !selectedFolder;
