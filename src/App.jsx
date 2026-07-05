@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp } from 'lucide-react';
 import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
 import EditForm from './components/EditForm';
