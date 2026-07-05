@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Key, CheckCircle, ShieldAlert, Sparkles, Folder, LogIn, Database, Share2, Trash2 } from 'lucide-react';
+import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
 import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 

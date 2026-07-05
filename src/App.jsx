@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Camera, History, Settings as SettingsIcon, Sparkles, Folder, LogIn, LogOut, CheckCircle, FileText, Download, Check, Database, TrendingUp, MapPin } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText } from 'lucide-react';
 import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
 import EditForm from './components/EditForm';
@@ -8,7 +8,7 @@ import InviteScreen from './components/InviteScreen';
 import Dashboard from './components/Dashboard';
 import BlueprintPinboard from './components/BlueprintPinboard';
 import { generateDocumentPDF } from './services/pdfGenerator';
-import { uploadFileToDrive, findOrCreateTrackingSheet, appendRowToSheet, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
+import { uploadFileToDrive, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
 import { getFirebaseDb } from './services/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 
@@ -56,7 +56,7 @@ export default function App() {
     try {
       const user = JSON.parse(userStr);
       return localStorage.getItem('jobscan_authorized_email') === user.email;
-    } catch (e) {
+    } catch {
       return false;
     }
   };
@@ -595,7 +595,7 @@ export default function App() {
         const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
         const category = (metadata.costCategory || 'material').trim().toLowerCase();
         const rawName = `${lot} - ${desc} - ${category}.pdf`;
-        const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+        const safeFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
 
         // Trigger browser download
         const url = URL.createObjectURL(pdfBlob);
@@ -681,7 +681,7 @@ export default function App() {
             const desc = (splitMetadata.description || 'Expense').trim().substring(0, 30).trim();
             const category = (splitMetadata.costCategory || 'material').trim().toLowerCase();
             const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
-            const splitFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+            const splitFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
 
             // 6. Upload split file with its metadata in the Invoice Uploads subfolder
             const result = await uploadFileToDrive(
@@ -703,7 +703,7 @@ export default function App() {
           const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
           const category = (metadata.costCategory || 'material').trim().toLowerCase();
           const rawName = `${lot} - ${desc} - ${category}.pdf`;
-          const safeFileName = rawName.replace(/[\/\\:*?"<>|]/g, '_');
+          const safeFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
 
           // Find or create "Invoice Uploads" folder inside the project folder
           const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', selectedFolder.id);

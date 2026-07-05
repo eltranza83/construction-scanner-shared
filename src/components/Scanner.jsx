@@ -160,7 +160,6 @@ function warpPerspective(srcImgData, srcWidth, srcHeight, corners) {
 export default function Scanner({ geminiKey, onDataExtracted, onError }) {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
-  const [localError, setLocalError] = useState(null);
 
   // WebRTC inline camera states
   const [showCamera, setShowCamera] = useState(false);
@@ -283,7 +282,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
       if (!warpedCanvas) {
         setLoading(false);
         const cropErr = 'Failed to crop the document. Try adjusting the corners.';
-        setLocalError(cropErr);
         if (onError) onError(cropErr);
         return;
       }
@@ -303,7 +301,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
         } else {
           setLoading(false);
           const captureErr = 'Failed to capture cropped canvas.';
-          setLocalError(captureErr);
           if (onError) onError(captureErr);
         }
       }, 'image/jpeg', 0.85);
@@ -321,7 +318,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
     } catch (err) {
       console.error('Scan process failed:', err);
       const errMsg = err.message || 'AI parsing failed. Please check your API key or connection.';
-      setLocalError(errMsg);
       if (onError) onError(errMsg);
     } finally {
       setLoading(false);
@@ -339,7 +335,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
   }, [cameraStream]);
 
   const startCamera = async () => {
-    setLocalError(null);
     if (onError) onError(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -361,7 +356,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
       }, 100);
     } catch (err) {
       console.error('Failed to access camera:', err);
-      setLocalError('Could not access front/back camera. Please make sure camera permissions are allowed for this site.');
       if (onError) onError('Could not access camera. Verify browser permissions.');
     }
   };
@@ -394,7 +388,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
           await processFile(file);
         } else {
           const frameErr = 'Failed to capture canvas frame.';
-          setLocalError(frameErr);
           if (onError) onError(frameErr);
         }
       }, 'image/jpeg', 0.85);
@@ -402,7 +395,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
     } catch (err) {
       console.error('Capture failed:', err);
       const capErr = `Capture failed: ${err.message}`;
-      setLocalError(capErr);
       if (onError) onError(capErr);
     }
   };
@@ -420,7 +412,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
 
   const processFile = async (file) => {
     setLoading(true);
-    setLocalError(null);
     if (onError) onError(null);
 
     // If PDF, bypass compression and crop editor
@@ -434,7 +425,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
       } catch (err) {
         console.error('PDF preparation failed:', err);
         const prepErr = err.message || 'Failed to load PDF.';
-        setLocalError(prepErr);
         if (onError) onError(prepErr);
       } finally {
         setLoading(false);
@@ -468,7 +458,6 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
     } catch (err) {
       console.error('File preparation failed:', err);
       const prepErr = err.message || 'Failed to load file.';
-      setLocalError(prepErr);
       if (onError) onError(prepErr);
     } finally {
       setLoading(false);

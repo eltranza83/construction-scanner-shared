@@ -1,16 +1,5 @@
 import { jsPDF } from 'jspdf';
 
-/**
- * Converts a Blob or File into a base64 Data URL.
- */
-function blobToDataURL(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = () => reject(reader.error);
-    reader.readAsDataURL(blob);
-  });
-}
 
 /**
  * Loads an image to get its width and height.

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MapPin, Plus, Camera, Image, Check, X, RefreshCw, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Eye, Loader2 } from 'lucide-react';
+import { MapPin, Camera, Image, X, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, Eye, Loader2 } from 'lucide-react';
 import { 
   findFileInFolder, 
   getFileContent, 
@@ -367,7 +367,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
       await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
       await loadBlueprintData();
-    } catch (err) {
+    } catch {
       setError('Failed to clear blueprint.');
     } finally {
       setLoading(false);

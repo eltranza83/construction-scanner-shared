@@ -96,7 +96,7 @@ function hasWholeWord(desc, keywords) {
   if (!desc) return false;
   const lowerDesc = desc.toLowerCase();
   return keywords.some(word => {
-    const escaped = word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+    const escaped = word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
     const regex = new RegExp(`\\b${escaped}\\b`, 'i');
     return regex.test(lowerDesc);
   });
@@ -190,7 +190,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
     }));
   };
 
-  const [mainImageBase64, setMainImageBase64] = useState(stagedItem.mainImageBase64 || null);
+  const mainImageBase64 = stagedItem.mainImageBase64 || null;
   const [secondaryImageBase64, setSecondaryImageBase64] = useState(stagedItem.secondaryImageBase64 || null);
 
   // Duplicate Warning State
@@ -849,8 +849,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                   style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
                   value={formData.date}
                   onChange={handleChange}
-                  onClick={(e) => { try { e.target.showPicker(); } catch (err) {} }}
-                  onFocus={(e) => { try { e.target.showPicker(); } catch (err) {} }}
+                  onClick={(e) => { try { e.target.showPicker(); } catch {} }}
+                  onFocus={(e) => { try { e.target.showPicker(); } catch {} }}
                 />
               </div>
 
@@ -938,8 +938,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                 style={{ padding: '8px 12px', fontSize: '0.85rem', width: '100%' }}
                 value={formData.date}
                 onChange={handleChange}
-                onClick={(e) => { try { e.target.showPicker(); } catch (err) {} }}
-                onFocus={(e) => { try { e.target.showPicker(); } catch (err) {} }}
+                onClick={(e) => { try { e.target.showPicker(); } catch {} }}
+                onFocus={(e) => { try { e.target.showPicker(); } catch {} }}
               />
             </div>
           </div>

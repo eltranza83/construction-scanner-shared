@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, DollarSign, Wallet, TrendingUp, ChevronDown, ChevronUp, RefreshCw, FileText, CheckCircle, Clock, AlertCircle, Camera, X, Plus, Image } from 'lucide-react';
+import { Search, Wallet, ChevronDown, ChevronUp, RefreshCw, AlertCircle, Camera, X, Plus, Image } from 'lucide-react';
 import { fetchProjectDashboardData } from '../services/sheetsDataService';
 import { uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
 
@@ -21,7 +21,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   const [dismissedReminders, setDismissedReminders] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(`jobscan_dismissed_reminders_${activeProject?.id}`) || '{}');
-    } catch (e) {
+    } catch {
       return {};
     }
   });
@@ -29,7 +29,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   const [snoozedReminders, setSnoozedReminders] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem(`jobscan_snoozed_reminders_${activeProject?.id}`) || '{}');
-    } catch (e) {
+    } catch {
       return {};
     }
   });
@@ -172,7 +172,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   };
 
   // Fetch dashboard data
-  const loadDashboardData = async (forceRefresh = false) => {
+  const loadDashboardData = async (_forceRefresh = false) => {
     if (!googleToken) {
       setError('Please connect your Google account in Settings to load the dashboard.');
       return;

@@ -22,13 +22,13 @@ import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/fi
 import { getFirebaseDb } from '../services/firebase';
 
 export default function Settings({ 
-  geminiKey, 
+  geminiKey: _geminiKey, 
   setGeminiKey, 
-  googleClientId, 
-  setGoogleClientId, 
+  googleClientId: _googleClientId, 
+  setGoogleClientId: _setGoogleClientId, 
   googleToken, 
-  setGoogleToken,
-  selectedFolder,
+  setGoogleToken: _setGoogleToken,
+  selectedFolder: _selectedFolder,
   setSelectedFolder,
   googleUser,
   onSignOut,
@@ -392,7 +392,7 @@ export default function Settings({
     setError(null);
     setSuccess(null);
     try {
-      const newFolder = await createFolder(
+      await createFolder(
         googleToken, 
         newFolderName.trim(), 
         currentParentId === 'root' ? null : currentParentId
