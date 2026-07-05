@@ -3,7 +3,7 @@ import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucid
 import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
-import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean, setStoredJson } from '../services/appStorage';
+import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';
 
 export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
@@ -29,14 +29,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
   const [savingGeminiKey, setSavingGeminiKey] = useState(false);
 
   const db = getFirebaseDb();
-  const localDevUser = {
-    email: 'local-dev@adepec.test',
-    name: 'Local Dev Tester',
-    picture: ''
-  };
-  const canUseLocalDevBypass =
-    import.meta.env.DEV &&
-    ['localhost', '127.0.0.1', '::1'].includes(window.location.hostname);
 
   const fetchInvitesList = async () => {
     if (!db) return;
@@ -318,23 +310,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
     }
   };
 
-  const handleLocalDevBypass = () => {
-    const finalKey = defaultGeminiKey || '';
-
-    setError(null);
-    setStoredBoolean(APP_STORAGE_KEYS.invited, true);
-    setStoredJson(APP_STORAGE_KEYS.googleUser, localDevUser);
-    localStorage.setItem(APP_STORAGE_KEYS.authorizedEmail, localDevUser.email);
-    localStorage.setItem(APP_STORAGE_KEYS.geminiKey, finalKey);
-
-    onKeyUpdated(finalKey);
-    setSuccess('Local dev access enabled. Google Drive sync still requires real Google sign-in.');
-
-    setTimeout(() => {
-      onUnlocked(localDevUser.email);
-    }, 500);
-  };
-
   const handleUnlockAdmin = () => {
     if (adminPasscode === ADMIN_PASSCODE) {
       setAdminPassUnlocked(true);
@@ -443,21 +418,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
               >
                 <LogIn size={18} /> Sign In with Google
               </button>
-              {canUseLocalDevBypass && (
-                <>
-                  <button
-                    type="button"
-                    onClick={handleLocalDevBypass}
-                    className="btn btn-secondary"
-                    style={{ fontSize: '0.82rem', padding: '9px 12px', width: '100%' }}
-                  >
-                    Continue in Local Dev Mode
-                  </button>
-                  <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-500)', textAlign: 'center', lineHeight: '1.4', margin: 0 }}>
-                    For browser testing only. Google Drive sync still requires Google sign-in.
-                  </p>
-                </>
-              )}
             </div>
           ) : (
             <form onSubmit={handleVerify} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
