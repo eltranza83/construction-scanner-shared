@@ -863,29 +863,6 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                               </span>
                               
                               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-                                {/* Camera View/Upload Photos */}
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveGalleryPhase({ category: cat.name, phase: sub.phase });
-                                  }}
-                                  style={{
-                                    background: 'rgba(255,255,255,0.03)',
-                                    border: '1px solid var(--color-zinc-800)',
-                                    cursor: 'pointer',
-                                    padding: '4px 6px',
-                                    color: 'var(--color-zinc-400)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    borderRadius: '4px',
-                                    transition: 'all 0.15s',
-                                  }}
-                                  title="Photos Log"
-                                >
-                                  <Camera size={12} />
-                                </button>
 
                                 {/* Material Total */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
