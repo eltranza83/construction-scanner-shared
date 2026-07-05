@@ -258,12 +258,12 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
       
       // Collect statuses and metadata for each phase
       rows.forEach(row => {
-        if (!row || row.length < 5) return;
+        if (!row || row.length < 2) return;
         const colA = String(row[0] || '').trim();
         const colB = String(row[1] || '').trim(); // Material Cost
-        const colC = String(row[2] || '').trim(); // Labor Cost
-        const colD = String(row[3] || '').trim(); // Combined Spent
-        const colE = String(row[4] || '').trim(); // Status
+        const colC = row.length > 2 ? String(row[2] || '').trim() : '$0.00'; // Labor Cost
+        const colD = row.length > 3 ? String(row[3] || '').trim() : '$0.00'; // Combined Spent
+        const colE = row.length > 4 ? String(row[4] || '').trim() : ''; // Status
         
         const cleanPhase = colA.toLowerCase().replace(/[^a-z0-9]/g, '');
         if (cleanPhase && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
