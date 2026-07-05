@@ -65,7 +65,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     try {
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const fileName = `Photo_${timestamp}_${file.name}`;
-      
+
       await uploadPhotoToPhaseFolder(
         googleToken,
         selectedFolder.id,
@@ -109,36 +109,36 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   // Get active reminder candidates
   const getActiveReminders = () => {
     if (!data?.subcontractors) return [];
-    
+
     // Check if Drywall & Sheetrock is Complete or In Progress
     const drywallSub = data.subcontractors.find(sub => sub.phase.toLowerCase().includes('drywall'));
-    const isDrywallActive = drywallSub && 
+    const isDrywallActive = drywallSub &&
       (drywallSub.status.toLowerCase().includes('progress') || drywallSub.status.toLowerCase().includes('complete') || drywallSub.status.toLowerCase().includes('done'));
-      
+
     return data.subcontractors.filter(sub => {
       const status = String(sub.status || '').trim().toLowerCase();
       const isActive = status.includes('progress') || (status.includes('started') && !status.includes('not'));
       if (!isActive) return false;
-      
+
       // If drywall is active/done, silence rough-ins
       const phaseName = sub.phase.toLowerCase();
       if (isDrywallActive) {
-        const isRoughIn = phaseName.includes('plumbing') || 
-                          phaseName.includes('electrical') || 
-                          phaseName.includes('hvac') || 
-                          phaseName.includes('insulation') || 
-                          phaseName.includes('framing') || 
-                          phaseName.includes('foundation');
+        const isRoughIn = phaseName.includes('plumbing') ||
+          phaseName.includes('electrical') ||
+          phaseName.includes('hvac') ||
+          phaseName.includes('insulation') ||
+          phaseName.includes('framing') ||
+          phaseName.includes('foundation');
         if (isRoughIn) return false;
       }
-      
+
       // Check if user dismissed it permanently
       if (dismissedReminders[sub.phase]) return false;
-      
+
       // Check if user snoozed it (and 24 hrs hasn't passed)
       const snoozeUntil = snoozedReminders[sub.phase] || 0;
       if (Date.now() < snoozeUntil) return false;
-      
+
       return true;
     });
   };
@@ -177,37 +177,37 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       setError('Please connect your Google account in Settings to load the dashboard.');
       return;
     }
-    
+
     // We need the tracking spreadsheet ID. Currently, it is stored or we find it in active project.
     // In our system, the spreadsheet ID is defined in the script.
     // For a fully dynamic client dashboard, we can search for the 'JobScan_Expense_Log' spreadsheet in the selectedFolder.
     // Let's first look in localStorage for a cached sheetId for this project, or search for it.
     setLoading(true);
     setError(null);
-    
+
     try {
       let spreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
-      
+
       if (!spreadsheetId) {
         // Search for any spreadsheet inside the project folder
         const query = `'${selectedFolder.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
         const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
-        
+
         const response = await fetch(searchUrl, {
           headers: { Authorization: `Bearer ${googleToken}` }
         });
-        
+
         if (response.status === 401) {
           if (onSessionExpired) {
             onSessionExpired();
             return;
           }
         }
-        
+
         if (!response.ok) {
           throw new Error('Failed to search project folder in Google Drive.');
         }
-        
+
         const searchResult = await response.json();
         if (searchResult.files && searchResult.files.length > 0) {
           // Prefer a spreadsheet named 'JobScan_Expense_Log' if multiple exist, otherwise use the first one
@@ -222,10 +222,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       // Fetch batch data from Sheets API
       const parsedData = await fetchProjectDashboardData(googleToken, spreadsheetId);
       setData(parsedData);
-      
+
       // Cache values for offline usage
       localStorage.setItem(`jobscan_cached_dashboard_${activeProject.id}`, JSON.stringify(parsedData));
-      
+
     } catch (err) {
       console.error(err);
       const errMsg = err.message.toLowerCase();
@@ -266,13 +266,13 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   // Autocomplete suggestions for contractor search
   const suggestions = data?.subcontractors
     ? data.subcontractors.filter(sub => {
-        const query = searchTerm.toLowerCase();
-        return (
-          sub.payee.toLowerCase().includes(query) ||
-          sub.phase.toLowerCase().includes(query) ||
-          sub.category.toLowerCase().includes(query)
-        );
-      })
+      const query = searchTerm.toLowerCase();
+      return (
+        sub.payee.toLowerCase().includes(query) ||
+        sub.phase.toLowerCase().includes(query) ||
+        sub.category.toLowerCase().includes(query)
+      );
+    })
     : [];
 
   const toggleCategory = (catName) => {
@@ -347,7 +347,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-      
+
       {/* Header Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
@@ -358,8 +358,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             </p>
           )}
         </div>
-        <button 
-          onClick={() => loadDashboardData(true)} 
+        <button
+          onClick={() => loadDashboardData(true)}
           className="btn btn-secondary"
           style={{ width: 'auto', padding: '6px 10px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}
           disabled={loading}
@@ -397,7 +397,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                 Build: {formatCurrency(data.projectInfo.budgetBuild)}
               </span>
             </div>
-            
+
             <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '8px 4px', display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, textAlign: 'center' }}>
               <span style={{ fontSize: '0.58rem', fontWeight: 700, color: 'var(--color-zinc-500)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Draws Paid</span>
               <span style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-amber-500)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -425,7 +425,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
           {activeReminders.length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {activeReminders.map(rem => (
-                <div 
+                <div
                   key={rem.id}
                   style={{
                     background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(0,0,0,0) 100%)',
@@ -450,7 +450,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     }}>
                       <Camera size={16} />
                     </div>
-                    
+
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', lineHeight: '1.2' }}>
                         📸 {rem.phase} is active!
@@ -460,7 +460,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                       </p>
                     </div>
                   </div>
-                  
+
                   <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid rgba(245, 158, 11, 0.05)', paddingTop: '8px' }}>
                     <button
                       type="button"
@@ -477,7 +477,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     >
                       Snooze 24h
                     </button>
-                    
+
                     <button
                       type="button"
                       onClick={() => dismissReminder(rem.phase)}
@@ -493,7 +493,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     >
                       I've Taken Them
                     </button>
-                    
+
                     <label
                       style={{
                         backgroundColor: 'var(--color-amber-500)',
@@ -510,9 +510,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                       }}
                     >
                       <Plus size={10} /> Snap Photo
-                      <input 
-                        type="file" 
-                        accept="image/*" 
+                      <input
+                        type="file"
+                        accept="image/*"
                         capture="environment"
                         onChange={(e) => {
                           setActiveGalleryPhase({ category: rem.category, phase: rem.phase });
@@ -533,10 +533,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
               <Search size={16} style={{ color: 'var(--color-amber-500)' }} />
               Contractor Balance Lookup
             </h3>
-            
+
             {/* Search Input */}
             <div style={{ position: 'relative' }}>
-              <input 
+              <input
                 type="text"
                 className="form-input"
                 placeholder="Search contractor payee (e.g. Painter, Electrician)..."
@@ -548,7 +548,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                 style={{ width: '100%', paddingLeft: '36px' }}
               />
               <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-zinc-600)' }} />
-              
+
               {/* Autocomplete suggestions */}
               {searchTerm && suggestions.length > 0 && (
                 <div style={{
@@ -565,7 +565,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8)'
                 }}>
                   {suggestions.map(sub => (
-                    <div 
+                    <div
                       key={sub.id}
                       onClick={() => selectSubcontractor(sub)}
                       style={{
@@ -630,7 +630,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                       <Camera size={12} /> View Phase Photos
                     </button>
                   </div>
-                  
+
                   {/* Status Badge & Close button aligned to the far right */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'absolute', right: '0', top: '0', height: '100%', maxHeight: '32px' }}>
                     {/* Status Badge */}
@@ -703,7 +703,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '6px' }}>
                     Payment History Logs ({selectedSub.payments.length})
                   </span>
-                  
+
                   {selectedSub.payments.length === 0 ? (
                     <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', padding: '6px 0' }}>
                       No payments recorded yet for this trade.
@@ -727,7 +727,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                               Date: {p.date} {p.checkNumber && p.checkNumber !== 'N/A' ? `• Check: ${p.checkNumber}` : ''}
                             </span>
                           </div>
-                          
+
                           <div style={{ textAlign: 'right', fontWeight: 700 }}>
                             {/* Compute total payment */}
                             {(() => {
@@ -754,16 +754,16 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-200)', marginBottom: '10px' }}>
               Trade Sections & Phase Totals
             </h3>
-            
+
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {data.categories.map(cat => {
                 const isExpanded = !!expandedCategories[cat.name];
-                
+
                 // Get subcontractors in this specific category
                 const catSubs = data.subcontractors.filter(sub => sub.category === cat.name);
 
                 return (
-                  <div 
+                  <div
                     key={cat.name}
                     style={{
                       border: '1px solid var(--color-zinc-800)',
@@ -773,7 +773,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     }}
                   >
                     {/* Header */}
-                    <div 
+                    <div
                       onClick={() => toggleCategory(cat.name)}
                       style={{
                         padding: '12px 14px',
@@ -808,7 +808,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                           </span>
                         </div>
                       </div>
-                      
+
                       <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
                         {isExpanded ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-500)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-500)' }} />}
                       </div>
@@ -816,8 +816,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
                     {/* Expanded Content list */}
                     {isExpanded && (
-                      <div style={{ 
-                        padding: '8px 12px', 
+                      <div style={{
+                        padding: '8px 12px',
                         backgroundColor: 'var(--color-zinc-950)',
                         display: 'flex',
                         flexDirection: 'column',
@@ -829,92 +829,84 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                             onClick={() => selectSubcontractor(sub)}
                             style={{
                               display: 'flex',
-                              justifyContent: 'space-between',
-                              alignItems: 'center',
-                              padding: '8px 10px',
-                              borderRadius: '6px',
+                              flexDirection: 'column',
+                              gap: '6px',
+                              padding: '10px 12px',
+                              borderRadius: '8px',
                               backgroundColor: 'var(--color-zinc-900)',
                               fontSize: '0.78rem',
                               cursor: 'pointer',
-                              border: '1px solid transparent',
+                              border: '1px solid var(--color-zinc-800)',
                               transition: 'all 0.15s'
                             }}
                             className="project-profile-row"
                           >
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', minWidth: 0, paddingRight: '8px' }}>
-                              <span style={{ fontWeight: 600, color: 'var(--color-zinc-200)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {/* Top Row: Phase Name */}
+                            <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
+                              <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                                 {sub.phase}
                               </span>
-                              <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                Contractor: {sub.payee}
-                              </span>
                             </div>
-                            
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexShrink: 0 }}>
-                              {/* Camera View/Upload Photos */}
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setActiveGalleryPhase({ category: cat.name, phase: sub.phase });
-                                }}
-                                style={{
-                                  background: 'rgba(255,255,255,0.03)',
-                                  border: '1px solid var(--color-zinc-800)',
-                                  cursor: 'pointer',
-                                  padding: '6px',
-                                  color: 'var(--color-zinc-400)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  borderRadius: '6px',
-                                  transition: 'all 0.15s',
-                                }}
-                                title="Photos Log"
-                              >
-                                <Camera size={13} />
-                              </button>
 
-                              {/* Material Total */}
-                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '65px' }}>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-amber-500)' }}>
-                                  {formatCurrency(sub.totalMaterial || 0)}
-                                </span>
-                                <span style={{ fontSize: '0.6rem', color: 'var(--color-zinc-500)' }}>
-                                  Mat
-                                </span>
-                              </div>
-
-                              {/* Spent & Balance */}
-                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '75px' }}>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-blue-500)' }}>
-                                  {formatCurrency(sub.totalPaid)}
-                                </span>
-                                <span style={{ fontSize: '0.6rem', color: 'var(--color-zinc-500)' }}>
-                                  Bal: {formatCurrency(sub.remainingBalance)}
-                                </span>
-                              </div>
+                            {/* Bottom Row: Contractor & Metrics */}
+                            <div style={{ 
+                              display: 'flex', 
+                              justifyContent: 'space-between', 
+                              alignItems: 'flex-end', 
+                              width: '100%', 
+                              gap: '10px', 
+                              borderTop: '1px solid rgba(255,255,255,0.03)', 
+                              paddingTop: '6px' 
+                            }}>
+                              <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingBottom: '2px' }}>
+                                {sub.payee}
+                              </span>
                               
-                              {(() => {
-                                const style = getStatusStyle(sub.status);
-                                return (
-                                  <span style={{
-                                    fontSize: '0.6rem',
-                                    fontWeight: 'bold',
-                                    padding: '2px 5px',
-                                    borderRadius: '3px',
-                                    backgroundColor: style.bg,
-                                    color: style.text,
-                                    border: `1px solid ${style.border}`,
-                                    textTransform: 'uppercase',
-                                    scale: '0.9',
-                                    width: '78px',
-                                    textAlign: 'center'
-                                  }}>
-                                    {sub.status || 'Not Started'}
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
+                                {/* Camera View/Upload Photos */}
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveGalleryPhase({ category: cat.name, phase: sub.phase });
+                                  }}
+                                  style={{
+                                    background: 'rgba(255,255,255,0.03)',
+                                    border: '1px solid var(--color-zinc-800)',
+                                    cursor: 'pointer',
+                                    padding: '4px 6px',
+                                    color: 'var(--color-zinc-400)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    borderRadius: '4px',
+                                    transition: 'all 0.15s',
+                                  }}
+                                  title="Photos Log"
+                                >
+                                  <Camera size={12} />
+                                </button>
+
+                                {/* Material Total */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-amber-500)', lineHeight: '1.2' }}>
+                                    {formatCurrency(sub.totalMaterial || 0)}
                                   </span>
-                                );
-                              })()}
+                                  <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
+                                    Mat
+                                  </span>
+                                </div>
+
+                                {/* Spent & Balance */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
+                                    {formatCurrency(sub.totalPaid)}
+                                  </span>
+                                  <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
+                                    Bal: {formatCurrency(sub.remainingBalance)}
+                                  </span>
+                                </div>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -972,14 +964,14 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   {activeGalleryPhase.category.replace(/_/g, ' ')}
                 </span>
               </div>
-              <button 
+              <button
                 onClick={() => setActiveGalleryPhase(null)}
                 style={{ background: 'transparent', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
               >
                 <X size={18} />
               </button>
             </div>
-            
+
             {/* Modal Body */}
             <div style={{ padding: '16px', overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {loadingPhotos ? (
@@ -1011,7 +1003,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   gap: '8px'
                 }}>
                   {photos.map(photo => (
-                    <div 
+                    <div
                       key={photo.id}
                       onClick={() => setFullscreenPhoto(photo)}
                       style={{
@@ -1024,8 +1016,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                         backgroundColor: 'var(--color-zinc-900)'
                       }}
                     >
-                      <img 
-                        src={photo.thumbnailLink} 
+                      <img
+                        src={photo.thumbnailLink}
                         alt={photo.name}
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
@@ -1033,10 +1025,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   ))}
                 </div>
               )}
-              
+
               {/* Upload Input & Progress */}
               <div style={{ borderTop: '1px solid var(--color-zinc-900)', paddingTop: '12px' }}>
-                <label 
+                <label
                   className={`btn ${uploadingPhoto ? 'btn-secondary' : 'btn-primary'}`}
                   style={{
                     display: 'flex',
@@ -1050,9 +1042,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                 >
                   <Plus size={14} />
                   {uploadingPhoto ? 'Uploading to Drive...' : '📸 Add Photo (Camera/Gallery)'}
-                  <input 
-                    type="file" 
-                    accept="image/*" 
+                  <input
+                    type="file"
+                    accept="image/*"
                     capture="environment"
                     onChange={handlePhotoUpload}
                     disabled={uploadingPhoto}
@@ -1081,7 +1073,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
           alignItems: 'center',
           padding: '16px'
         }} onClick={() => setFullscreenPhoto(null)}>
-          <button 
+          <button
             onClick={() => setFullscreenPhoto(null)}
             style={{
               position: 'absolute',
@@ -1097,8 +1089,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
           >
             <X size={20} />
           </button>
-          
-          <img 
+
+          <img
             src={fullscreenPhoto.thumbnailLink ? fullscreenPhoto.thumbnailLink.replace(/=s\d+$/, '=s1200') : fullscreenPhoto.webViewLink}
             alt="Fullscreen view"
             style={{
@@ -1109,11 +1101,11 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             }}
             onClick={(e) => e.stopPropagation()}
           />
-          
+
           <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.8rem', marginTop: '12px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
-            <a 
-              href={fullscreenPhoto.webViewLink} 
-              target="_blank" 
+            <a
+              href={fullscreenPhoto.webViewLink}
+              target="_blank"
               rel="noopener noreferrer"
               style={{ color: 'var(--color-amber-500)', textDecoration: 'underline', fontWeight: 600 }}
             >
