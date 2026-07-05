@@ -2,7 +2,20 @@ import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { uploadFileToDrive, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
-import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from './config/appConfig';
+import {
+  APP_STORAGE_KEYS,
+  clearGoogleIdentity,
+  clearGoogleSession,
+  loadInitialInviteState,
+  loadStoredAppState,
+  persistActiveProject,
+  persistGoogleToken,
+  persistGoogleUser,
+  persistHistory,
+  persistProjects,
+  persistStagedItems,
+  setStoredBoolean
+} from './services/appStorage';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -53,64 +66,24 @@ export default function App() {
   const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [hasUnprocessedUploads, setHasUnprocessedUploads] = useState(
-    localStorage.getItem('jobscan_has_unprocessed_uploads') === 'true'
-  );
+  const [hasUnprocessedUploads, setHasUnprocessedUploads] = useState(() => (
+    loadStoredAppState().hasUnprocessedUploads
+  ));
   const [triggeringSync, setTriggeringSync] = useState(false);
-  const checkInitialInviteState = () => {
-    const userStr = localStorage.getItem('jobscan_google_user');
-    if (!userStr) return false;
-    try {
-      const user = JSON.parse(userStr);
-      return localStorage.getItem('jobscan_authorized_email') === user.email;
-    } catch {
-      return false;
-    }
-  };
-
-  const [isInvited, setIsInvited] = useState(checkInitialInviteState());
+  const [isInvited, setIsInvited] = useState(loadInitialInviteState());
 
   // Load configuration and history on mount
   useEffect(() => {
-    const key = localStorage.getItem('jobscan_gemini_key') || '';
-    if (!localStorage.getItem('jobscan_gemini_key')) {
-      localStorage.setItem('jobscan_gemini_key', '');
-    }
-    const cid = localStorage.getItem(STORAGE_KEYS.googleClientId) || DEFAULT_GOOGLE_CLIENT_ID;
-    if (!localStorage.getItem(STORAGE_KEYS.googleClientId)) {
-      localStorage.setItem(STORAGE_KEYS.googleClientId, DEFAULT_GOOGLE_CLIENT_ID);
-    }
-    const token = localStorage.getItem('jobscan_google_token') || null;
-    const userStr = localStorage.getItem('jobscan_google_user');
-    const folderId = localStorage.getItem('jobscan_folder_id');
-    const folderName = localStorage.getItem('jobscan_folder_name');
-    const projectsStr = localStorage.getItem('jobscan_projects') || '[]';
-    const activeProjectStr = localStorage.getItem('jobscan_active_project') || 'null';
-    const historyStr = localStorage.getItem('jobscan_history') || '[]';
-    const stagedStr = localStorage.getItem('jobscan_staged_items') || '[]';
-
-    setGeminiKey(key);
-    setGoogleClientId(cid);
-    setGoogleToken(token);
-    if (userStr) setGoogleUser(JSON.parse(userStr));
-    if (folderId && folderName) setSelectedFolder({ id: folderId, name: folderName });
-    setHistory(JSON.parse(historyStr));
-
-    try {
-      setProjects(JSON.parse(projectsStr));
-      setActiveProject(JSON.parse(activeProjectStr));
-    } catch (e) {
-      console.error('Failed to parse projects or active project:', e);
-    }
-
-    // Restore staged scan list (now preserves base64 images!)
-    if (stagedStr) {
-      try {
-        setStagedItems(JSON.parse(stagedStr));
-      } catch (e) {
-        console.error('Failed to restore staged items:', e);
-      }
-    }
+    const stored = loadStoredAppState();
+    setGeminiKey(stored.geminiKey);
+    setGoogleClientId(stored.googleClientId);
+    setGoogleToken(stored.googleToken);
+    setGoogleUser(stored.googleUser);
+    setSelectedFolder(stored.selectedFolder);
+    setProjects(stored.projects);
+    setActiveProject(stored.activeProject);
+    setHistory(stored.history);
+    setStagedItems(stored.stagedItems);
 
     // Load Google Identity Services Script dynamically and pre-initialize token client
     const scriptId = 'google-gis-script';
@@ -125,7 +98,7 @@ export default function App() {
             callback: async (tokenResponse) => {
               if (tokenResponse.access_token) {
                 setGoogleToken(tokenResponse.access_token);
-                localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
+                persistGoogleToken(tokenResponse.access_token);
                 setError(null); // Clear any previous auth errors
                 
                 // Refetch user details quietly to ensure profile stays in sync
@@ -136,7 +109,7 @@ export default function App() {
                   if (res.ok) {
                     const info = await res.json();
                     setGoogleUser(info);
-                    localStorage.setItem('jobscan_google_user', JSON.stringify(info));
+                    persistGoogleUser(info);
                   }
                 } catch (e) {
                   console.error("Quiet user info update failed:", e);
@@ -145,8 +118,7 @@ export default function App() {
                 console.warn("Google authentication failed or was cancelled:", tokenResponse);
                 setGoogleToken(null);
                 setGoogleUser(null);
-                localStorage.removeItem('jobscan_google_token');
-                localStorage.removeItem('jobscan_google_user');
+                clearGoogleIdentity();
                 if (tokenResponse.error === 'user_logged_out' || tokenResponse.error === 'immediate_failed') {
                   setError('Google Drive session expired. Please sign in again.');
                 } else {
@@ -192,7 +164,7 @@ export default function App() {
           const data = docSnap.data();
           if (data && data.apiKey) {
             setGeminiKey(data.apiKey);
-            localStorage.setItem('jobscan_gemini_key', data.apiKey);
+            localStorage.setItem(APP_STORAGE_KEYS.geminiKey, data.apiKey);
           }
         }
       } catch (err) {
@@ -238,11 +210,11 @@ export default function App() {
         
         if (Array.isArray(cloudProjects)) {
           setProjects(cloudProjects);
-          localStorage.setItem('jobscan_projects', JSON.stringify(cloudProjects));
+          persistProjects(cloudProjects);
           console.log("Projects loaded from Google Drive:", cloudProjects);
           
           // Verify active project selection matches one of the cloud projects
-          const activeProjId = localStorage.getItem('jobscan_active_project_id');
+          const activeProjId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
           if (activeProjId) {
             const match = cloudProjects.find(p => p.id === activeProjId);
             if (match) {
@@ -252,17 +224,13 @@ export default function App() {
               const first = cloudProjects[0];
               setActiveProject(first);
               setSelectedFolder({ id: first.folderId, name: first.folderName });
-              localStorage.setItem('jobscan_active_project_id', first.id);
-              localStorage.setItem('jobscan_folder_id', first.folderId);
-              localStorage.setItem('jobscan_folder_name', first.folderName);
+              persistActiveProject(first);
             }
           } else if (cloudProjects.length > 0) {
             const first = cloudProjects[0];
             setActiveProject(first);
             setSelectedFolder({ id: first.folderId, name: first.folderName });
-            localStorage.setItem('jobscan_active_project_id', first.id);
-            localStorage.setItem('jobscan_folder_id', first.folderId);
-            localStorage.setItem('jobscan_folder_name', first.folderName);
+            persistActiveProject(first);
           }
         }
       } else {
@@ -296,7 +264,7 @@ export default function App() {
 
   const handleUpdateProjects = (newProjects) => {
     setProjects(newProjects);
-    localStorage.setItem('jobscan_projects', JSON.stringify(newProjects));
+    persistProjects(newProjects);
     if (googleToken) {
       saveProjectsToCloud(newProjects, googleToken);
     }
@@ -312,7 +280,7 @@ export default function App() {
   // Save history to LocalStorage
   const saveHistory = (newHistory) => {
     setHistory(newHistory);
-    localStorage.setItem('jobscan_history', JSON.stringify(newHistory));
+    persistHistory(newHistory);
   };
 
   // Google OAuth Login
@@ -331,7 +299,7 @@ export default function App() {
         callback: async (tokenResponse) => {
           if (tokenResponse.access_token) {
             setGoogleToken(tokenResponse.access_token);
-            localStorage.setItem('jobscan_google_token', tokenResponse.access_token);
+            persistGoogleToken(tokenResponse.access_token);
             
             // Fetch User Details
             try {
@@ -341,7 +309,7 @@ export default function App() {
               if (res.ok) {
                 const info = await res.json();
                 setGoogleUser(info);
-                localStorage.setItem('jobscan_google_user', JSON.stringify(info));
+                persistGoogleUser(info);
                 setSuccess('Successfully signed in with Google!');
                 setTimeout(() => setSuccess(null), 3000);
               } else {
@@ -372,13 +340,7 @@ export default function App() {
     setSelectedFolder(null);
     setActiveProject(null);
     setIsInvited(false);
-    localStorage.removeItem('jobscan_google_token');
-    localStorage.removeItem('jobscan_google_user');
-    localStorage.removeItem('jobscan_folder_id');
-    localStorage.removeItem('jobscan_folder_name');
-    localStorage.removeItem('jobscan_active_project');
-    localStorage.removeItem('jobscan_authorized_email');
-    localStorage.removeItem('jobscan_invited');
+    clearGoogleSession();
     setSuccess('Signed out of Google account.');
     setTimeout(() => setSuccess(null), 3000);
   };
@@ -386,18 +348,16 @@ export default function App() {
   const handleSelectActiveProject = (projectId) => {
     if (!projectId) {
       setActiveProject(null);
-      localStorage.setItem('jobscan_active_project', 'null');
+      persistActiveProject(null);
       return;
     }
 
     const proj = projects.find(p => p.id === projectId);
     if (proj) {
       setActiveProject(proj);
-      localStorage.setItem('jobscan_active_project', JSON.stringify(proj));
 
       setSelectedFolder({ id: proj.folderId, name: proj.folderName });
-      localStorage.setItem('jobscan_folder_id', proj.folderId);
-      localStorage.setItem('jobscan_folder_name', proj.folderName);
+      persistActiveProject(proj);
 
       setSuccess(`Switched active project to: "${proj.name}"`);
       setTimeout(() => setSuccess(null), 2500);
@@ -419,7 +379,7 @@ export default function App() {
       // Wait a moment to show completion
       setTimeout(() => {
         setHasUnprocessedUploads(false);
-        localStorage.setItem('jobscan_has_unprocessed_uploads', 'false');
+        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
         setTriggeringSync(false);
         setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
         setTimeout(() => setSuccess(null), 4000);
@@ -479,7 +439,7 @@ export default function App() {
       setStagedItems(updatedDrafts);
       
       try {
-        localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+        persistStagedItems(updatedDrafts);
       } catch (e) {
         console.error('LocalStorage quota error:', e);
         setError('Storage full! Draft saved in memory, but please sync items to free up browser space.');
@@ -506,7 +466,7 @@ export default function App() {
       return item;
     });
     setStagedItems(updatedDrafts);
-    localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+    persistStagedItems(updatedDrafts);
     setEditingItemId(null);
     setSuccess('Draft updated successfully!');
     setTimeout(() => setSuccess(null), 3000);
@@ -523,7 +483,7 @@ export default function App() {
     if (!draftToDelete) return;
     const updatedDrafts = stagedItems.filter(item => item.id !== draftToDelete.id);
     setStagedItems(updatedDrafts);
-    localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+    persistStagedItems(updatedDrafts);
     setDraftToDelete(null);
     setSuccess('Draft discarded successfully!');
     setTimeout(() => setSuccess(null), 2500);
@@ -540,7 +500,7 @@ export default function App() {
       return item;
     });
     setStagedItems(updatedDrafts);
-    localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+    persistStagedItems(updatedDrafts);
   };
 
   const handleResetTimer = (id) => {
@@ -555,7 +515,7 @@ export default function App() {
       return item;
     });
     setStagedItems(updatedDrafts);
-    localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+    persistStagedItems(updatedDrafts);
   };
 
   const handleUpdateDraftField = (id, field, value) => {
@@ -572,7 +532,7 @@ export default function App() {
       return item;
     });
     setStagedItems(updatedDrafts);
-    localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+    persistStagedItems(updatedDrafts);
   };
 
   // Upload/Sync Action
@@ -655,7 +615,7 @@ export default function App() {
         // Remove from drafts
         const updatedDrafts = stagedItems.filter(item => item.id !== id);
         setStagedItems(updatedDrafts);
-        localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+        persistStagedItems(updatedDrafts);
       } else {
         // Online Sync to Google Drive
         let mainUploadResult = null;
@@ -773,7 +733,7 @@ export default function App() {
         // Mark that there is a new upload that has landed in Drive
         if (activeProject?.appsScriptUrl) {
           setHasUnprocessedUploads(true);
-          localStorage.setItem('jobscan_has_unprocessed_uploads', 'true');
+          setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
         }
 
         setSuccess('Document report PDF synced successfully!');
@@ -781,7 +741,7 @@ export default function App() {
         // Remove from drafts
         const updatedDrafts = stagedItems.filter(item => item.id !== id);
         setStagedItems(updatedDrafts);
-        localStorage.setItem('jobscan_staged_items', JSON.stringify(updatedDrafts));
+        persistStagedItems(updatedDrafts);
       }
 
       setTimeout(() => setSuccess(null), 4000);
@@ -899,8 +859,7 @@ export default function App() {
     // Fallback: only clear token if the token client is not initialized
     setGoogleToken(null);
     setGoogleUser(null);
-    localStorage.removeItem('jobscan_google_token');
-    localStorage.removeItem('jobscan_google_user');
+    clearGoogleIdentity();
     setError('Google Drive session expired. Please sign in again.');
   };
 
@@ -909,12 +868,12 @@ export default function App() {
       <Suspense fallback={<LazyScreenFallback />}>
         <InviteScreen
           onUnlocked={(email) => {
-            localStorage.setItem('jobscan_authorized_email', email);
-            localStorage.setItem('jobscan_invited', 'true');
+            localStorage.setItem(APP_STORAGE_KEYS.authorizedEmail, email);
+            setStoredBoolean(APP_STORAGE_KEYS.invited, true);
             setIsInvited(true);
           }}
           onKeyUpdated={(key) => setGeminiKey(key)}
-          defaultGeminiKey={localStorage.getItem('jobscan_gemini_key') || ''}
+          defaultGeminiKey={localStorage.getItem(APP_STORAGE_KEYS.geminiKey) || ''}
           googleUser={googleUser}
           onGoogleSignIn={handleGoogleSignIn}
           onSignOut={handleSignOut}

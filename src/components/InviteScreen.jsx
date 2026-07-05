@@ -3,6 +3,7 @@ import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucid
 import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
+import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';
 
 export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
@@ -109,7 +110,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
           onUnlocked(googleUser.email);
         } else {
           // If not found in database, check if this browser was already verified under the old version
-          const isLegacyInvited = localStorage.getItem('jobscan_invited') === 'true';
+          const isLegacyInvited = getStoredBoolean(APP_STORAGE_KEYS.invited);
           if (isLegacyInvited) {
             const emailClean = googleUser.email.toLowerCase();
             const legacyDocId = `LEGACY-${emailClean.replace(/[^a-zA-Z0-9]/g, '_')}`;
@@ -185,7 +186,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       setSuccess('Shared Gemini API Key saved to database! Other users will receive it automatically on next load.');
       
       // Update local storage and call parent callback if passed
-      localStorage.setItem('jobscan_gemini_key', tempGeminiKey.trim());
+      localStorage.setItem(APP_STORAGE_KEYS.geminiKey, tempGeminiKey.trim());
       if (onKeyUpdated) {
         onKeyUpdated(tempGeminiKey.trim());
       }
@@ -291,8 +292,8 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       const finalKey = defaultGeminiKey || '';
 
       // Save local credentials
-      localStorage.setItem('jobscan_invited', 'true');
-      localStorage.setItem('jobscan_gemini_key', finalKey);
+      setStoredBoolean(APP_STORAGE_KEYS.invited, true);
+      localStorage.setItem(APP_STORAGE_KEYS.geminiKey, finalKey);
       
       onKeyUpdated(finalKey);
       setSuccess('Access activated successfully! Launching scanner...');

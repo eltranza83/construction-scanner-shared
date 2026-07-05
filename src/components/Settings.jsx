@@ -21,6 +21,7 @@ import { listFolders, createFolder } from '../services/googleDrive';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
+import { APP_STORAGE_KEYS } from '../services/appStorage';
 
 export default function Settings({ 
   geminiKey: _geminiKey, 
@@ -227,7 +228,7 @@ export default function Settings({
       
       // Update local state and storage
       setGeminiKey(tempGeminiKey.trim());
-      localStorage.setItem('jobscan_gemini_key', tempGeminiKey.trim());
+      localStorage.setItem(APP_STORAGE_KEYS.geminiKey, tempGeminiKey.trim());
       
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
