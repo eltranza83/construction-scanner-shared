@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   MapPin, Camera, Image, X, ZoomIn, ZoomOut, RotateCcw, 
-  AlertTriangle, Eye, Loader2, Folder, FolderOpen, 
-  ChevronDown, ChevronUp, Plus, ArrowLeft, Trash2 
+  AlertTriangle, Eye, Loader2,
+  ChevronDown, ChevronUp, ArrowLeft
 } from 'lucide-react';
 import { 
   findFileInFolder, 

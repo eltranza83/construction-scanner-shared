@@ -20,6 +20,7 @@ import {
 import { listFolders, createFolder } from '../services/googleDrive';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
+import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 
 export default function Settings({ 
   geminiKey: _geminiKey, 
@@ -53,9 +54,9 @@ export default function Settings({
   const [loadingInvites, setLoadingInvites] = useState(false);
   
   // Firebase credentials states
-  const [firebaseApiKey, setFirebaseApiKey] = useState(localStorage.getItem('jobscan_firebase_api_key') || 'AIzaSyDjYPPkW8ffQMOCByCo9gMlVxQ8PsMpAoU');
-  const [firebaseProjectId, setFirebaseProjectId] = useState(localStorage.getItem('jobscan_firebase_project_id') || 'adepec-scanner-invites');
-  const [firebaseAppId, setFirebaseAppId] = useState(localStorage.getItem('jobscan_firebase_app_id') || '1:256926375840:web:1dfab80a93a0f9cfa9cec5');
+  const [firebaseApiKey, setFirebaseApiKey] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseApiKey, DEFAULT_FIREBASE_CONFIG.apiKey));
+  const [firebaseProjectId, setFirebaseProjectId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseProjectId, DEFAULT_FIREBASE_CONFIG.projectId));
+  const [firebaseAppId, setFirebaseAppId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseAppId, DEFAULT_FIREBASE_CONFIG.appId));
 
   // Gemini API Key states
   const [tempGeminiKey, setTempGeminiKey] = useState('');
@@ -197,9 +198,9 @@ export default function Settings({
       setError('Firebase API Key and Project ID are required.');
       return;
     }
-    localStorage.setItem('jobscan_firebase_api_key', firebaseApiKey.trim());
-    localStorage.setItem('jobscan_firebase_project_id', firebaseProjectId.trim());
-    localStorage.setItem('jobscan_firebase_app_id', firebaseAppId.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseApiKey, firebaseApiKey.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseProjectId, firebaseProjectId.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseAppId, firebaseAppId.trim());
     setSuccess('Firebase configuration saved successfully!');
     setError(null);
     setTimeout(() => {
@@ -620,7 +621,7 @@ export default function Settings({
                     placeholder="Enter admin passcode"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter') {
-                        if (adminPassInput === 'adepec#83') {
+                        if (adminPassInput === ADMIN_PASSCODE) {
                           setIsAdminUnlocked(true);
                           setError(null);
                         } else {
@@ -634,7 +635,7 @@ export default function Settings({
                   type="button" 
                   className="btn btn-secondary"
                   onClick={() => {
-                    if (adminPassInput === 'adepec#83') {
+                    if (adminPassInput === ADMIN_PASSCODE) {
                       setIsAdminUnlocked(true);
                       setError(null);
                     } else {

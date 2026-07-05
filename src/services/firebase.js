@@ -1,5 +1,6 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 
 /**
  * Dynamically gets or initializes the Firestore database instance
@@ -7,8 +8,8 @@ import { getFirestore } from 'firebase/firestore';
  * pre-configured default credentials for zero-setup execution.
  */
 export function getFirebaseDb() {
-  const apiKey = localStorage.getItem('jobscan_firebase_api_key') || 'AIzaSyDjYPPkW8ffQMOCByCo9gMlVxQ8PsMpAoU';
-  const projectId = localStorage.getItem('jobscan_firebase_project_id') || 'adepec-scanner-invites';
+  const apiKey = getStoredConfigValue(STORAGE_KEYS.firebaseApiKey, DEFAULT_FIREBASE_CONFIG.apiKey);
+  const projectId = getStoredConfigValue(STORAGE_KEYS.firebaseProjectId, DEFAULT_FIREBASE_CONFIG.projectId);
   
   if (!apiKey || !projectId) {
     return null; 
@@ -20,7 +21,7 @@ export function getFirebaseDb() {
     projectId,
     storageBucket: localStorage.getItem('jobscan_firebase_storage_bucket') || `${projectId}.appspot.com`,
     messagingSenderId: localStorage.getItem('jobscan_firebase_messaging_sender_id') || '',
-    appId: localStorage.getItem('jobscan_firebase_app_id') || '1:256926375840:web:1dfab80a93a0f9cfa9cec5'
+    appId: getStoredConfigValue(STORAGE_KEYS.firebaseAppId, DEFAULT_FIREBASE_CONFIG.appId)
   };
 
   try {

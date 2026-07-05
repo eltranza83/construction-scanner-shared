@@ -1,16 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check } from 'lucide-react';
-import Scanner from './components/Scanner';
 import StagingCard from './components/StagingCard';
-import EditForm from './components/EditForm';
-import Settings from './components/Settings';
-import InviteScreen from './components/InviteScreen';
-import Dashboard from './components/Dashboard';
-import BlueprintPinboard from './components/BlueprintPinboard';
-import { generateDocumentPDF } from './services/pdfGenerator';
 import { uploadFileToDrive, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
-import { getFirebaseDb } from './services/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from './config/appConfig';
+
+const Scanner = lazy(() => import('./components/Scanner'));
+const EditForm = lazy(() => import('./components/EditForm'));
+const Settings = lazy(() => import('./components/Settings'));
+const InviteScreen = lazy(() => import('./components/InviteScreen'));
+const Dashboard = lazy(() => import('./components/Dashboard'));
+const BlueprintPinboard = lazy(() => import('./components/BlueprintPinboard'));
+
+function LazyScreenFallback() {
+  return (
+    <div className="settings-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '220px' }}>
+      <div className="spinner" />
+    </div>
+  );
+}
 
 export default function App() {
   // Config & Auth State
@@ -69,9 +76,9 @@ export default function App() {
     if (!localStorage.getItem('jobscan_gemini_key')) {
       localStorage.setItem('jobscan_gemini_key', '');
     }
-    const cid = localStorage.getItem('jobscan_google_client_id') || '523814311929-lku3c1m2rq4qpmbf1earpgnm1beuvq8m.apps.googleusercontent.com';
-    if (!localStorage.getItem('jobscan_google_client_id')) {
-      localStorage.setItem('jobscan_google_client_id', '523814311929-lku3c1m2rq4qpmbf1earpgnm1beuvq8m.apps.googleusercontent.com');
+    const cid = localStorage.getItem(STORAGE_KEYS.googleClientId) || DEFAULT_GOOGLE_CLIENT_ID;
+    if (!localStorage.getItem(STORAGE_KEYS.googleClientId)) {
+      localStorage.setItem(STORAGE_KEYS.googleClientId, DEFAULT_GOOGLE_CLIENT_ID);
     }
     const token = localStorage.getItem('jobscan_google_token') || null;
     const userStr = localStorage.getItem('jobscan_google_user');
@@ -172,6 +179,10 @@ export default function App() {
   // Fetch shared Gemini key from Firestore if unlocked
   useEffect(() => {
     const fetchSharedGeminiKey = async () => {
+      const [{ getFirebaseDb }, { doc, getDoc }] = await Promise.all([
+        import('./services/firebase'),
+        import('firebase/firestore')
+      ]);
       const db = getFirebaseDb();
       if (!db) return;
       try {
@@ -573,6 +584,7 @@ export default function App() {
     setUploading(id);
 
     try {
+      const { generateDocumentPDF } = await import('./services/pdfGenerator');
       const { metadata, mainImageBase64, secondaryImageBase64 } = itemToSync;
       const images = [];
       if (mainImageBase64) images.push(mainImageBase64);
@@ -894,18 +906,20 @@ export default function App() {
 
   if (!isInvited) {
     return (
-      <InviteScreen 
-        onUnlocked={(email) => {
-          localStorage.setItem('jobscan_authorized_email', email);
-          localStorage.setItem('jobscan_invited', 'true');
-          setIsInvited(true);
-        }} 
-        onKeyUpdated={(key) => setGeminiKey(key)}
-        defaultGeminiKey={localStorage.getItem('jobscan_gemini_key') || ''}
-        googleUser={googleUser}
-        onGoogleSignIn={handleGoogleSignIn}
-        onSignOut={handleSignOut}
-      />
+      <Suspense fallback={<LazyScreenFallback />}>
+        <InviteScreen
+          onUnlocked={(email) => {
+            localStorage.setItem('jobscan_authorized_email', email);
+            localStorage.setItem('jobscan_invited', 'true');
+            setIsInvited(true);
+          }}
+          onKeyUpdated={(key) => setGeminiKey(key)}
+          defaultGeminiKey={localStorage.getItem('jobscan_gemini_key') || ''}
+          googleUser={googleUser}
+          onGoogleSignIn={handleGoogleSignIn}
+          onSignOut={handleSignOut}
+        />
+      </Suspense>
     );
   }
 
@@ -1102,6 +1116,7 @@ export default function App() {
         )}
 
         {/* Tab view routing */}
+        <Suspense fallback={<LazyScreenFallback />}>
         {editingItemId && stagedItems.find(item => item.id === editingItemId) ? (
           <EditForm 
             stagedItem={stagedItems.find(item => item.id === editingItemId)}
@@ -1332,6 +1347,7 @@ export default function App() {
             handleSelectActiveProject={handleSelectActiveProject}
           />
         )}
+        </Suspense>
       </main>
 
       {/* 3. Navigation Footer */}

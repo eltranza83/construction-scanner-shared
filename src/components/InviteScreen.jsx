@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
 import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
+import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 
 export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
@@ -13,9 +14,9 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
   const [showAdminConfig, setShowAdminConfig] = useState(false);
   const [adminPasscode, setAdminPasscode] = useState('');
   const [adminPassUnlocked, setAdminPassUnlocked] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_firebase_api_key') || 'AIzaSyDjYPPkW8ffQMOCByCo9gMlVxQ8PsMpAoU');
-  const [projectId, setProjectId] = useState(localStorage.getItem('jobscan_firebase_project_id') || 'adepec-scanner-invites');
-  const [appId, setAppId] = useState(localStorage.getItem('jobscan_firebase_app_id') || '1:256926375840:web:1dfab80a93a0f9cfa9cec5');
+  const [apiKey, setApiKey] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseApiKey, DEFAULT_FIREBASE_CONFIG.apiKey));
+  const [projectId, setProjectId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseProjectId, DEFAULT_FIREBASE_CONFIG.projectId));
+  const [appId, setAppId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseAppId, DEFAULT_FIREBASE_CONFIG.appId));
 
   // Invites Management States
   const [invites, setInvites] = useState([]);
@@ -309,7 +310,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
   };
 
   const handleUnlockAdmin = () => {
-    if (adminPasscode === 'adepec#83') {
+    if (adminPasscode === ADMIN_PASSCODE) {
       setAdminPassUnlocked(true);
       setError(null);
     } else {
@@ -323,9 +324,9 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       return;
     }
 
-    localStorage.setItem('jobscan_firebase_api_key', apiKey.trim());
-    localStorage.setItem('jobscan_firebase_project_id', projectId.trim());
-    localStorage.setItem('jobscan_firebase_app_id', appId.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseApiKey, apiKey.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseProjectId, projectId.trim());
+    localStorage.setItem(STORAGE_KEYS.firebaseAppId, appId.trim());
     setSuccess('Database configuration saved! Reloading application...');
     setError(null);
     setTimeout(() => {
