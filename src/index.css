@@ -122,6 +122,17 @@ button, input, select, textarea {
   flex: none;
 }
 
+.logo-main-text {
+  font-family: var(--font-syne);
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  color: #fff;
+  text-transform: uppercase;
+  line-height: 1.1;
+  margin-right: -0.12em; /* Fixes trailing letter-spacing on 'C' */
+}
+
 .header-logo-homes {
   display: flex;
   align-items: center;
@@ -129,25 +140,26 @@ button, input, select, textarea {
   font-family: var(--font-syne);
   font-size: 0.55rem;
   font-weight: 700;
-  letter-spacing: 0.2em;
-  color: #fff;
+  letter-spacing: 0.22em;
+  color: var(--color-zinc-400);
   text-transform: uppercase;
-  margin: 1px 0;
+  margin-top: 1px;
+  padding-right: 2px; /* Centers HOMES perfectly while keeping balanced line margins */
 }
 
 .header-logo-homes::before,
 .header-logo-homes::after {
   content: "";
   flex: 1;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.4);
+  border-bottom: 1px solid var(--color-accent);
 }
 
 .header-logo-homes::before {
-  margin-right: 6px;
+  margin-right: 7px;
 }
 
 .header-logo-homes::after {
-  margin-left: 6px;
+  margin-left: 5px;
 }
 
 .header-project-section {

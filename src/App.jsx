@@ -909,14 +909,11 @@ export default function App() {
             <path fillRule="evenodd" d="M50 33.5 L66.5 50 V85 H50.5 V73 H49.5 V85 H33.5 V50 Z M50 42.5 L57.5 50 V63 H42.5 V50 Z" fill="url(#header-gold)" />
           </svg>
           <div className="logo-text-group">
-            <span className="logo-main-text" style={{ fontFamily: 'var(--font-syne)', fontSize: '0.85rem', fontWeight: 800, letterSpacing: '0.12em', color: '#fff', textTransform: 'uppercase', lineHeight: 1.1 }}>
+            <span className="logo-main-text">
               ADEPEC
             </span>
-            <div className="header-logo-homes" style={{ display: 'flex', alignItems: 'center' }}>
+            <div className="header-logo-homes">
               HOMES
-              <span style={{ fontSize: '0.5rem', backgroundColor: '#C5A059', color: '#0a0a0a', padding: '1px 4px', borderRadius: '3px', fontWeight: 800, marginLeft: '6px', letterSpacing: '0.05em' }}>
-                V2 - SPLITS
-              </span>
             </div>
           </div>
         </div>

@@ -370,13 +370,13 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
             <path d="M50 15 L80 45 V85 H71 V45 L50 24 L29 45 V85 H20 V45 Z" fill="url(#invite-gold)" />
             <path fillRule="evenodd" d="M50 33.5 L66.5 50 V85 H50.5 V73 H49.5 V85 H33.5 V50 Z M50 42.5 L57.5 50 V63 H42.5 V50 Z" fill="url(#invite-gold)" />
           </svg>
-          <div style={{ display: 'flex', flexDirection: 'column', marginTop: '4px' }}>
-            <span style={{ fontFamily: 'var(--font-syne)', fontSize: '1.25rem', fontWeight: 800, letterSpacing: '0.12em', color: '#fff', textTransform: 'uppercase' }}>
+          <div className="logo-text-group" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '180px', marginTop: '4px' }}>
+            <span className="logo-main-text" style={{ fontSize: '1.25rem' }}>
               ADEPEC
             </span>
-            <span style={{ fontFamily: 'var(--font-syne)', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.3em', color: '#C5A059', textTransform: 'uppercase', marginTop: '-2px' }}>
+            <div className="header-logo-homes" style={{ fontSize: '0.68rem', marginTop: '1px' }}>
               HOMES
-            </span>
+            </div>
           </div>
           <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)', marginTop: '4px' }}>
             Private Invite-Only Construction Scanner
