@@ -4,18 +4,15 @@ import StagingCard from './components/StagingCard';
 import { uploadFileToDrive, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
 import {
   APP_STORAGE_KEYS,
-  clearGoogleIdentity,
-  clearGoogleSession,
   loadInitialInviteState,
   loadStoredAppState,
   persistActiveProject,
-  persistGoogleToken,
-  persistGoogleUser,
   persistHistory,
   persistProjects,
   persistStagedItems,
   setStoredBoolean
 } from './services/appStorage';
+import { useGoogleAuth } from './hooks/useGoogleAuth';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -35,9 +32,6 @@ function LazyScreenFallback() {
 export default function App() {
   // Config & Auth State
   const [geminiKey, setGeminiKey] = useState('');
-  const [googleClientId, setGoogleClientId] = useState('');
-  const [googleToken, setGoogleToken] = useState(null);
-  const [googleUser, setGoogleUser] = useState(null);
   const [selectedFolder, setSelectedFolder] = useState(null);
   const [projects, setProjects] = useState([]);
   const [activeProject, setActiveProject] = useState(null);
@@ -71,82 +65,36 @@ export default function App() {
   ));
   const [triggeringSync, setTriggeringSync] = useState(false);
   const [isInvited, setIsInvited] = useState(loadInitialInviteState());
+  const {
+    googleClientId,
+    setGoogleClientId,
+    googleToken,
+    setGoogleToken,
+    googleUser,
+    signIn: handleGoogleSignIn,
+    signOut: handleSignOut,
+    handleSessionExpired
+  } = useGoogleAuth({
+    setError,
+    setSuccess,
+    onMissingClientId: () => setActiveTab('settings'),
+    onSignedOut: () => {
+      setSelectedFolder(null);
+      setActiveProject(null);
+      setIsInvited(false);
+    }
+  });
 
   // Load configuration and history on mount
   useEffect(() => {
     const stored = loadStoredAppState();
     setGeminiKey(stored.geminiKey);
-    setGoogleClientId(stored.googleClientId);
-    setGoogleToken(stored.googleToken);
-    setGoogleUser(stored.googleUser);
     setSelectedFolder(stored.selectedFolder);
     setProjects(stored.projects);
     setActiveProject(stored.activeProject);
     setHistory(stored.history);
     setStagedItems(stored.stagedItems);
-
-    // Load Google Identity Services Script dynamically and pre-initialize token client
-    const scriptId = 'google-gis-script';
-    let script = document.getElementById(scriptId);
-
-    const initClient = () => {
-      if (googleClientId && window.google?.accounts?.oauth2 && !window.googleTokenClient) {
-        try {
-          const client = window.google.accounts.oauth2.initTokenClient({
-            client_id: googleClientId,
-            scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile',
-            callback: async (tokenResponse) => {
-              if (tokenResponse.access_token) {
-                setGoogleToken(tokenResponse.access_token);
-                persistGoogleToken(tokenResponse.access_token);
-                setError(null); // Clear any previous auth errors
-                
-                // Refetch user details quietly to ensure profile stays in sync
-                try {
-                  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                    headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-                  });
-                  if (res.ok) {
-                    const info = await res.json();
-                    setGoogleUser(info);
-                    persistGoogleUser(info);
-                  }
-                } catch (e) {
-                  console.error("Quiet user info update failed:", e);
-                }
-              } else if (tokenResponse.error) {
-                console.warn("Google authentication failed or was cancelled:", tokenResponse);
-                setGoogleToken(null);
-                setGoogleUser(null);
-                clearGoogleIdentity();
-                if (tokenResponse.error === 'user_logged_out' || tokenResponse.error === 'immediate_failed') {
-                  setError('Google Drive session expired. Please sign in again.');
-                } else {
-                  setError(`Google Sign-In failed: ${tokenResponse.error}`);
-                }
-              }
-            }
-          });
-          window.googleTokenClient = client;
-          console.log("Google token client pre-initialized successfully.");
-        } catch (err) {
-          console.error("Failed to pre-initialize GIS token client:", err);
-        }
-      }
-    };
-
-    if (!script) {
-      script = document.createElement('script');
-      script.id = scriptId;
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = initClient;
-      document.body.appendChild(script);
-    } else {
-      initClient();
-    }
-  }, [googleClientId]);
+  }, []);
 
   // Fetch shared Gemini key from Firestore if unlocked
   useEffect(() => {
@@ -281,68 +229,6 @@ export default function App() {
   const saveHistory = (newHistory) => {
     setHistory(newHistory);
     persistHistory(newHistory);
-  };
-
-  // Google OAuth Login
-  const handleGoogleSignIn = () => {
-    if (!googleClientId) {
-      setError('Please set your Google Web Client ID in the Settings tab first.');
-      setActiveTab('settings');
-      return;
-    }
-
-    setError(null);
-    try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: googleClientId,
-        scope: 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile',
-        callback: async (tokenResponse) => {
-          if (tokenResponse.access_token) {
-            setGoogleToken(tokenResponse.access_token);
-            persistGoogleToken(tokenResponse.access_token);
-            
-            // Fetch User Details
-            try {
-              const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-                headers: { Authorization: `Bearer ${tokenResponse.access_token}` }
-              });
-              if (res.ok) {
-                const info = await res.json();
-                setGoogleUser(info);
-                persistGoogleUser(info);
-                setSuccess('Successfully signed in with Google!');
-                setTimeout(() => setSuccess(null), 3000);
-              } else {
-                const errText = await res.text();
-                setError(`Failed to retrieve Google profile: ${res.status} ${errText}`);
-              }
-            } catch (err) {
-              console.error('Failed to get Google User details:', err);
-              setError(`Failed to retrieve Google profile: ${err.message}`);
-            }
-          }
-        },
-        error_callback: (err) => {
-          setError(`Google Sign In failed: ${err.message}`);
-        }
-      });
-      window.googleTokenClient = client;
-      client.requestAccessToken();
-    } catch (err) {
-      console.error(err);
-      setError('Failed to initialize Google login client. Make sure client ID is valid.');
-    }
-  };
-
-  const handleSignOut = () => {
-    setGoogleToken(null);
-    setGoogleUser(null);
-    setSelectedFolder(null);
-    setActiveProject(null);
-    setIsInvited(false);
-    clearGoogleSession();
-    setSuccess('Signed out of Google account.');
-    setTimeout(() => setSuccess(null), 3000);
   };
 
   const handleSelectActiveProject = (projectId) => {
@@ -842,25 +728,6 @@ export default function App() {
       msg.includes('session expired') ||
       msg.includes('invalid_grant')
     );
-  };
-
-  const handleSessionExpired = () => {
-    console.warn("Session expired. Attempting silent token refresh...");
-    // Try to silently refresh the access token in the background using the Google GIS token client
-    try {
-      if (window.googleTokenClient) {
-        window.googleTokenClient.requestAccessToken({ prompt: '' });
-        return; // Wait for callback to handle success or failure
-      }
-    } catch (e) {
-      console.error("Silent token refresh failed:", e);
-    }
-
-    // Fallback: only clear token if the token client is not initialized
-    setGoogleToken(null);
-    setGoogleUser(null);
-    clearGoogleIdentity();
-    setError('Google Drive session expired. Please sign in again.');
   };
 
   if (!isInvited) {
