@@ -162,7 +162,8 @@ function finalizeBlock(block, phaseStatuses = {}) {
     status: status,
     payments: payments,
     totalMaterial: (meta && typeof meta === 'object') ? meta.materialCost : '$0.00',
-    totalLabor: (meta && typeof meta === 'object') ? meta.laborCost : '$0.00'
+    totalLabor: (meta && typeof meta === 'object') ? meta.laborCost : '$0.00',
+    totalSpent: (meta && typeof meta === 'object') ? meta.combinedSpent : '$0.00'
   };
 }
 
@@ -294,14 +295,25 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
         let catQuote = 0;
         let catPaid = 0;
         let catOwed = 0;
+        let catMaterial = 0;
+        let catLabor = 0;
 
         parsedSubs.forEach(s => {
           const quote = parseFloat(s.originalQuote.replace(/[^0-9.-]/g, '')) || 0;
-          const paid = parseFloat(s.totalPaid.replace(/[^0-9.-]/g, '')) || 0;
           const owed = parseFloat(s.remainingBalance.replace(/[^0-9.-]/g, '')) || 0;
+          
+          // Use totalSpent from Summary_Dashboard if available, otherwise fallback to totalPaid from category sheet
+          const spentVal = s.totalSpent ? parseFloat(s.totalSpent.replace(/[^0-9.-]/g, '')) : 0;
+          const paid = spentVal || parseFloat(s.totalPaid.replace(/[^0-9.-]/g, '')) || 0;
+          
+          const material = parseFloat(s.totalMaterial.replace(/[^0-9.-]/g, '')) || 0;
+          const labor = parseFloat(s.totalLabor.replace(/[^0-9.-]/g, '')) || 0;
+          
           catQuote += quote;
           catPaid += paid;
           catOwed += owed;
+          catMaterial += material;
+          catLabor += labor;
         });
 
         categorySummaries.push({
@@ -310,6 +322,8 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
           totalQuote: catQuote,
           totalPaid: catPaid,
           totalOwed: catOwed,
+          totalMaterial: catMaterial,
+          totalLabor: catLabor,
           phasesCount: parsedSubs.length
         });
       }

@@ -790,9 +790,17 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                         <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: '1.2' }}>
                           {cat.name}
                         </span>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
                           <span style={{ fontWeight: 700, color: 'var(--color-amber-500)' }}>
-                            Spent: {formatCurrency(cat.totalPaid)}
+                            Mat: {formatCurrency(cat.totalMaterial || 0)}
+                          </span>
+                          <span style={{ color: 'var(--color-zinc-700)' }}>•</span>
+                          <span style={{ fontWeight: 700, color: 'var(--color-blue-500)' }}>
+                            Lab: {formatCurrency(cat.totalLabor || 0)}
+                          </span>
+                          <span style={{ color: 'var(--color-zinc-700)' }}>•</span>
+                          <span style={{ fontWeight: 700, color: 'var(--color-emerald-500)' }}>
+                            Spent: {formatCurrency(cat.totalPaid || 0)}
                           </span>
                           <span style={{ color: 'var(--color-zinc-700)' }}>•</span>
                           <span style={{ color: 'var(--color-zinc-500)' }}>
