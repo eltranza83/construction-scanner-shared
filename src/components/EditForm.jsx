@@ -81,6 +81,14 @@ const TRADE_SECTIONS_CONFIG = {
   'Project_Overhead_&_Bills': {
     label: 'Project Overhead & Bills',
     phases: ['Monthly Utility Bills', 'Dumpsters & Cleaning', 'Extra Costs & Misc']
+  },
+  'Paperwork_&_Permits': {
+    label: 'Paperwork & Permits',
+    phases: ['Paperwork & Permits']
+  },
+  'Interior_Hardware': {
+    label: 'Interior Hardware',
+    phases: ['Plumbing Hardware Fixtures', 'Electrical Hardware Fixtures']
   }
 };
 

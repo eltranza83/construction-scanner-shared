@@ -223,7 +223,9 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
     'Interior_Finishes!A1:K80',
     'Paint_Tile!A1:K80',
     'House_Exterior_&_Yard!A1:K80',
-    'Project_Overhead_&_Bills!A1:K80'
+    'Project_Overhead_&_Bills!A1:K80',
+    'Paperwork_&_Permits!A1:K80',
+    'Interior_Hardware!A1:K80'
   ];
 
   const queryParams = ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&');

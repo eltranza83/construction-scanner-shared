@@ -48,7 +48,7 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
         "amount": 0.00 (the total cost or check amount as a decimal number),
         "date": "YYYY-MM-DD (format the date found on the document, or empty string)",
         "checkNumber": "Check number (only if the document is a check, otherwise null)",
-        "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills",
+        "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills" | "Paperwork_&_Permits" | "Interior_Hardware",
         "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes')",
         "lineItems": [
           {
@@ -73,6 +73,8 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
          - Category: Paint_Tile (Phases: Tile & Flooring, Paint & Finishes)
          - Category: House_Exterior_&_Yard (Phases: Stucco & Masonry, Garage Doors, Driveway & Sidewalks, Cantera Stone Detail, Fencing & Gates, Landscaping & Irrigation)
          - Category: Project_Overhead_&_Bills (Phases: Monthly Utility Bills, Dumpsters & Cleaning, Extra Costs & Misc)
+         - Category: Paperwork_&_Permits (Phases: Paperwork & Permits)
+         - Category: Interior_Hardware (Phases: Plumbing Hardware Fixtures, Electrical Hardware Fixtures)
       
       6. For invoices/receipts, extract the individual line items with their item names and prices, placing them in the lineItems array.
       7. Output ONLY the JSON block. Do not wrap in markdown or backticks.
