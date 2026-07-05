@@ -885,9 +885,19 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                                 </span>
                               </div>
 
+                              {/* Labor Total */}
+                              <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '65px' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-blue-500)' }}>
+                                  {formatCurrency(sub.totalLabor || 0)}
+                                </span>
+                                <span style={{ fontSize: '0.6rem', color: 'var(--color-zinc-500)' }}>
+                                  Lab
+                                </span>
+                              </div>
+
                               {/* Spent & Balance */}
                               <div style={{ textAlign: 'right', display: 'flex', flexDirection: 'column', minWidth: '75px' }}>
-                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-zinc-300)' }}>
+                                <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-emerald-500)' }}>
                                   {formatCurrency(sub.totalPaid)}
                                 </span>
                                 <span style={{ fontSize: '0.6rem', color: 'var(--color-zinc-500)' }}>
