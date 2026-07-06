@@ -1,13 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   MapPin, X, ZoomIn, ZoomOut, RotateCcw,
-  AlertTriangle, Eye, Loader2,
+  AlertTriangle, Loader2,
 } from 'lucide-react';
 import { getDriveErrorMessage, getUploadErrorMessage } from '../services/appErrors';
 import { 
   uploadPhotoToPhaseFolder,
-  listPhotosInPhase,
-  getDriveFileMediaUrl
+  listPhotosInPhase
 } from '../services/googleDrive';
 import {
   addBlueprintPin,
@@ -19,6 +18,7 @@ import {
 import BlueprintAddPinModal from './BlueprintAddPinModal';
 import BlueprintFullscreenPhotoModal from './BlueprintFullscreenPhotoModal';
 import BlueprintPhaseAlbums from './BlueprintPhaseAlbums';
+import BlueprintSelectedPinCard from './BlueprintSelectedPinCard';
 import BlueprintSetupPrompt from './BlueprintSetupPrompt';
 
 // Subcontractor categories and phases matching EditForm config
@@ -598,7 +598,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
             <div style={{ position: 'absolute', bottom: '12px', right: '12px', display: 'flex', flexDirection: 'column', gap: '6px', zIndex: 50 }}>
               <button 
                 onClick={() => setZoomScale(s => Math.min(s + 0.25, 3.0))}
-                style={{ width: '28px', height: '28px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '6px', color: '#fff', display: 'flex', alignItems: 'center', justifyCenter: 'center', cursor: 'pointer' }}
+                style={{ width: '28px', height: '28px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '6px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
               >
                 <ZoomIn size={14} style={{ margin: 'auto' }} />
               </button>
@@ -618,61 +618,12 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           </div>
 
           {/* Selected Pin Details Card */}
-          {selectedPin && (
-            <div style={{ backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px', animation: 'slideUp 0.2s ease-out' }}>
-              <div style={{ display: 'flex', justifyContext: 'space-between', alignItems: 'flex-start' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                  <span style={{ fontSize: '0.68rem', textTransform: 'uppercase', color: TRADE_SECTIONS_CONFIG[selectedPin.category]?.color || '#fff', fontWeight: 800, letterSpacing: '0.05em' }}>
-                    {TRADE_SECTIONS_CONFIG[selectedPin.category]?.label || 'General'}
-                  </span>
-                  <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fff' }}>{selectedPin.phase}</h4>
-                </div>
-                <button 
-                  onClick={() => setSelectedPin(null)}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-zinc-500)', cursor: 'pointer' }}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              {/* Note details */}
-              <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-300)', lineHeight: 1.4, backgroundColor: 'var(--color-zinc-900)', padding: '10px 12px', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}>
-                {selectedPin.note}
-              </p>
-
-              {/* Photo preview link */}
-              {selectedPin.photoUrl && (
-                <div style={{ position: 'relative', width: '100%', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-zinc-800)' }}>
-                  <a href={selectedPin.photoUrl} target="_blank" rel="noopener noreferrer" style={{ display: 'block', textDecoration: 'none' }}>
-                    <div style={{ position: 'absolute', top: '8px', right: '8px', backgroundColor: 'rgba(0,0,0,0.6)', padding: '4px 8px', borderRadius: '4px', fontSize: '0.65rem', color: '#fff', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      <Eye size={10} /> Open in Drive
-                    </div>
-                    <img 
-                      src={getDriveFileMediaUrl(selectedPin.photoFileId)}
-                      alt="Verification preview"
-                      style={{ width: '100%', maxHeight: '180px', objectFit: 'cover' }}
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                      }}
-                    />
-                    <div style={{ backgroundColor: 'var(--color-zinc-900)', padding: '8px', textAlign: 'center', fontSize: '0.74rem', color: 'var(--color-amber-500)', fontWeight: 600 }}>
-                      📷 Click to View Verification Photo
-                    </div>
-                  </a>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
-                <button
-                  onClick={() => handleDeletePin(selectedPin.id)}
-                  className="btn"
-                  style={{ backgroundColor: 'rgba(244, 63, 94, 0.1)', border: '1px solid rgba(244, 63, 94, 0.2)', color: 'var(--color-rose-500)', fontSize: '0.75rem', padding: '6px 12px', fontWeight: 600 }}
-                >
-                  Delete Pin
-                </button>
-              </div>
-            </div>
-          )}
+          <BlueprintSelectedPinCard
+            pin={selectedPin}
+            tradeSectionsConfig={TRADE_SECTIONS_CONFIG}
+            onClose={() => setSelectedPin(null)}
+            onDelete={handleDeletePin}
+          />
         </div>
       )}
 
@@ -693,7 +644,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
         onCancel={() => setShowAddForm(false)}
         onSave={handleSavePin}
       />
-<BlueprintFullscreenPhotoModal
+      <BlueprintFullscreenPhotoModal
         photo={fullscreenAlbumPhoto}
         onClose={() => setFullscreenAlbumPhoto(null)}
       />
