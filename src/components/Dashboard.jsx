@@ -874,24 +874,36 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                                   </span>
                                 </div>
 
-                                {/* Labor Total */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
-                                    {formatCurrency(sub.totalLabor || 0)}
-                                  </span>
-                                  <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-                                    Lab
-                                  </span>
-                                </div>
+                                <div style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: '10px',
+                                  padding: '4px 7px',
+                                  border: '1px solid rgba(96, 165, 250, 0.18)',
+                                  borderRadius: '6px',
+                                  backgroundColor: 'rgba(59, 130, 246, 0.04)'
+                                }}>
+                                  {/* Labor Total */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
+                                      {formatCurrency(sub.totalLabor || 0)}
+                                    </span>
+                                    <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
+                                      Lab
+                                    </span>
+                                  </div>
 
-                                {/* Balance */}
-                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-zinc-300)', lineHeight: '1.2' }}>
-                                    {formatCurrency(sub.remainingBalance)}
-                                  </span>
-                                  <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-                                    Bal
-                                  </span>
+                                  <div style={{ width: '1px', alignSelf: 'stretch', backgroundColor: 'rgba(148, 163, 184, 0.16)' }} />
+
+                                  {/* Balance */}
+                                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                    <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-zinc-300)', lineHeight: '1.2' }}>
+                                      {formatCurrency(sub.remainingBalance)}
+                                    </span>
+                                    <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
+                                      Bal
+                                    </span>
+                                  </div>
                                 </div>
                               </div>
                             </div>
