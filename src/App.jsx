@@ -1,7 +1,6 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check } from 'lucide-react';
 import StagingCard from './components/StagingCard';
-import { uploadFileToDrive, findFileInFolder, getFileContent, updateFileContent, findOrCreateFolder } from './services/googleDrive';
 import {
   APP_STORAGE_KEYS,
   loadInitialInviteState,
@@ -12,6 +11,12 @@ import {
   persistStagedItems,
   setStoredBoolean
 } from './services/appStorage';
+import { syncInvoiceDocument } from './services/invoiceUpload';
+import {
+  loadProjectsConfigFromDrive,
+  resolveActiveProject,
+  saveProjectsConfigToDrive
+} from './services/projectCloudSync';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 
 const Scanner = lazy(() => import('./components/Scanner'));
@@ -149,42 +154,18 @@ export default function App() {
   // Google Drive Cloud Sync for Projects
   const syncProjectsFromCloud = async (token) => {
     try {
-      console.log("Searching for cloud projects configuration...");
-      const configFile = await findFileInFolder(token, 'root', 'jobscan_config.json');
-      
-      if (configFile) {
-        console.log("Cloud projects configuration found. Loading...");
-        const cloudProjects = await getFileContent(token, configFile.id);
-        
-        if (Array.isArray(cloudProjects)) {
-          setProjects(cloudProjects);
-          persistProjects(cloudProjects);
-          console.log("Projects loaded from Google Drive:", cloudProjects);
-          
-          // Verify active project selection matches one of the cloud projects
-          const activeProjId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
-          if (activeProjId) {
-            const match = cloudProjects.find(p => p.id === activeProjId);
-            if (match) {
-              setActiveProject(match);
-              setSelectedFolder({ id: match.folderId, name: match.folderName });
-            } else if (cloudProjects.length > 0) {
-              const first = cloudProjects[0];
-              setActiveProject(first);
-              setSelectedFolder({ id: first.folderId, name: first.folderName });
-              persistActiveProject(first);
-            }
-          } else if (cloudProjects.length > 0) {
-            const first = cloudProjects[0];
-            setActiveProject(first);
-            setSelectedFolder({ id: first.folderId, name: first.folderName });
-            persistActiveProject(first);
-          }
-        }
-      } else {
-        console.log("No cloud projects configuration found. Uploading current local projects...");
-        const blob = new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
-        await uploadFileToDrive(token, 'root', 'jobscan_config.json', 'application/json', blob);
+      const cloudProjects = await loadProjectsConfigFromDrive(token, projects);
+      if (!cloudProjects) return;
+
+      setProjects(cloudProjects);
+      persistProjects(cloudProjects);
+
+      const activeProjId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
+      const resolvedProject = resolveActiveProject(cloudProjects, activeProjId);
+      if (resolvedProject) {
+        setActiveProject(resolvedProject);
+        setSelectedFolder({ id: resolvedProject.folderId, name: resolvedProject.folderName });
+        persistActiveProject(resolvedProject);
       }
     } catch (err) {
       console.error("Failed to sync projects from Google Drive:", err);
@@ -194,17 +175,7 @@ export default function App() {
   const saveProjectsToCloud = async (updatedProjects, token = googleToken) => {
     if (!token) return;
     try {
-      console.log("Saving projects to Google Drive...");
-      const configFile = await findFileInFolder(token, 'root', 'jobscan_config.json');
-      const blob = new Blob([JSON.stringify(updatedProjects, null, 2)], { type: 'application/json' });
-      
-      if (configFile) {
-        await updateFileContent(token, configFile.id, blob, 'application/json');
-        console.log("Cloud projects configuration updated.");
-      } else {
-        await uploadFileToDrive(token, 'root', 'jobscan_config.json', 'application/json', blob);
-        console.log("Cloud projects configuration created.");
-      }
+      await saveProjectsConfigToDrive(token, updatedProjects);
     } catch (err) {
       console.error("Failed to save projects to Google Drive:", err);
     }
@@ -286,18 +257,6 @@ export default function App() {
       reader.onerror = (err) => reject(err);
       reader.readAsDataURL(file);
     });
-  };
-
-  const dataURLtoBlob = (dataUrl) => {
-    const arr = dataUrl.split(',');
-    const mime = arr[0].match(/:(.*?);/)[1];
-    const bstr = atob(arr[1]);
-    let n = bstr.length;
-    const u8arr = new Uint8Array(n);
-    while (n--) {
-      u8arr[n] = bstr.charCodeAt(n);
-    }
-    return new Blob([u8arr], { type: mime });
   };
 
   // Staging scan callback
@@ -430,206 +389,25 @@ export default function App() {
     setUploading(id);
 
     try {
-      const { generateDocumentPDF } = await import('./services/pdfGenerator');
-      const { metadata, mainImageBase64, secondaryImageBase64 } = itemToSync;
-      const images = [];
-      if (mainImageBase64) images.push(mainImageBase64);
-      if (secondaryImageBase64) images.push(secondaryImageBase64);
+      const result = await syncInvoiceDocument({
+        item: itemToSync,
+        googleToken,
+        selectedFolder,
+        projects
+      });
 
-      // 1. Generate PDF (or use original PDF if uploaded directly)
-      let pdfBlob;
-      if (mainImageBase64 && mainImageBase64.startsWith('data:application/pdf')) {
-        pdfBlob = dataURLtoBlob(mainImageBase64);
-      } else {
-        pdfBlob = await generateDocumentPDF(metadata, images);
+      saveHistory([...result.logs, ...history]);
+
+      if (result.hasDriveUpload && activeProject?.appsScriptUrl) {
+        setHasUnprocessedUploads(true);
+        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
       }
 
-      // Check if running in Offline / Download fallback
-      const isOfflineMode = !googleToken || !selectedFolder;
+      setSuccess(result.successMessage);
 
-      if (isOfflineMode) {
-        // Generate clean and safe file name based on: LotNumber - Description - CostCategory.pdf
-        const lot = (metadata.lotNumber || 'No_Lot').trim();
-        const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
-        const category = (metadata.costCategory || 'material').trim().toLowerCase();
-        const rawName = `${lot} - ${desc} - ${category}.pdf`;
-        const safeFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
-
-        // Trigger browser download
-        const url = URL.createObjectURL(pdfBlob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = safeFileName;
-        a.click();
-        URL.revokeObjectURL(url);
-
-        // Add to local history list (handling splits if defined)
-        let logs = [];
-        if (metadata.splits && metadata.splits.length > 0) {
-          metadata.splits.forEach((split, index) => {
-            logs.push({
-              id: `${Date.now()}_split_${index}`,
-              dateLogged: new Date().toLocaleDateString(),
-              dateTransaction: metadata.date,
-              description: `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
-              vendor: metadata.vendor,
-              costCategory: split.costCategory || 'material',
-              amount: split.amount,
-              link: null,
-              tradeCategory: split.tradeCategory || metadata.tradeCategory,
-              tradePhase: split.tradePhase || metadata.tradePhase
-            });
-          });
-        } else {
-          logs.push({
-            id: Date.now().toString(),
-            dateLogged: new Date().toLocaleDateString(),
-            dateTransaction: metadata.date,
-            description: `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
-            vendor: metadata.vendor,
-            costCategory: metadata.costCategory,
-            amount: metadata.amount,
-            link: null, // local only
-            tradeCategory: metadata.tradeCategory,
-            tradePhase: metadata.tradePhase
-          });
-        }
-
-        saveHistory([...logs, ...history]);
-        setSuccess('Document PDF generated and downloaded to device!');
-        
-        // Remove from drafts
-        const updatedDrafts = stagedItems.filter(item => item.id !== id);
-        setStagedItems(updatedDrafts);
-        persistStagedItems(updatedDrafts);
-      } else {
-        // Online Sync to Google Drive
-        let mainUploadResult = null;
-        if (metadata.splits && metadata.splits.length > 0) {
-          // Generate and upload a separate PDF for each split item
-          for (const split of metadata.splits) {
-            const splitAmount = parseFloat(split.amount) || 0;
-            if (splitAmount <= 0) continue;
-
-            // 1. Construct single-split metadata
-            const splitMetadata = {
-              ...metadata,
-              amount: splitAmount,
-              description: split.description || metadata.description,
-              lotNumber: split.lotNumber || metadata.lotNumber,
-              tradeCategory: split.tradeCategory || metadata.tradeCategory,
-              tradePhase: split.tradePhase || metadata.tradePhase,
-              costCategory: split.costCategory || metadata.costCategory,
-              splits: null // Clear splits array so it gets logged as a single invoice
-            };
-
-            // 2. Generate PDF for this split
-            const splitPdfBlob = await generateDocumentPDF(splitMetadata, images);
-
-            // 3. Resolve target folder ID for this split's lot
-            const lotName = String(split.lotNumber || '').trim().toLowerCase();
-            const matchingProj = projects.find(p => p.name.trim().toLowerCase() === lotName);
-            const parentFolderId = matchingProj ? matchingProj.folderId : selectedFolder.id;
-
-            // 4. Find or create the "Invoice Uploads" folder inside the project folder
-            const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', parentFolderId);
-
-            // 5. Format filename
-            const resolvedLotName = matchingProj ? matchingProj.name : split.lotNumber;
-            const desc = (splitMetadata.description || 'Expense').trim().substring(0, 30).trim();
-            const category = (splitMetadata.costCategory || 'material').trim().toLowerCase();
-            const rawName = `${resolvedLotName} - ${desc} - ${category}.pdf`;
-            const splitFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
-
-            // 6. Upload split file with its metadata in the Invoice Uploads subfolder
-            const result = await uploadFileToDrive(
-              googleToken, 
-              uploadsFolder, 
-              splitFileName, 
-              'application/pdf', 
-              splitPdfBlob,
-              JSON.stringify(splitMetadata)
-            );
-
-            if (!mainUploadResult) {
-              mainUploadResult = result;
-            }
-          }
-        } else {
-          // Single upload filename
-          const lot = (metadata.lotNumber || 'No_Lot').trim();
-          const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
-          const category = (metadata.costCategory || 'material').trim().toLowerCase();
-          const rawName = `${lot} - ${desc} - ${category}.pdf`;
-          const safeFileName = rawName.replace(/[/\\:*?"<>|]/g, '_');
-
-          // Find or create "Invoice Uploads" folder inside the project folder
-          const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', selectedFolder.id);
-
-          mainUploadResult = await uploadFileToDrive(
-            googleToken, 
-            uploadsFolder, 
-            safeFileName, 
-            'application/pdf', 
-            pdfBlob,
-            JSON.stringify(metadata)
-          );
-        }
-        const uploadResult = mainUploadResult;
-
-        // B. Update local history log items (Google Sheets log appending disabled per user request)
-        const dateLoggedStr = new Date().toLocaleDateString();
-        
-        let logs = [];
-        if (metadata.splits && metadata.splits.length > 0) {
-          // Loop through split items and log each separately
-          for (let index = 0; index < metadata.splits.length; index++) {
-            const split = metadata.splits[index];
-            logs.push({
-              id: `${uploadResult.id}_split_${index}`,
-              dateLogged: dateLoggedStr,
-              dateTransaction: metadata.date,
-              description: `[${split.lotNumber || metadata.lotNumber || 'N/A'}] ${split.description || metadata.description || ''}`,
-              vendor: metadata.vendor,
-              costCategory: split.costCategory || 'material',
-              amount: split.amount,
-              link: uploadResult.webViewLink,
-              tradeCategory: split.tradeCategory || metadata.tradeCategory,
-              tradePhase: split.tradePhase || metadata.tradePhase
-            });
-          }
-        } else {
-          logs.push({
-            id: uploadResult.id,
-            dateLogged: dateLoggedStr,
-            dateTransaction: metadata.date,
-            description: `[${metadata.lotNumber || 'N/A'}] ${metadata.description || ''}`,
-            vendor: metadata.vendor,
-            costCategory: metadata.costCategory,
-            amount: metadata.amount,
-            link: uploadResult.webViewLink,
-            tradeCategory: metadata.tradeCategory,
-            tradePhase: metadata.tradePhase
-          });
-        }
-        
-        // C. Update local history
-        saveHistory([...logs, ...history]);
-
-        // Mark that there is a new upload that has landed in Drive
-        if (activeProject?.appsScriptUrl) {
-          setHasUnprocessedUploads(true);
-          setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
-        }
-
-        setSuccess('Document report PDF synced successfully!');
-        
-        // Remove from drafts
-        const updatedDrafts = stagedItems.filter(item => item.id !== id);
-        setStagedItems(updatedDrafts);
-        persistStagedItems(updatedDrafts);
-      }
-
+      const updatedDrafts = stagedItems.filter(item => item.id !== id);
+      setStagedItems(updatedDrafts);
+      persistStagedItems(updatedDrafts);
       setTimeout(() => setSuccess(null), 4000);
 
     } catch (err) {

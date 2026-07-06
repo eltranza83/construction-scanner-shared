@@ -1,0 +1,59 @@
+import {
+  findFileInFolder,
+  getFileContent,
+  updateFileContent,
+  uploadFileToDrive
+} from './googleDrive';
+
+const PROJECTS_CONFIG_FILE = 'jobscan_config.json';
+
+function createProjectsConfigBlob(projects) {
+  return new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
+}
+
+export function resolveActiveProject(projects, activeProjectId) {
+  if (!Array.isArray(projects) || projects.length === 0) return null;
+  if (!activeProjectId) return projects[0];
+  return projects.find(project => project.id === activeProjectId) || projects[0];
+}
+
+export async function loadProjectsConfigFromDrive(accessToken, localProjects = []) {
+  console.log('Searching for cloud projects configuration...');
+  const configFile = await findFileInFolder(accessToken, 'root', PROJECTS_CONFIG_FILE);
+
+  if (!configFile) {
+    console.log('No cloud projects configuration found. Uploading current local projects...');
+    await uploadFileToDrive(
+      accessToken,
+      'root',
+      PROJECTS_CONFIG_FILE,
+      'application/json',
+      createProjectsConfigBlob(localProjects)
+    );
+    return null;
+  }
+
+  console.log('Cloud projects configuration found. Loading...');
+  const cloudProjects = await getFileContent(accessToken, configFile.id);
+  if (!Array.isArray(cloudProjects)) return null;
+
+  console.log('Projects loaded from Google Drive:', cloudProjects);
+  return cloudProjects;
+}
+
+export async function saveProjectsConfigToDrive(accessToken, projects) {
+  if (!accessToken) return;
+
+  console.log('Saving projects to Google Drive...');
+  const configFile = await findFileInFolder(accessToken, 'root', PROJECTS_CONFIG_FILE);
+  const blob = createProjectsConfigBlob(projects);
+
+  if (configFile) {
+    await updateFileContent(accessToken, configFile.id, blob, 'application/json');
+    console.log('Cloud projects configuration updated.');
+    return;
+  }
+
+  await uploadFileToDrive(accessToken, 'root', PROJECTS_CONFIG_FILE, 'application/json', blob);
+  console.log('Cloud projects configuration created.');
+}
