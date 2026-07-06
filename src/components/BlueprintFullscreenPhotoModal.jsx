@@ -1,5 +1,6 @@
 import React from 'react';
 import { X } from 'lucide-react';
+import { getDriveFileMediaUrl } from '../services/googleDrive';
 
 export default function BlueprintFullscreenPhotoModal({ photo, onClose }) {
   if (!photo) return null;
@@ -18,7 +19,7 @@ export default function BlueprintFullscreenPhotoModal({ photo, onClose }) {
       </button>
 
       <img
-        src={`https://www.googleapis.com/drive/v3/files/${photo.id}?alt=media`}
+        src={getDriveFileMediaUrl(photo.id)}
         alt={photo.name}
         style={{ maxWidth: '100%', maxHeight: '80vh', objectFit: 'contain', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}
         onClick={(e) => e.stopPropagation()}

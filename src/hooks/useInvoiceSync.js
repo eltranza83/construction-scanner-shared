@@ -5,6 +5,7 @@ import {
   persistHistory,
   setStoredBoolean
 } from '../services/appStorage';
+import { fetchDriveFileBlob } from '../services/googleDrive';
 import { syncInvoiceDocument } from '../services/invoiceUpload';
 
 function isAuthError(err) {
@@ -148,17 +149,7 @@ export function useInvoiceSync({
     if (googleToken) {
       try {
         const fileId = item.id.split('_split_')[0];
-        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-          headers: {
-            Authorization: `Bearer ${googleToken}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to retrieve PDF content');
-        }
-
-        const blob = await response.blob();
+        const blob = await fetchDriveFileBlob(googleToken, fileId);
         const fileURL = URL.createObjectURL(blob);
         if (newWindow) {
           newWindow.location.href = fileURL;

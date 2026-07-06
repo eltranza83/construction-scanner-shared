@@ -5,6 +5,31 @@
 const GOOGLE_DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+export function getDriveFileMediaUrl(fileId) {
+  return `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?alt=media`;
+}
+
+export async function fetchDriveFileBlob(accessToken, fileId) {
+  const response = await fetch(getDriveFileMediaUrl(fileId), {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (response.status === 401) {
+    const error = new Error('Google Drive session expired while retrieving file content.');
+    error.status = 401;
+    throw error;
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to retrieve file content: ${errText}`);
+  }
+
+  return await response.blob();
+}
+
 /**
  * Creates a file metadata resource and then uploads the media content.
  * This two-step process is highly reliable client-side and avoids multipart assembly.
@@ -383,14 +408,8 @@ export async function findFileInFolder(accessToken, folderId, fileName) {
  * Downloads and parses JSON content of a specific Google Drive file.
  */
 export async function getFileContent(accessToken, fileId) {
-  const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?alt=media`;
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` }
-  });
-  if (!response.ok) {
-    throw new Error(`Failed to get file content: ${await response.text()}`);
-  }
-  return await response.json();
+  const blob = await fetchDriveFileBlob(accessToken, fileId);
+  return await blob.text().then(JSON.parse);
 }
 
 /**

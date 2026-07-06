@@ -11,7 +11,9 @@ import {
   updateFileContent, 
   uploadPhotoToPhaseFolder,
   findOrCreateFolder,
-  listPhotosInPhase
+  listPhotosInPhase,
+  getDriveFileMediaUrl,
+  fetchDriveFileBlob
 } from '../services/googleDrive';
 import BlueprintAddPinModal from './BlueprintAddPinModal';
 import BlueprintFullscreenPhotoModal from './BlueprintFullscreenPhotoModal';
@@ -212,16 +214,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           setPins(data.pins || []);
           
           // 3. Fetch the blueprint image content as a private binary blob
-          const imgUrl = `https://www.googleapis.com/drive/v3/files/${data.blueprintFileId}?alt=media`;
-          const response = await fetch(imgUrl, {
-            headers: { Authorization: `Bearer ${googleToken}` }
-          });
-          
-          if (!response.ok) {
-            throw new Error('Failed to download blueprint image.');
-          }
-          
-          const blob = await response.blob();
+          const blob = await fetchDriveFileBlob(googleToken, data.blueprintFileId);
           const localUrl = URL.createObjectURL(blob);
           setImageSrc(localUrl);
         } else {
@@ -880,7 +873,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
                       <Eye size={10} /> Open in Drive
                     </div>
                     <img 
-                      src={`https://www.googleapis.com/drive/v3/files/${selectedPin.photoFileId}?alt=media`}
+                      src={getDriveFileMediaUrl(selectedPin.photoFileId)}
                       alt="Verification preview"
                       style={{ width: '100%', maxHeight: '180px', objectFit: 'cover' }}
                       onError={(e) => {
