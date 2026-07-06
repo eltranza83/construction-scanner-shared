@@ -5,18 +5,12 @@ import {
   APP_STORAGE_KEYS,
   loadInitialInviteState,
   loadStoredAppState,
-  persistActiveProject,
   persistHistory,
-  persistProjects,
   setStoredBoolean
 } from './services/appStorage';
 import { syncInvoiceDocument } from './services/invoiceUpload';
-import {
-  loadProjectsConfigFromDrive,
-  resolveActiveProject,
-  saveProjectsConfigToDrive
-} from './services/projectCloudSync';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
 
 const Scanner = lazy(() => import('./components/Scanner'));
@@ -37,9 +31,6 @@ function LazyScreenFallback() {
 export default function App() {
   // Config & Auth State
   const [geminiKey, setGeminiKey] = useState('');
-  const [selectedFolder, setSelectedFolder] = useState(null);
-  const [projects, setProjects] = useState([]);
-  const [activeProject, setActiveProject] = useState(null);
 
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
@@ -54,6 +45,36 @@ export default function App() {
   ));
   const [triggeringSync, setTriggeringSync] = useState(false);
   const [isInvited, setIsInvited] = useState(loadInitialInviteState());
+  const {
+    googleClientId,
+    setGoogleClientId,
+    googleToken,
+    setGoogleToken,
+    googleUser,
+    signIn: handleGoogleSignIn,
+    signOut: googleSignOut,
+    handleSessionExpired
+  } = useGoogleAuth({
+    setError,
+    setSuccess,
+    onMissingClientId: () => setActiveTab('settings'),
+    onSignedOut: () => {
+      setIsInvited(false);
+    }
+  });
+  const {
+    selectedFolder,
+    setSelectedFolder,
+    projects,
+    activeProject,
+    setActiveProject,
+    updateProjects: handleUpdateProjects,
+    selectActiveProject: handleSelectActiveProject,
+    resetProjectSelection
+  } = useProjects({
+    googleToken,
+    setSuccess
+  });
   const {
     stagedItems,
     animateBadge,
@@ -74,33 +95,16 @@ export default function App() {
     setError,
     setSuccess
   });
-  const {
-    googleClientId,
-    setGoogleClientId,
-    googleToken,
-    setGoogleToken,
-    googleUser,
-    signIn: handleGoogleSignIn,
-    signOut: handleSignOut,
-    handleSessionExpired
-  } = useGoogleAuth({
-    setError,
-    setSuccess,
-    onMissingClientId: () => setActiveTab('settings'),
-    onSignedOut: () => {
-      setSelectedFolder(null);
-      setActiveProject(null);
-      setIsInvited(false);
-    }
-  });
+
+  const handleSignOut = () => {
+    googleSignOut();
+    resetProjectSelection();
+  };
 
   // Load configuration and history on mount
   useEffect(() => {
     const stored = loadStoredAppState();
     setGeminiKey(stored.geminiKey);
-    setSelectedFolder(stored.selectedFolder);
-    setProjects(stored.projects);
-    setActiveProject(stored.activeProject);
     setHistory(stored.history);
   }, []);
 
@@ -154,74 +158,10 @@ export default function App() {
     };
   }, [showProjectDropdown]);
 
-  // Google Drive Cloud Sync for Projects
-  const syncProjectsFromCloud = async (token) => {
-    try {
-      const cloudProjects = await loadProjectsConfigFromDrive(token, projects);
-      if (!cloudProjects) return;
-
-      setProjects(cloudProjects);
-      persistProjects(cloudProjects);
-
-      const activeProjId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
-      const resolvedProject = resolveActiveProject(cloudProjects, activeProjId);
-      if (resolvedProject) {
-        setActiveProject(resolvedProject);
-        setSelectedFolder({ id: resolvedProject.folderId, name: resolvedProject.folderName });
-        persistActiveProject(resolvedProject);
-      }
-    } catch (err) {
-      console.error("Failed to sync projects from Google Drive:", err);
-    }
-  };
-
-  const saveProjectsToCloud = async (updatedProjects, token = googleToken) => {
-    if (!token) return;
-    try {
-      await saveProjectsConfigToDrive(token, updatedProjects);
-    } catch (err) {
-      console.error("Failed to save projects to Google Drive:", err);
-    }
-  };
-
-  const handleUpdateProjects = (newProjects) => {
-    setProjects(newProjects);
-    persistProjects(newProjects);
-    if (googleToken) {
-      saveProjectsToCloud(newProjects, googleToken);
-    }
-  };
-
-  // Sync projects list from cloud whenever user logs in or refreshes with a valid token
-  useEffect(() => {
-    if (googleToken) {
-      syncProjectsFromCloud(googleToken);
-    }
-  }, [googleToken]);
-
   // Save history to LocalStorage
   const saveHistory = (newHistory) => {
     setHistory(newHistory);
     persistHistory(newHistory);
-  };
-
-  const handleSelectActiveProject = (projectId) => {
-    if (!projectId) {
-      setActiveProject(null);
-      persistActiveProject(null);
-      return;
-    }
-
-    const proj = projects.find(p => p.id === projectId);
-    if (proj) {
-      setActiveProject(proj);
-
-      setSelectedFolder({ id: proj.folderId, name: proj.folderName });
-      persistActiveProject(proj);
-
-      setSuccess(`Switched active project to: "${proj.name}"`);
-      setTimeout(() => setSuccess(null), 2500);
-    }
   };
 
   const handleTriggerAppsScriptSync = async () => {
