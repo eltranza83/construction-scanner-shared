@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Wallet, RefreshCw, AlertCircle, Camera } from 'lucide-react';
+import { getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import { fetchProjectDashboardData } from '../services/sheetsDataService';
 import { findSpreadsheetInFolder, uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
 import DashboardContractorDetail from './DashboardContractorDetail';
@@ -89,7 +90,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       setPhotos(updatedList);
     } catch (err) {
       console.error(err);
-      alert(`Failed to save photo: ${err.message}`);
+      setError(getUploadErrorMessage(err, 'photo'));
     } finally {
       setUploadingPhoto(false);
     }
@@ -210,8 +211,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
     } catch (err) {
       console.error(err);
-      const errMsg = err.message.toLowerCase();
-      if (err.status === 401 || errMsg.includes('401') || errMsg.includes('unauthenticated') || errMsg.includes('auth') || errMsg.includes('credential')) {
+      if (isAuthError(err)) {
         if (onSessionExpired) {
           onSessionExpired();
           return;
@@ -221,9 +221,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       const cached = localStorage.getItem(`jobscan_cached_dashboard_${activeProject?.id}`);
       if (cached) {
         setData(JSON.parse(cached));
-        setError(`Failed to load live data (offline). Displaying cached report from last load.`);
+        setError('Could not load live dashboard data. Displaying cached report from last load.');
       } else {
-        setError(err.message);
+        setError(getDriveErrorMessage(err, 'load dashboard data'));
       }
     } finally {
       setLoading(false);

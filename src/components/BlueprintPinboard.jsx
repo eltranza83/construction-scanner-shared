@@ -4,6 +4,7 @@ import {
   AlertTriangle, Eye, Loader2,
   ChevronDown, ChevronUp, ArrowLeft
 } from 'lucide-react';
+import { getDriveErrorMessage, getUploadErrorMessage } from '../services/appErrors';
 import { 
   uploadPhotoToPhaseFolder,
   listPhotosInPhase,
@@ -142,7 +143,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       setAlbumPhotos(list || []);
     } catch (err) {
       console.error(err);
-      setError('Failed to load photos from Google Drive.');
+      setError(getDriveErrorMessage(err, 'load photos from Google Drive'));
     } finally {
       setLoadingAlbumPhotos(false);
     }
@@ -171,7 +172,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       setTimeout(() => setSuccess(null), 2500);
     } catch (err) {
       console.error(err);
-      setError('Failed to upload progress photo.');
+      setError(getUploadErrorMessage(err, 'progress photo'));
     } finally {
       setUploadingAlbumPhoto(false);
     }
@@ -211,7 +212,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       }
     } catch (err) {
       console.error(err);
-      setError('Could not retrieve blueprint data from Google Drive.');
+      setError(getDriveErrorMessage(err, 'retrieve blueprint data from Google Drive'));
     } finally {
       setLoading(false);
     }
@@ -244,7 +245,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error(err);
-      setError('Failed to upload blueprint. Verify connection and permission settings.');
+      setError(getUploadErrorMessage(err, 'blueprint'));
     } finally {
       setLoading(false);
     }
@@ -326,7 +327,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error(err);
-      setError('Failed to save pin details. Please try again.');
+      setError(getDriveErrorMessage(err, 'save pin details'));
     } finally {
       setSavingPin(false);
     }
@@ -354,7 +355,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       setTimeout(() => setSuccess(null), 2000);
     } catch (err) {
       console.error(err);
-      setError('Failed to update pins data.');
+      setError(getDriveErrorMessage(err, 'update pins data'));
     } finally {
       setLoading(false);
     }
@@ -368,8 +369,8 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     try {
       await resetBlueprintVault(googleToken, blueprintDataFileId);
       await loadBlueprintData();
-    } catch {
-      setError('Failed to clear blueprint.');
+    } catch (err) {
+      setError(getDriveErrorMessage(err, 'clear blueprint'));
     } finally {
       setLoading(false);
     }

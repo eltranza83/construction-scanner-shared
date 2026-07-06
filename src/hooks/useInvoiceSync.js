@@ -5,22 +5,9 @@ import {
   persistHistory,
   setStoredBoolean
 } from '../services/appStorage';
+import { getDriveErrorMessage, isAuthError } from '../services/appErrors';
 import { fetchDriveFileBlob } from '../services/googleDrive';
 import { syncInvoiceDocument } from '../services/invoiceUpload';
-
-function isAuthError(err) {
-  if (!err || !err.message) return false;
-  const msg = err.message.toLowerCase();
-  return (
-    msg.includes('401') ||
-    msg.includes('unauthenticated') ||
-    msg.includes('unauthorized') ||
-    msg.includes('invalid credentials') ||
-    msg.includes('invalid token') ||
-    msg.includes('session expired') ||
-    msg.includes('invalid_grant')
-  );
-}
 
 function writePdfLoadingState(newWindow) {
   if (!newWindow) return;
@@ -97,7 +84,7 @@ export function useInvoiceSync({
       }, 2000);
     } catch (err) {
       console.error(err);
-      setError(`Failed to trigger spreadsheet sync: ${err.message}`);
+      setError(getDriveErrorMessage(err, 'trigger spreadsheet sync'));
       setTriggeringSync(false);
     }
   };
@@ -133,7 +120,7 @@ export function useInvoiceSync({
       if (isAuthError(err)) {
         handleSessionExpired();
       } else {
-        setError(`Failed to save report: ${err.message}`);
+        setError(getDriveErrorMessage(err, 'save report'));
       }
     } finally {
       setUploading(null);
