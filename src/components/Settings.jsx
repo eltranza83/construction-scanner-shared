@@ -1,13 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  HelpCircle, 
-  Trash2, 
-  FolderOpen,
-  ChevronDown,
-  ChevronUp,
-  Plus,
-  Pencil
-} from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { listFolders, createFolder } from '../services/googleDrive';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
@@ -18,6 +10,7 @@ import SettingsFolderPickerModal from './SettingsFolderPickerModal';
 import SettingsProjectModal from './SettingsProjectModal';
 import SettingsAdminPanel from './SettingsAdminPanel';
 import SettingsGoogleConnectionCard from './SettingsGoogleConnectionCard';
+import SettingsProjectProfilesCard from './SettingsProjectProfilesCard';
 
 export default function Settings({ 
   geminiKey: _geminiKey, 
@@ -452,137 +445,28 @@ export default function Settings({
         onSignOut={onSignOut}
       />
 
-      {/* 2. Project Profiles Card (Only available if logged in) */}
       {googleToken && (
-        <div className="settings-card" style={{ marginBottom: '16px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <h3 className="settings-title" style={{ marginBottom: '4px' }}>
-            <FolderOpen size={18} className="logo-icon" style={{ color: 'var(--color-amber-500)' }} />
-            Project Profiles
-          </h3>
-
-
-
-          {/* B. Create New Project Button */}
-          <button 
-            type="button" 
-            className="btn btn-primary"
-            onClick={() => {
-              setProjectNameInput('');
-              setTempSelectedFolder(null);
-              setShowCreateModal(true);
-            }}
-            style={{ padding: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-          >
-            <Plus size={16} /> Create New Project
-          </button>
-
-          {/* C. Collapsible Saved Projects Accordion */}
-          {projects.length > 0 && (
-            <div style={{ borderTop: '1px solid var(--color-zinc-800)', paddingTop: '12px' }}>
-              <div 
-                onClick={() => setShowProjectsAccordion(!showProjectsAccordion)}
-                style={{ 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'space-between', 
-                  cursor: 'pointer',
-                  padding: '4px 0'
-                }}
-              >
-                <label className="form-label" style={{ marginBottom: 0, cursor: 'pointer' }}>
-                  Manage Project Profiles ({projects.length})
-                </label>
-                <div style={{ color: 'var(--color-zinc-400)' }}>
-                  {showProjectsAccordion ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                </div>
-              </div>
-
-              {showProjectsAccordion && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '200px', overflowY: 'auto', marginTop: '12px' }}>
-                  {projects.map(proj => {
-                    const isActive = activeProject && activeProject.id === proj.id;
-                    return (
-                      <div 
-                        key={proj.id} 
-                        onClick={() => handleSelectActiveProject(proj.id)}
-                        className="project-profile-row"
-                        role="button"
-                        tabIndex={0}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault();
-                            handleSelectActiveProject(proj.id);
-                          }
-                        }}
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          justifyContent: 'space-between', 
-                          padding: '8px 12px', 
-                          borderRadius: '6px', 
-                          backgroundColor: isActive ? 'rgba(245, 158, 11, 0.05)' : 'var(--color-zinc-900)', 
-                          border: isActive ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid var(--color-zinc-800)',
-                          fontSize: '0.85rem'
-                        }}
-                      >
-                        <div style={{ flex: 1, minWidth: 0, paddingRight: '8px' }}>
-                          <div style={{ 
-                            fontWeight: 600, 
-                            color: isActive ? 'var(--color-amber-400)' : 'var(--color-zinc-200)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            {proj.name} {isActive && <span style={{ fontSize: '0.7rem', color: 'var(--color-emerald-500)', marginLeft: '6px', fontWeight: 'bold' }}>(ACTIVE)</span>}
-                          </div>
-                          <div style={{ 
-                            fontSize: '0.75rem', 
-                            color: 'var(--color-zinc-500)',
-                            whiteSpace: 'nowrap',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis'
-                          }}>
-                            Folder: {proj.folderName} {proj.appsScriptUrl ? ' • Script Linked' : ''}
-                          </div>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 'none' }} onClick={(e) => e.stopPropagation()}>
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              setEditingProject(proj);
-                              setProjectNameInput(proj.name);
-                              setAppsScriptUrlInput(proj.appsScriptUrl || '');
-                              setTempSelectedFolder({ id: proj.folderId, name: proj.folderName });
-                              setShowCreateModal(true);
-                            }}
-                            className="nav-item" 
-                            style={{ width: 'auto', padding: '4px', color: 'var(--color-amber-500)' }}
-                            title="Edit Project Profile"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button 
-                            type="button" 
-                            onClick={() => {
-                              setProjectToDelete(proj);
-                            }}
-                            className="nav-item" 
-                            style={{ width: 'auto', padding: '4px', color: 'var(--color-rose-500)' }}
-                            title="Delete Project Profile"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <SettingsProjectProfilesCard
+          activeProject={activeProject}
+          isOpen={showProjectsAccordion}
+          projects={projects}
+          onCreateProject={() => {
+            setProjectNameInput('');
+            setTempSelectedFolder(null);
+            setShowCreateModal(true);
+          }}
+          onDeleteProject={setProjectToDelete}
+          onEditProject={(project) => {
+            setEditingProject(project);
+            setProjectNameInput(project.name);
+            setAppsScriptUrlInput(project.appsScriptUrl || '');
+            setTempSelectedFolder({ id: project.folderId, name: project.folderName });
+            setShowCreateModal(true);
+          }}
+          onSelectActiveProject={handleSelectActiveProject}
+          onToggleOpen={() => setShowProjectsAccordion(!showProjectsAccordion)}
+        />
       )}
-
       {/* 3. Help Card / How it works */}
       <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', marginTop: '4px' }}>
         <h3 className="settings-title" style={{ color: 'var(--color-zinc-200)', marginBottom: '8px' }}>
