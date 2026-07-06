@@ -3,11 +3,11 @@ import {
   getFileContent,
   updateFileContent,
   uploadFileToDrive
-} from './googleDrive';
+} from './googleDrive.js';
 
 const PROJECTS_CONFIG_FILE = 'jobscan_config.json';
 
-function createProjectsConfigBlob(projects) {
+export function createProjectsConfigBlob(projects) {
   return new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
 }
 

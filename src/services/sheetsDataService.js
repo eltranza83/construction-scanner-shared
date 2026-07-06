@@ -4,7 +4,7 @@
 
 const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
-function normalizeKey(value) {
+export function normalizeKey(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
@@ -12,7 +12,7 @@ function normalizeKey(value) {
  * Searches the rows for a text label and returns the cell offset value.
  * Useful for handling spreadsheet structures where row indexes might shift slightly.
  */
-function getValByLabel(rows, labelText, offsetCol = 1) {
+export function getValByLabel(rows, labelText, offsetCol = 1) {
   if (!rows || rows.length === 0) return '';
   const cleanLabel = normalizeKey(labelText);
   
@@ -30,11 +30,11 @@ function getValByLabel(rows, labelText, offsetCol = 1) {
   return '';
 }
 
-function parseCurrency(value) {
+export function parseCurrency(value) {
   return parseFloat(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
 }
 
-function getWords(value) {
+export function getWords(value) {
   return String(value || '')
     .toLowerCase()
     .split(/[^a-z0-9]+/)
@@ -42,7 +42,7 @@ function getWords(value) {
     .filter(word => !['and', 'the', 'of'].includes(word));
 }
 
-function scoreWordOverlap(left, right) {
+export function scoreWordOverlap(left, right) {
   const leftWords = new Set(getWords(left));
   const rightWords = new Set(getWords(right));
   if (leftWords.size === 0 || rightWords.size === 0) return 0;
@@ -56,7 +56,7 @@ function scoreWordOverlap(left, right) {
   return score;
 }
 
-function findSummarySectionForSheet(sheetName, summarySections) {
+export function findSummarySectionForSheet(sheetName, summarySections) {
   const readableSheetName = sheetName.replace(/_/g, ' ');
 
   let bestSection = null;
@@ -73,7 +73,7 @@ function findSummarySectionForSheet(sheetName, summarySections) {
   return bestScore > 0 ? bestSection : null;
 }
 
-function isSummarySectionHeader(row) {
+export function isSummarySectionHeader(row) {
   const label = String(row?.[0] || '').trim();
   if (!label) return false;
 
@@ -83,7 +83,7 @@ function isSummarySectionHeader(row) {
   return label === label.toUpperCase() && /[A-Z]/.test(label);
 }
 
-function createSummaryPhaseMeta(row) {
+export function createSummaryPhaseMeta(row) {
   return {
     phase: String(row[0] || '').trim(),
     status: row.length > 4 ? String(row[4] || '').trim() : '',
@@ -96,7 +96,7 @@ function createSummaryPhaseMeta(row) {
 /**
  * Parses the raw Summary_Dashboard tab rows.
  */
-function parseSummaryDashboard(rows) {
+export function parseSummaryDashboard(rows) {
   if (!rows || rows.length === 0) {
     return {
       name: 'N/A',
@@ -131,7 +131,7 @@ function parseSummaryDashboard(rows) {
 /**
  * Analyzes all rows in a phase block to extract the contractor payee, quote, paid, balance, status, and payments.
  */
-function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = null) {
+export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = null) {
   let payee = '';
   let originalQuote = '$0.00';
   let totalPaid = '$0.00';
@@ -242,7 +242,7 @@ function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = null) {
 /**
  * Parses a subcontractor category tab (e.g. Paint_Tile).
  */
-function parseCategorySheet(sheetName, rows, phaseStatuses = {}, summarySection = null) {
+export function parseCategorySheet(sheetName, rows, phaseStatuses = {}, summarySection = null) {
   const contractors = [];
   if (!rows || rows.length <= 1) return contractors;
 
