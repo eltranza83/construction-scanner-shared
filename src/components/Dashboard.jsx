@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Wallet, RefreshCw, AlertCircle, Camera } from 'lucide-react';
 import { fetchProjectDashboardData } from '../services/sheetsDataService';
-import { uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
+import { findSpreadsheetInFolder, uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
 import DashboardContractorDetail from './DashboardContractorDetail';
 import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
@@ -192,30 +192,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       let spreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
 
       if (!spreadsheetId) {
-        // Search for any spreadsheet inside the project folder
-        const query = `'${selectedFolder.id}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
-        const searchUrl = `https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
-
-        const response = await fetch(searchUrl, {
-          headers: { Authorization: `Bearer ${googleToken}` }
-        });
-
-        if (response.status === 401) {
-          if (onSessionExpired) {
-            onSessionExpired();
-            return;
-          }
-        }
-
-        if (!response.ok) {
-          throw new Error('Failed to search project folder in Google Drive.');
-        }
-
-        const searchResult = await response.json();
-        if (searchResult.files && searchResult.files.length > 0) {
-          // Prefer a spreadsheet named 'JobScan_Expense_Log' if multiple exist, otherwise use the first one
-          const preferred = searchResult.files.find(f => f.name === 'JobScan_Expense_Log');
-          spreadsheetId = preferred ? preferred.id : searchResult.files[0].id;
+        const spreadsheet = await findSpreadsheetInFolder(googleToken, selectedFolder.id);
+        if (spreadsheet) {
+          spreadsheetId = spreadsheet.id;
           localStorage.setItem(`jobscan_sheet_id_${activeProject.id}`, spreadsheetId);
         } else {
           throw new Error("No spreadsheet found in your project folder. Please move your project spreadsheet (e.g. 'test project spreadsheet') into this folder.");
@@ -232,7 +211,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     } catch (err) {
       console.error(err);
       const errMsg = err.message.toLowerCase();
-      if (errMsg.includes('401') || errMsg.includes('unauthenticated') || errMsg.includes('auth') || errMsg.includes('credential')) {
+      if (err.status === 401 || errMsg.includes('401') || errMsg.includes('unauthenticated') || errMsg.includes('auth') || errMsg.includes('credential')) {
         if (onSessionExpired) {
           onSessionExpired();
           return;

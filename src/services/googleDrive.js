@@ -110,6 +110,34 @@ export async function listFolders(accessToken, parentId = 'root') {
   return data.files || [];
 }
 
+export async function findSpreadsheetInFolder(accessToken, folderId, preferredName = 'JobScan_Expense_Log') {
+  const query = `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+
+  const response = await fetch(url, {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (response.status === 401) {
+    const error = new Error('Google Drive session expired while searching for the project spreadsheet.');
+    error.status = 401;
+    throw error;
+  }
+
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to search project folder in Google Drive: ${errText}`);
+  }
+
+  const searchResult = await response.json();
+  const files = searchResult.files || [];
+  if (files.length === 0) return null;
+
+  return files.find(file => file.name === preferredName) || files[0];
+}
+
 /**
  * Creates a new folder in Google Drive.
  */
