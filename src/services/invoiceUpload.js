@@ -1,4 +1,4 @@
-import { findOrCreateFolder, uploadFileToDrive } from './googleDrive';
+import { findOrCreateFolder, uploadFileToDrive } from './googleDrive.js';
 
 function dataURLtoBlob(dataUrl) {
   const arr = dataUrl.split(',');
@@ -12,7 +12,7 @@ function dataURLtoBlob(dataUrl) {
   return new Blob([u8arr], { type: mime });
 }
 
-function buildInvoiceFileName(metadata) {
+export function buildInvoiceFileName(metadata) {
   const lot = (metadata.lotNumber || 'No_Lot').trim();
   const desc = (metadata.description || 'Expense').trim().substring(0, 30).trim();
   const category = (metadata.costCategory || 'material').trim().toLowerCase();
@@ -20,7 +20,7 @@ function buildInvoiceFileName(metadata) {
   return rawName.replace(/[/\\:*?"<>|]/g, '_');
 }
 
-function buildHistoryLogs(metadata, { idPrefix, link }) {
+export function buildHistoryLogs(metadata, { idPrefix, link }) {
   const dateLogged = new Date().toLocaleDateString();
 
   if (metadata.splits && metadata.splits.length > 0) {
@@ -77,7 +77,7 @@ async function buildPdfBlob(item, generateDocumentPDF) {
   };
 }
 
-function resolveSplitProjectFolder(projects, selectedFolder, split) {
+export function resolveSplitProjectFolder(projects, selectedFolder, split) {
   const lotName = String(split.lotNumber || '').trim().toLowerCase();
   const matchingProject = projects.find(project => project.name.trim().toLowerCase() === lotName);
 
@@ -93,7 +93,7 @@ export async function syncInvoiceDocument({
   selectedFolder,
   projects
 }) {
-  const { generateDocumentPDF } = await import('./pdfGenerator');
+  const { generateDocumentPDF } = await import('./pdfGenerator.js');
   const { metadata } = item;
   const { pdfBlob, images } = await buildPdfBlob(item, generateDocumentPDF);
 
