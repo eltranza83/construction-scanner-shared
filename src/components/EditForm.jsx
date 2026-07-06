@@ -72,7 +72,7 @@ const TRADE_SECTIONS_CONFIG = {
   },
   'Paint_Tile': {
     label: 'Paint & Tile',
-    phases: ['Tile & Flooring', 'Paint & Finishes']
+    phases: ['Tile', 'Paint']
   },
   'House_Exterior_&_Yard': {
     label: 'House Exterior & Yard',
@@ -1017,8 +1017,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Drywall & Sheetrock' });
                     }
                     const isPaint = hasWholeWord(desc, ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']);
-                    if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint & Finishes')) {
-                      detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint & Finishes' });
+                    if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint')) {
+                      detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint' });
                     }
                   });
 

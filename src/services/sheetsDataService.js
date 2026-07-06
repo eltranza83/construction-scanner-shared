@@ -4,26 +4,93 @@
 
 const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+function normalizeKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
 /**
  * Searches the rows for a text label and returns the cell offset value.
  * Useful for handling spreadsheet structures where row indexes might shift slightly.
  */
 function getValByLabel(rows, labelText, offsetCol = 1) {
   if (!rows || rows.length === 0) return '';
-  const cleanLabel = labelText.toLowerCase().replace(/[^a-z0-9]/g, '');
+  const cleanLabel = normalizeKey(labelText);
   
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r];
     if (!row) continue;
     for (let c = 0; c < row.length; c++) {
       const cellVal = String(row[c] || '').trim();
-      const cleanCellVal = cellVal.toLowerCase().replace(/[^a-z0-9]/g, '');
+      const cleanCellVal = normalizeKey(cellVal);
       if (cleanCellVal === cleanLabel) {
         return String(row[c + offsetCol] || '').trim();
       }
     }
   }
   return '';
+}
+
+function parseCurrency(value) {
+  return parseFloat(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
+}
+
+function getWords(value) {
+  return String(value || '')
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .filter(word => !['and', 'the', 'of'].includes(word));
+}
+
+function scoreWordOverlap(left, right) {
+  const leftWords = new Set(getWords(left));
+  const rightWords = new Set(getWords(right));
+  if (leftWords.size === 0 || rightWords.size === 0) return 0;
+
+  let score = 0;
+  leftWords.forEach(word => {
+    if (rightWords.has(word)) {
+      score += 1;
+    }
+  });
+  return score;
+}
+
+function findSummarySectionForSheet(sheetName, summarySections) {
+  const readableSheetName = sheetName.replace(/_/g, ' ');
+
+  let bestSection = null;
+  let bestScore = 0;
+
+  summarySections.forEach(section => {
+    const score = scoreWordOverlap(readableSheetName, section.name);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSection = section;
+    }
+  });
+
+  return bestScore > 0 ? bestSection : null;
+}
+
+function isSummarySectionHeader(row) {
+  const label = String(row?.[0] || '').trim();
+  if (!label) return false;
+
+  const hasTotals = row.slice(1, 5).some(cell => String(cell || '').trim() !== '');
+  if (hasTotals) return false;
+
+  return label === label.toUpperCase() && /[A-Z]/.test(label);
+}
+
+function createSummaryPhaseMeta(row) {
+  return {
+    phase: String(row[0] || '').trim(),
+    status: row.length > 4 ? String(row[4] || '').trim() : '',
+    materialCost: String(row[1] || '').trim() || '$0.00',
+    laborCost: row.length > 2 ? String(row[2] || '').trim() || '$0.00' : '$0.00',
+    combinedSpent: row.length > 3 ? String(row[3] || '').trim() || '$0.00' : '$0.00'
+  };
 }
 
 /**
@@ -64,7 +131,7 @@ function parseSummaryDashboard(rows) {
 /**
  * Analyzes all rows in a phase block to extract the contractor payee, quote, paid, balance, status, and payments.
  */
-function finalizeBlock(block, phaseStatuses = {}) {
+function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = null) {
   let payee = '';
   let originalQuote = '$0.00';
   let totalPaid = '$0.00';
@@ -132,15 +199,20 @@ function finalizeBlock(block, phaseStatuses = {}) {
   });
 
   // Overwrite status using the Summary_Dashboard master dropdown if mapped
-  const cleanPhaseKey = block.phase.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const meta = (phaseStatuses && phaseStatuses[cleanPhaseKey]) ? phaseStatuses[cleanPhaseKey] : null;
+  const cleanPhaseKey = normalizeKey(block.phase);
+  const meta = (phaseStatuses && phaseStatuses[cleanPhaseKey]) ? phaseStatuses[cleanPhaseKey] : fallbackSummaryMeta;
   if (meta) {
     if (typeof meta === 'object') {
       status = meta.status || status;
+      totalPaid = meta.combinedSpent || '$0.00';
     } else {
       status = meta;
     }
   }
+
+  const metaMaterialTotal = (meta && typeof meta === 'object') ? meta.materialCost : '$0.00';
+  const metaLaborTotal = (meta && typeof meta === 'object') ? meta.laborCost : '$0.00';
+  const metaCombinedSpent = (meta && typeof meta === 'object') ? meta.combinedSpent : '$0.00';
 
   // Fallback to placeholder payee if no custom payee is filled in
   if (!payee && block.rows.length > 0) {
@@ -161,16 +233,16 @@ function finalizeBlock(block, phaseStatuses = {}) {
     remainingBalance: remainingBalance,
     status: status,
     payments: payments,
-    totalMaterial: (meta && typeof meta === 'object') ? meta.materialCost : '$0.00',
-    totalLabor: (meta && typeof meta === 'object') ? meta.laborCost : '$0.00',
-    totalSpent: (meta && typeof meta === 'object') ? meta.combinedSpent : '$0.00'
+    totalMaterial: metaMaterialTotal,
+    totalLabor: metaLaborTotal,
+    totalSpent: metaCombinedSpent
   };
 }
 
 /**
  * Parses a subcontractor category tab (e.g. Paint_Tile).
  */
-function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
+function parseCategorySheet(sheetName, rows, phaseStatuses = {}, summarySection = null) {
   const contractors = [];
   if (!rows || rows.length <= 1) return contractors;
 
@@ -189,7 +261,7 @@ function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
 
     if (isPhaseHeader) {
       if (currentBlock) {
-        contractors.push(finalizeBlock(currentBlock, phaseStatuses));
+        contractors.push(finalizeBlock(currentBlock, phaseStatuses, summarySection?.phases?.[contractors.length] || null));
       }
 
       const phaseName = colA.replace(/^[→\-—\s]+/, '').trim();
@@ -205,7 +277,7 @@ function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
   }
 
   if (currentBlock) {
-    contractors.push(finalizeBlock(currentBlock, phaseStatuses));
+    contractors.push(finalizeBlock(currentBlock, phaseStatuses, summarySection?.phases?.[contractors.length] || null));
   }
 
   return contractors;
@@ -216,7 +288,7 @@ function parseCategorySheet(sheetName, rows, phaseStatuses = {}) {
  */
 export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
   const ranges = [
-    'Summary_Dashboard!A1:E60',
+    'Summary_Dashboard!A1:E120',
     'Site_Prep_&_Structure!A1:K80',
     'Framing_&_Lumber!A1:K80',
     'Mechanicals_&_Utilities!A1:K80',
@@ -249,6 +321,7 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
   let subcontractorsList = [];
   const categorySummaries = [];
   const phaseStatuses = {};
+  const summarySections = [];
 
   // First pass: Find Summary_Dashboard to parse project info and collect statuses
   for (let i = 0; i < valueRanges.length; i++) {
@@ -258,30 +331,36 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
 
     if (rangeName.includes('Summary_Dashboard')) {
       projectInfo = parseSummaryDashboard(rows);
+      let currentSummarySection = null;
       
       // Collect statuses and metadata for each phase
       rows.forEach(row => {
-        if (!row || row.length < 2) return;
+        if (!row || row.length < 1) return;
         const colA = String(row[0] || '').trim();
-        const colB = String(row[1] || '').trim(); // Material Cost
-        const colC = row.length > 2 ? String(row[2] || '').trim() : '$0.00'; // Labor Cost
-        const colD = row.length > 3 ? String(row[3] || '').trim() : '$0.00'; // Combined Spent
-        const colE = row.length > 4 ? String(row[4] || '').trim() : ''; // Status
-        
-        const cleanPhase = colA.toLowerCase().replace(/[^a-z0-9]/g, '');
-        if (cleanPhase && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
-          phaseStatuses[cleanPhase] = {
-            status: colE,
-            materialCost: colB,
-            laborCost: colC,
-            combinedSpent: colD
+        if (isSummarySectionHeader(row)) {
+          currentSummarySection = {
+            name: colA,
+            phases: []
           };
+          summarySections.push(currentSummarySection);
+          return;
+        }
+
+        if (row.length < 2) return;
+        const meta = createSummaryPhaseMeta(row);
+        const cleanPhase = normalizeKey(colA);
+        if (cleanPhase && !cleanPhase.includes('projecttrade') && !cleanPhase.includes('phase')) {
+          phaseStatuses[cleanPhase] = meta;
+          if (currentSummarySection) {
+            currentSummarySection.phases.push(meta);
+          }
         }
       });
     }
   }
 
   // Second pass: Parse all category sheets using the collected statuses
+  let categorySheetIndex = 0;
   for (let i = 0; i < valueRanges.length; i++) {
     const vRange = valueRanges[i];
     const rangeName = vRange.range || '';
@@ -289,7 +368,9 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
 
     if (!rangeName.includes('Summary_Dashboard')) {
       const sheetName = rangeName.split('!')[0].replace(/'/g, '');
-      const parsedSubs = parseCategorySheet(sheetName, rows, phaseStatuses);
+      const summarySection = findSummarySectionForSheet(sheetName, summarySections) || summarySections[categorySheetIndex] || null;
+      const parsedSubs = parseCategorySheet(sheetName, rows, phaseStatuses, summarySection);
+      categorySheetIndex += 1;
       
       if (parsedSubs.length > 0) {
         subcontractorsList = [...subcontractorsList, ...parsedSubs];
@@ -301,15 +382,15 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
         let catLabor = 0;
 
         parsedSubs.forEach(s => {
-          const quote = parseFloat(s.originalQuote.replace(/[^0-9.-]/g, '')) || 0;
-          const owed = parseFloat(s.remainingBalance.replace(/[^0-9.-]/g, '')) || 0;
+          const quote = parseCurrency(s.originalQuote);
+          const owed = parseCurrency(s.remainingBalance);
           
-          // Use totalSpent from Summary_Dashboard if available, otherwise fallback to totalPaid from category sheet
-          const spentVal = s.totalSpent ? parseFloat(s.totalSpent.replace(/[^0-9.-]/g, '')) : 0;
-          const paid = spentVal || parseFloat(s.totalPaid.replace(/[^0-9.-]/g, '')) || 0;
+          // Phase totals must come from Summary_Dashboard only.
+          const spentVal = s.totalSpent ? parseCurrency(s.totalSpent) : 0;
+          const paid = spentVal;
           
-          const material = parseFloat(s.totalMaterial.replace(/[^0-9.-]/g, '')) || 0;
-          const labor = parseFloat(s.totalLabor.replace(/[^0-9.-]/g, '')) || 0;
+          const material = parseCurrency(s.totalMaterial);
+          const labor = parseCurrency(s.totalLabor);
           
           catQuote += quote;
           catPaid += paid;

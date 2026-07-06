@@ -685,9 +685,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     </div>
                   </div>
                   <div style={{ padding: '8px', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Total Paid</span>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Summary Spent</span>
                     <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-zinc-200)', marginTop: '2px' }}>
-                      {formatCurrency(selectedSub.totalPaid)}
+                      {formatCurrency(selectedSub.totalSpent)}
                     </div>
                   </div>
                   <div style={{ padding: '8px', backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
@@ -877,7 +877,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                                 {/* Spent & Balance */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                   <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
-                                    {formatCurrency(sub.totalPaid)}
+                                    {formatCurrency(sub.totalSpent)}
                                   </span>
                                   <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
                                     Bal: {formatCurrency(sub.remainingBalance)}

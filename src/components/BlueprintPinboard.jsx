@@ -39,7 +39,7 @@ export const TRADE_SECTIONS_CONFIG = {
   'Paint_Tile': {
     label: 'Paint & Tile',
     color: '#a855f7', // Purple
-    phases: ['Tile & Flooring', 'Paint & Finishes']
+    phases: ['Tile', 'Paint']
   },
   'House_Exterior_&_Yard': {
     label: 'House Exterior & Yard',
