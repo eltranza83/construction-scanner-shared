@@ -1,13 +1,9 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database } from 'lucide-react';
 import StagingCard from './components/StagingCard';
-import {
-  APP_STORAGE_KEYS,
-  loadInitialInviteState,
-  setStoredBoolean
-} from './services/appStorage';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
+import { useInviteGate } from './hooks/useInviteGate';
 import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
 
@@ -27,16 +23,20 @@ function LazyScreenFallback() {
 }
 
 export default function App() {
-  // Config & Auth State
-  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem(APP_STORAGE_KEYS.geminiKey) || '');
-
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
   const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [isInvited, setIsInvited] = useState(loadInitialInviteState());
+  const {
+    geminiKey,
+    setGeminiKey,
+    isInvited,
+    unlockInvite,
+    updateGeminiKey,
+    resetInvite
+  } = useInviteGate();
   const {
     googleClientId,
     setGoogleClientId,
@@ -51,7 +51,7 @@ export default function App() {
     setSuccess,
     onMissingClientId: () => setActiveTab('settings'),
     onSignedOut: () => {
-      setIsInvited(false);
+      resetInvite();
     }
   });
   const {
@@ -112,35 +112,6 @@ export default function App() {
     resetProjectSelection();
   };
 
-  // Fetch shared Gemini key from Firestore if unlocked
-  useEffect(() => {
-    const fetchSharedGeminiKey = async () => {
-      const [{ getFirebaseDb }, { doc, getDoc }] = await Promise.all([
-        import('./services/firebase'),
-        import('firebase/firestore')
-      ]);
-      const db = getFirebaseDb();
-      if (!db) return;
-      try {
-        const docRef = doc(db, 'invites', 'CONFIG-GEMINI');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          if (data && data.apiKey) {
-            setGeminiKey(data.apiKey);
-            localStorage.setItem(APP_STORAGE_KEYS.geminiKey, data.apiKey);
-          }
-        }
-      } catch (err) {
-        console.error('Failed to fetch shared Gemini key from Firestore:', err);
-      }
-    };
-
-    if (isInvited) {
-      fetchSharedGeminiKey();
-    }
-  }, [isInvited]);
-
   // Close project dropdown when clicking outside
   useEffect(() => {
     if (!showProjectDropdown) return;
@@ -166,13 +137,9 @@ export default function App() {
     return (
       <Suspense fallback={<LazyScreenFallback />}>
         <InviteScreen
-          onUnlocked={(email) => {
-            localStorage.setItem(APP_STORAGE_KEYS.authorizedEmail, email);
-            setStoredBoolean(APP_STORAGE_KEYS.invited, true);
-            setIsInvited(true);
-          }}
-          onKeyUpdated={(key) => setGeminiKey(key)}
-          defaultGeminiKey={localStorage.getItem(APP_STORAGE_KEYS.geminiKey) || ''}
+          onUnlocked={unlockInvite}
+          onKeyUpdated={updateGeminiKey}
+          defaultGeminiKey={geminiKey}
           googleUser={googleUser}
           onGoogleSignIn={handleGoogleSignIn}
           onSignOut={handleSignOut}
