@@ -325,6 +325,7 @@ export default function StagingCard({
         {/* Actions */}
         <div style={{ display: 'flex', gap: '8px', flex: 1, minWidth: 0 }}>
           <button 
+            type="button"
             onClick={onEditClick}
             className="btn btn-secondary" 
             style={{ flex: 1, padding: '8px 10px', fontSize: '0.8rem', height: '36px', whiteSpace: 'nowrap' }}
@@ -333,6 +334,7 @@ export default function StagingCard({
             <Edit2 size={12} /> Edit
           </button>
           <button 
+            type="button"
             onClick={onUploadClick}
             className="btn btn-primary" 
             style={{ flex: 1.3, padding: '8px 10px', fontSize: '0.8rem', height: '36px', whiteSpace: 'nowrap' }}
