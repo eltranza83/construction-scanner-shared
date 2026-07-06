@@ -676,7 +676,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                   </div>
                 </div>
 
-                {/* Quote, Paid, Balance Grid */}
+                {/* Quote, Spent, Balance Grid */}
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', textAlign: 'center' }}>
                   <div style={{ padding: '8px', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
                     <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Original Quote</span>
@@ -691,7 +691,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                     </div>
                   </div>
                   <div style={{ padding: '8px', backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
-                    <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-500)', textTransform: 'uppercase', fontWeight: 700 }}>Remaining Balz</span>
+                    <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-500)', textTransform: 'uppercase', fontWeight: 700 }}>Remaining Balance</span>
                     <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#f59e0b', marginTop: '2px' }}>
                       {formatCurrency(selectedSub.remainingBalance)}
                     </div>
@@ -874,13 +874,23 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
                                   </span>
                                 </div>
 
-                                {/* Spent & Balance */}
+                                {/* Labor Total */}
                                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
                                   <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
-                                    {formatCurrency(sub.totalSpent)}
+                                    {formatCurrency(sub.totalLabor || 0)}
                                   </span>
                                   <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-                                    Bal: {formatCurrency(sub.remainingBalance)}
+                                    Lab
+                                  </span>
+                                </div>
+
+                                {/* Balance */}
+                                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                                  <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-zinc-300)', lineHeight: '1.2' }}>
+                                    {formatCurrency(sub.remainingBalance)}
+                                  </span>
+                                  <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
+                                    Bal
                                   </span>
                                 </div>
                               </div>
