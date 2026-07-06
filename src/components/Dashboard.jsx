@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Search, RefreshCw, AlertCircle, Camera } from 'lucide-react';
+import { RefreshCw, AlertCircle } from 'lucide-react';
 import { getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import { fetchProjectDashboardData } from '../services/sheetsDataService';
 import { findSpreadsheetInFolder, uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
-import DashboardContractorDetail from './DashboardContractorDetail';
+import DashboardContractorSearch from './DashboardContractorSearch';
 import DashboardKpiCards from './DashboardKpiCards';
+import DashboardPhotoReminders from './DashboardPhotoReminders';
 import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
 
@@ -62,9 +63,11 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   }, [activeGalleryPhase, googleToken, selectedFolder]);
 
   // Handle snapping/uploading a photo on-site
-  const handlePhotoUpload = async (e) => {
+  const handlePhotoUpload = async (e, targetPhase = activeGalleryPhase) => {
     const file = e.target.files[0];
-    if (!file || !activeGalleryPhase) return;
+    if (!file || !targetPhase) return;
+
+    setActiveGalleryPhase(targetPhase);
 
     setUploadingPhoto(true);
     try {
@@ -74,8 +77,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       await uploadPhotoToPhaseFolder(
         googleToken,
         selectedFolder.id,
-        activeGalleryPhase.category,
-        activeGalleryPhase.phase,
+        targetPhase.category,
+        targetPhase.phase,
         fileName,
         file.type,
         file
@@ -85,8 +88,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       const updatedList = await listPhotosInPhase(
         googleToken,
         selectedFolder.id,
-        activeGalleryPhase.category,
-        activeGalleryPhase.phase
+        targetPhase.category,
+        targetPhase.phase
       );
       setPhotos(updatedList);
     } catch (err) {
@@ -374,184 +377,28 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             formatCurrency={formatCurrency}
           />
 
-          {/* Proactive Construction Alerts */}
-          {activeReminders.length > 0 && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-              {activeReminders.map(rem => (
-                <div
-                  key={rem.id}
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.05) 0%, rgba(0,0,0,0) 100%)',
-                    border: '1px solid rgba(245, 158, 11, 0.2)',
-                    borderRadius: '10px',
-                    padding: '12px 14px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                  }}
-                >
-                  <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                    <div style={{
-                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                      color: 'var(--color-amber-500)',
-                      padding: '6px',
-                      borderRadius: '50%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      flexShrink: 0
-                    }}>
-                      <Camera size={16} />
-                    </div>
+          <DashboardPhotoReminders
+            reminders={activeReminders}
+            getPhaseReminderTip={getPhaseReminderTip}
+            onSnoozeReminder={snoozeReminder}
+            onDismissReminder={dismissReminder}
+            onPhotoUpload={handlePhotoUpload}
+          />
 
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <h4 style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', lineHeight: '1.2' }}>
-                        📸 {rem.phase} is active!
-                      </h4>
-                      <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)', marginTop: '4px', lineHeight: '1.3' }}>
-                        {getPhaseReminderTip(rem.phase)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', borderTop: '1px solid rgba(245, 158, 11, 0.05)', paddingTop: '8px' }}>
-                    <button
-                      type="button"
-                      onClick={() => snoozeReminder(rem.phase)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--color-zinc-500)',
-                        fontSize: '0.72rem',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      Snooze 24h
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => dismissReminder(rem.phase)}
-                      style={{
-                        background: 'transparent',
-                        border: 'none',
-                        color: 'var(--color-zinc-500)',
-                        fontSize: '0.72rem',
-                        cursor: 'pointer',
-                        padding: '4px 8px',
-                        borderRadius: '4px'
-                      }}
-                    >
-                      I've Taken Them
-                    </button>
-
-                    <label
-                      style={{
-                        backgroundColor: 'var(--color-amber-500)',
-                        border: 'none',
-                        color: '#0a0a0a',
-                        fontWeight: 700,
-                        fontSize: '0.72rem',
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <Plus size={10} /> Snap Photo
-                      <input
-                        type="file"
-                        accept="image/*"
-                        capture="environment"
-                        onChange={(e) => {
-                          setActiveGalleryPhase({ category: rem.category, phase: rem.phase });
-                          handlePhotoUpload(e);
-                        }}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Subcontractor Balance Checker */}
-          <div id="contractor-lookup-container" className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-            <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: 'var(--color-zinc-200)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <Search size={16} style={{ color: 'var(--color-amber-500)' }} />
-              Contractor Balance Lookup
-            </h3>
-
-            {/* Search Input */}
-            <div style={{ position: 'relative' }}>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="Search contractor payee (e.g. Painter, Electrician)..."
-                value={searchTerm}
-                onChange={(e) => {
-                  setSearchTerm(e.target.value);
-                  setSelectedSub(null);
-                }}
-                style={{ width: '100%', paddingLeft: '36px' }}
-              />
-              <Search size={14} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: 'var(--color-zinc-600)' }} />
-
-              {/* Autocomplete suggestions */}
-              {searchTerm && suggestions.length > 0 && (
-                <div style={{
-                  position: 'absolute',
-                  top: 'calc(100% + 4px)',
-                  left: 0,
-                  width: '100%',
-                  backgroundColor: 'var(--color-zinc-950)',
-                  border: '1px solid var(--color-zinc-800)',
-                  borderRadius: '8px',
-                  zIndex: 900,
-                  maxHeight: '180px',
-                  overflowY: 'auto',
-                  boxShadow: '0 10px 25px -5px rgba(0,0,0,0.8)'
-                }}>
-                  {suggestions.map(sub => (
-                    <div
-                      key={sub.id}
-                      onClick={() => selectSubcontractor(sub)}
-                      style={{
-                        padding: '10px 12px',
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        borderBottom: '1px solid var(--color-zinc-900)',
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center'
-                      }}
-                      className="project-profile-row"
-                    >
-                      <div>
-                        <span style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>{sub.payee}</span>
-                        <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-500)', marginLeft: '6px' }}>({sub.phase})</span>
-                      </div>
-                      <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontWeight: 600 }}>{formatCurrency(sub.remainingBalance)}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Selected Contractor Balance Details Card */}
-            <DashboardContractorDetail
-              selectedSub={selectedSub}
-              formatCurrency={formatCurrency}
-              getStatusStyle={getStatusStyle}
-              onViewPhasePhotos={setActiveGalleryPhase}
-              onClearSelection={() => setSelectedSub(null)}
-            />
-          </div>
+          <DashboardContractorSearch
+            searchTerm={searchTerm}
+            suggestions={suggestions}
+            selectedSub={selectedSub}
+            formatCurrency={formatCurrency}
+            getStatusStyle={getStatusStyle}
+            onSearchTermChange={(value) => {
+              setSearchTerm(value);
+              setSelectedSub(null);
+            }}
+            onSelectSubcontractor={selectSubcontractor}
+            onClearSelection={() => setSelectedSub(null)}
+            onViewPhasePhotos={setActiveGalleryPhase}
+          />
 
           {/* Trade Phase Categories Accordion List */}
           <DashboardTradeSections
