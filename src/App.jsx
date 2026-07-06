@@ -4,12 +4,10 @@ import StagingCard from './components/StagingCard';
 import {
   APP_STORAGE_KEYS,
   loadInitialInviteState,
-  loadStoredAppState,
-  persistHistory,
   setStoredBoolean
 } from './services/appStorage';
-import { syncInvoiceDocument } from './services/invoiceUpload';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useInvoiceSync } from './hooks/useInvoiceSync';
 import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
 
@@ -30,20 +28,14 @@ function LazyScreenFallback() {
 
 export default function App() {
   // Config & Auth State
-  const [geminiKey, setGeminiKey] = useState('');
+  const [geminiKey, setGeminiKey] = useState(() => localStorage.getItem(APP_STORAGE_KEYS.geminiKey) || '');
 
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
   const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
-  const [uploading, setUploading] = useState(null); // stores the draft ID being uploaded
-  const [history, setHistory] = useState([]);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
-  const [hasUnprocessedUploads, setHasUnprocessedUploads] = useState(() => (
-    loadStoredAppState().hasUnprocessedUploads
-  ));
-  const [triggeringSync, setTriggeringSync] = useState(false);
   const [isInvited, setIsInvited] = useState(loadInitialInviteState());
   const {
     googleClientId,
@@ -95,18 +87,30 @@ export default function App() {
     setError,
     setSuccess
   });
+  const {
+    uploading,
+    history,
+    hasUnprocessedUploads,
+    triggeringSync,
+    handleTriggerAppsScriptSync,
+    handleSyncToDrive,
+    handleViewPDF
+  } = useInvoiceSync({
+    activeProject,
+    googleToken,
+    selectedFolder,
+    projects,
+    stagedItems,
+    removeStagedItem,
+    handleSessionExpired,
+    setError,
+    setSuccess
+  });
 
   const handleSignOut = () => {
     googleSignOut();
     resetProjectSelection();
   };
-
-  // Load configuration and history on mount
-  useEffect(() => {
-    const stored = loadStoredAppState();
-    setGeminiKey(stored.geminiKey);
-    setHistory(stored.history);
-  }, []);
 
   // Fetch shared Gemini key from Firestore if unlocked
   useEffect(() => {
@@ -157,166 +161,6 @@ export default function App() {
       document.removeEventListener('click', handleOutsideClick);
     };
   }, [showProjectDropdown]);
-
-  // Save history to LocalStorage
-  const saveHistory = (newHistory) => {
-    setHistory(newHistory);
-    persistHistory(newHistory);
-  };
-
-  const handleTriggerAppsScriptSync = async () => {
-    if (!activeProject?.appsScriptUrl) return;
-    setTriggeringSync(true);
-    setError(null);
-    try {
-      // Trigger Apps Script webhook POST sync action with dynamic project folder routing
-      const syncUrl = `${activeProject.appsScriptUrl}?action=sync&folderId=${activeProject.folderId}`;
-      await fetch(syncUrl, {
-        method: 'POST',
-        mode: 'no-cors'
-      });
-      
-      // Wait a moment to show completion
-      setTimeout(() => {
-        setHasUnprocessedUploads(false);
-        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
-        setTriggeringSync(false);
-        setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
-        setTimeout(() => setSuccess(null), 4000);
-      }, 2000);
-      
-    } catch (err) {
-      console.error(err);
-      setError(`Failed to trigger spreadsheet sync: ${err.message}`);
-      setTriggeringSync(false);
-    }
-  };
-
-  // Upload/Sync Action
-  const handleSyncToDrive = async (id) => {
-    const itemToSync = stagedItems.find(item => item.id === id);
-    if (!itemToSync) return;
-    
-    setError(null);
-    setUploading(id);
-
-    try {
-      const result = await syncInvoiceDocument({
-        item: itemToSync,
-        googleToken,
-        selectedFolder,
-        projects
-      });
-
-      saveHistory([...result.logs, ...history]);
-
-      if (result.hasDriveUpload && activeProject?.appsScriptUrl) {
-        setHasUnprocessedUploads(true);
-        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
-      }
-
-      setSuccess(result.successMessage);
-
-      removeStagedItem(id);
-      setTimeout(() => setSuccess(null), 4000);
-
-    } catch (err) {
-      console.error(err);
-      if (isAuthError(err)) {
-        handleSessionExpired();
-      } else {
-        setError(`Failed to save report: ${err.message}`);
-      }
-    } finally {
-      setUploading(null);
-    }
-  };
-
-  const handleViewPDF = async (item) => {
-    if (!item.link) return;
-
-    // Open a blank tab immediately to satisfy pop-up blockers
-    const newWindow = window.open('about:blank', '_blank');
-    if (newWindow) {
-      newWindow.document.write(`
-        <div style="
-          font-family: system-ui, -apple-system, sans-serif;
-          color: #fafafa;
-          background: #0a0a0a;
-          height: 100vh;
-          margin: 0;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          flex-direction: column;
-          gap: 16px;
-        ">
-          <div style="
-            width: 28px;
-            height: 28px;
-            border: 3px solid rgba(197, 160, 89, 0.2);
-            border-top-color: #C5A059;
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-          "></div>
-          <span style="font-size: 0.95rem; font-weight: 500; letter-spacing: 0.02em;">Retrieving PDF from Google Drive...</span>
-          <style>
-            @keyframes spin { to { transform: rotate(360deg); } }
-          </style>
-        </div>
-      `);
-    }
-
-    if (googleToken) {
-      try {
-        const fileId = item.id.split('_split_')[0];
-        const response = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-          headers: {
-            Authorization: `Bearer ${googleToken}`
-          }
-        });
-
-        if (!response.ok) {
-          throw new Error('Failed to retrieve PDF content');
-        }
-
-        const blob = await response.blob();
-        const fileURL = URL.createObjectURL(blob);
-        if (newWindow) {
-          newWindow.location.href = fileURL;
-        } else {
-          window.open(fileURL, '_blank');
-        }
-        return;
-      } catch (err) {
-        console.error('Failed to view PDF via API, falling back to web link:', err);
-        if (isAuthError(err)) {
-          handleSessionExpired();
-        }
-      }
-    }
-
-    // Fallback if not authenticated or API call fails
-    if (newWindow) {
-      newWindow.location.href = item.link;
-    } else {
-      window.open(item.link, '_blank');
-    }
-  };
-
-  const isAuthError = (err) => {
-    if (!err || !err.message) return false;
-    const msg = err.message.toLowerCase();
-    return (
-      msg.includes('401') || 
-      msg.includes('unauthenticated') || 
-      msg.includes('unauthorized') || 
-      msg.includes('invalid credentials') || 
-      msg.includes('invalid token') || 
-      msg.includes('session expired') ||
-      msg.includes('invalid_grant')
-    );
-  };
 
   if (!isInvited) {
     return (
