@@ -1,4 +1,4 @@
-import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from '../config/appConfig';
+import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from '../config/appConfig.js';
 
 export const APP_STORAGE_KEYS = {
   ...STORAGE_KEYS,
