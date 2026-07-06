@@ -5,16 +5,17 @@ import {
   ChevronDown, ChevronUp, ArrowLeft
 } from 'lucide-react';
 import { 
-  findFileInFolder, 
-  getFileContent, 
-  uploadFileToDrive, 
-  updateFileContent, 
   uploadPhotoToPhaseFolder,
-  findOrCreateFolder,
   listPhotosInPhase,
-  getDriveFileMediaUrl,
-  fetchDriveFileBlob
+  getDriveFileMediaUrl
 } from '../services/googleDrive';
+import {
+  addBlueprintPin,
+  deleteBlueprintPin,
+  loadBlueprintVault,
+  resetBlueprintVault,
+  uploadBlueprintVaultFile
+} from '../services/blueprintDrive';
 import BlueprintAddPinModal from './BlueprintAddPinModal';
 import BlueprintFullscreenPhotoModal from './BlueprintFullscreenPhotoModal';
 
@@ -198,34 +199,15 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     }
 
     try {
-      // 1. Get or create X-Ray subfolder
-      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
+      const data = await loadBlueprintVault(googleToken, selectedFolder.id);
+      setBlueprintDataFileId(data.blueprintDataFileId);
+      setBlueprintFileId(data.blueprintFileId);
+      setBlueprintFileName(data.blueprintFileName || (data.blueprintFileId ? 'Blueprint.png' : null));
+      setPins(data.pins || []);
 
-      // 2. Search for blueprint_data.json inside X-Ray_Files subfolder
-      const configJsonFile = await findFileInFolder(googleToken, xRayFolder, 'blueprint_data.json');
-      
-      if (configJsonFile) {
-        setBlueprintDataFileId(configJsonFile.id);
-        const data = await getFileContent(googleToken, configJsonFile.id);
-        
-        if (data.blueprintFileId) {
-          setBlueprintFileId(data.blueprintFileId);
-          setBlueprintFileName(data.blueprintFileName || 'Blueprint.png');
-          setPins(data.pins || []);
-          
-          // 3. Fetch the blueprint image content as a private binary blob
-          const blob = await fetchDriveFileBlob(googleToken, data.blueprintFileId);
-          const localUrl = URL.createObjectURL(blob);
-          setImageSrc(localUrl);
-        } else {
-          // JSON exists but no image linked
-          setPins([]);
-        }
-      } else {
-        // No data file found
-        setBlueprintDataFileId(null);
-        setBlueprintFileId(null);
-        setPins([]);
+      if (data.blueprintBlob) {
+        const localUrl = URL.createObjectURL(data.blueprintBlob);
+        setImageSrc(localUrl);
       }
     } catch (err) {
       console.error(err);
@@ -250,29 +232,13 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setError(null);
 
     try {
-      // 1. Get or create X-Ray subfolder
-      const xRayFolder = await findOrCreateFolder(googleToken, 'X-Ray Photos', selectedFolder.id);
-
-      // 2. Upload blueprint image to X-Ray_Files subfolder
-      const imgFileName = `${activeProject?.name || 'Project'}_Blueprint_${Date.now()}.${file.name.split('.').pop()}`;
-      const imgUpload = await uploadFileToDrive(googleToken, xRayFolder, imgFileName, file.type, file);
-      
-      // 3. Create the configuration data payload
-      const configPayload = {
-        blueprintFileId: imgUpload.id,
-        blueprintFileName: imgFileName,
-        pins: []
-      };
-
-      const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
-      
-      // 4. Save blueprint_data.json to X-Ray_Files subfolder
-      if (blueprintDataFileId) {
-        await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
-      } else {
-        await uploadFileToDrive(googleToken, xRayFolder, 'blueprint_data.json', 'application/json', blob);
-      }
-
+      await uploadBlueprintVaultFile({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        projectName: activeProject?.name,
+        file,
+        blueprintDataFileId
+      });
       await loadBlueprintData();
       setSuccess('Blueprint uploaded successfully!');
       setTimeout(() => setSuccess(null), 3000);
@@ -340,50 +306,17 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setError(null);
 
     try {
-      let photoUrl = '';
-      let photoFileId = '';
-
-      // 1. If photo is selected, upload it to the proper folder inside Google Drive
-      if (selectedPhoto) {
-        const photoFileName = `${formData.tradePhase.replace(/[^a-zA-Z0-9_]/g, '_')}_Pin_${Date.now()}.${selectedPhoto.name.split('.').pop()}`;
-        const uploadResult = await uploadPhotoToPhaseFolder(
-          googleToken,
-          selectedFolder.id, // Nest subcontractor photo folders inside root photos folder for consistency
-          formData.tradeCategory,
-          formData.tradePhase,
-          photoFileName,
-          selectedPhoto.type,
-          selectedPhoto
-        );
-        photoFileId = uploadResult.id;
-        photoUrl = uploadResult.webViewLink || '';
-      }
-
-      // 2. Build the new pin object
-      const newPin = {
-        id: `pin_${Date.now()}`,
-        x: parseFloat(newPinCoords.x.toFixed(2)),
-        y: parseFloat(newPinCoords.y.toFixed(2)),
-        category: formData.tradeCategory,
-        phase: formData.tradePhase,
-        note: formData.note.trim(),
-        photoFileId,
-        photoUrl,
-        createdAt: new Date().toISOString()
-      };
-
-      const updatedPins = [...pins, newPin];
-
-      // 3. Serialize and save blueprint_data.json back to Google Drive
-      const configPayload = {
+      const { updatedPins } = await addBlueprintPin({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        blueprintDataFileId,
         blueprintFileId,
         blueprintFileName,
-        pins: updatedPins
-      };
-
-      const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
-      await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
-
+        pins,
+        pinCoords: newPinCoords,
+        formData,
+        selectedPhoto
+      });
       setPins(updatedPins);
       setShowAddForm(false);
       setFormData({ tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In', note: '' });
@@ -407,17 +340,14 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setError(null);
 
     try {
-      const updatedPins = pins.filter(p => p.id !== pinId);
-      
-      const configPayload = {
+      const updatedPins = await deleteBlueprintPin({
+        accessToken: googleToken,
+        blueprintDataFileId,
         blueprintFileId,
         blueprintFileName,
-        pins: updatedPins
-      };
-
-      const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
-      await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
-      
+        pins,
+        pinId
+      });
       setPins(updatedPins);
       setSelectedPin(null);
       setSuccess('Pin removed.');
@@ -436,14 +366,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     
     setLoading(true);
     try {
-      const configPayload = {
-        blueprintFileId: null,
-        blueprintFileName: null,
-        pins: []
-      };
-
-      const blob = new Blob([JSON.stringify(configPayload, null, 2)], { type: 'application/json' });
-      await updateFileContent(googleToken, blueprintDataFileId, blob, 'application/json');
+      await resetBlueprintVault(googleToken, blueprintDataFileId);
       await loadBlueprintData();
     } catch {
       setError('Failed to clear blueprint.');
