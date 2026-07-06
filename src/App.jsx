@@ -8,7 +8,6 @@ import {
   persistActiveProject,
   persistHistory,
   persistProjects,
-  persistStagedItems,
   setStoredBoolean
 } from './services/appStorage';
 import { syncInvoiceDocument } from './services/invoiceUpload';
@@ -18,6 +17,7 @@ import {
   saveProjectsConfigToDrive
 } from './services/projectCloudSync';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useStagedDocuments } from './hooks/useStagedDocuments';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -44,22 +44,6 @@ export default function App() {
   // App Navigation & UI State
   const [activeTab, setActiveTab] = useState('scanner');
   const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
-  const [stagedItems, setStagedItems] = useState([]);
-  const [animateBadge, setAnimateBadge] = useState(false);
-  const [prevStagedCount, setPrevStagedCount] = useState(0);
-
-  useEffect(() => {
-    if (stagedItems.length > prevStagedCount) {
-      setAnimateBadge(true);
-      const timer = setTimeout(() => setAnimateBadge(false), 500);
-      setPrevStagedCount(stagedItems.length);
-      return () => clearTimeout(timer);
-    }
-    setPrevStagedCount(stagedItems?.length || 0);
-  }, [stagedItems.length, prevStagedCount]);
-
-  const [editingItemId, setEditingItemId] = useState(null);
-  const [draftToDelete, setDraftToDelete] = useState(null);
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [uploading, setUploading] = useState(null); // stores the draft ID being uploaded
   const [history, setHistory] = useState([]);
@@ -70,6 +54,26 @@ export default function App() {
   ));
   const [triggeringSync, setTriggeringSync] = useState(false);
   const [isInvited, setIsInvited] = useState(loadInitialInviteState());
+  const {
+    stagedItems,
+    animateBadge,
+    editingItemId,
+    setEditingItemId,
+    draftToDelete,
+    setDraftToDelete,
+    handleDataExtracted,
+    handleSaveStagedEdits,
+    handleDeleteStaged,
+    confirmDeleteDraft,
+    handleAdjustTimer,
+    handleResetTimer,
+    handleUpdateDraftField,
+    removeStagedItem
+  } = useStagedDocuments({
+    activeProject,
+    setError,
+    setSuccess
+  });
   const {
     googleClientId,
     setGoogleClientId,
@@ -98,7 +102,6 @@ export default function App() {
     setProjects(stored.projects);
     setActiveProject(stored.activeProject);
     setHistory(stored.history);
-    setStagedItems(stored.stagedItems);
   }, []);
 
   // Fetch shared Gemini key from Firestore if unlocked
@@ -249,137 +252,6 @@ export default function App() {
     }
   };
 
-  // Helper to convert File to base64 Data URL
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (err) => reject(err);
-      reader.readAsDataURL(file);
-    });
-  };
-
-  // Staging scan callback
-  const handleDataExtracted = async (scanItem) => {
-    setError(null);
-    try {
-      let mainImageBase64 = null;
-      if (scanItem.mainImage) {
-        mainImageBase64 = await fileToBase64(scanItem.mainImage);
-      }
-      
-      const newDraft = {
-        id: `draft_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        metadata: {
-          ...scanItem.metadata,
-          lotNumber: activeProject ? activeProject.name : ''
-        },
-        mainImageBase64,
-        secondaryImageBase64: null,
-        createdAt: Date.now(),
-        timerDuration: 60 * 60 * 1000 // 60 minutes default
-      };
-
-      const updatedDrafts = [newDraft, ...stagedItems];
-      setStagedItems(updatedDrafts);
-      
-      try {
-        persistStagedItems(updatedDrafts);
-      } catch (e) {
-        console.error('LocalStorage quota error:', e);
-        setError('Storage full! Draft saved in memory, but please sync items to free up browser space.');
-      }
-
-      setSuccess('Check/Invoice scanned and saved to Drafts!');
-      setTimeout(() => setSuccess(null), 4000);
-    } catch (err) {
-      console.error(err);
-      setError(`Failed to save scanned item to drafts: ${err.message}`);
-    }
-  };
-
-  const handleSaveStagedEdits = (updatedItem) => {
-    const updatedDrafts = stagedItems.map(item => {
-      if (item.id === editingItemId) {
-        return {
-          ...item,
-          metadata: updatedItem.metadata,
-          mainImageBase64: updatedItem.mainImageBase64,
-          secondaryImageBase64: updatedItem.secondaryImageBase64
-        };
-      }
-      return item;
-    });
-    setStagedItems(updatedDrafts);
-    persistStagedItems(updatedDrafts);
-    setEditingItemId(null);
-    setSuccess('Draft updated successfully!');
-    setTimeout(() => setSuccess(null), 3000);
-  };
-
-  const handleDeleteStaged = (id) => {
-    const item = stagedItems.find(i => i.id === id);
-    if (item) {
-      setDraftToDelete(item);
-    }
-  };
-
-  const confirmDeleteDraft = () => {
-    if (!draftToDelete) return;
-    const updatedDrafts = stagedItems.filter(item => item.id !== draftToDelete.id);
-    setStagedItems(updatedDrafts);
-    persistStagedItems(updatedDrafts);
-    setDraftToDelete(null);
-    setSuccess('Draft discarded successfully!');
-    setTimeout(() => setSuccess(null), 2500);
-  };
-
-  const handleAdjustTimer = (id, additionalMinutes) => {
-    const updatedDrafts = stagedItems.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          timerDuration: item.timerDuration + (additionalMinutes * 60 * 1000)
-        };
-      }
-      return item;
-    });
-    setStagedItems(updatedDrafts);
-    persistStagedItems(updatedDrafts);
-  };
-
-  const handleResetTimer = (id) => {
-    const updatedDrafts = stagedItems.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          createdAt: Date.now(),
-          timerDuration: 60 * 60 * 1000
-        };
-      }
-      return item;
-    });
-    setStagedItems(updatedDrafts);
-    persistStagedItems(updatedDrafts);
-  };
-
-  const handleUpdateDraftField = (id, field, value) => {
-    const updatedDrafts = stagedItems.map(item => {
-      if (item.id === id) {
-        return {
-          ...item,
-          metadata: {
-            ...item.metadata,
-            [field]: value
-          }
-        };
-      }
-      return item;
-    });
-    setStagedItems(updatedDrafts);
-    persistStagedItems(updatedDrafts);
-  };
-
   // Upload/Sync Action
   const handleSyncToDrive = async (id) => {
     const itemToSync = stagedItems.find(item => item.id === id);
@@ -405,9 +277,7 @@ export default function App() {
 
       setSuccess(result.successMessage);
 
-      const updatedDrafts = stagedItems.filter(item => item.id !== id);
-      setStagedItems(updatedDrafts);
-      persistStagedItems(updatedDrafts);
+      removeStagedItem(id);
       setTimeout(() => setSuccess(null), 4000);
 
     } catch (err) {
