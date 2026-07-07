@@ -1,167 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Camera, ArrowLeft, Save, Plus, Trash2, Calendar, User, DollarSign, Tag, CheckSquare, MapPin } from 'lucide-react';
-
-/**
- * Resizes and compresses an image client-side in a memory-efficient manner.
- */
-function compressImage(file, maxWidth = 1200, maxHeight = 1200) {
-  return new Promise((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(objectUrl);
-      
-      const canvas = document.createElement('canvas');
-      let width = img.width;
-      let height = img.height;
-
-      if (width > height) {
-        if (width > maxWidth) {
-          height = Math.round((height * maxWidth) / width);
-          width = maxWidth;
-        }
-      } else {
-        if (height > maxHeight) {
-          width = Math.round((width * maxHeight) / height);
-          height = maxHeight;
-        }
-      }
-
-      canvas.width = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      canvas.toBlob((blob) => {
-        if (blob) {
-          const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, "") + "_compressed.jpg", {
-            type: 'image/jpeg',
-            lastModified: Date.now()
-          });
-          resolve(compressedFile);
-        } else {
-          resolve(file);
-        }
-      }, 'image/jpeg', 0.8);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      resolve(file);
-    };
-    img.src = objectUrl;
-  });
-}
-
-const TRADE_SECTIONS_CONFIG = {
-  'Site_Prep_&_Structure': {
-    label: 'Site Prep & Structure',
-    phases: ['Foundation & Flatwork', 'Roofing', 'Windows & Exterior Doors']
-  },
-  'Framing_&_Lumber': {
-    label: 'Framing & Lumber',
-    phases: ['Framing & Lumber']
-  },
-  'Mechanicals_&_Utilities': {
-    label: 'Mechanicals & Utilities',
-    phases: ['Plumbing Rough-In', 'Electrical & Lighting', 'HVAC / AC Systems', 'Insulation & Alarms']
-  },
-  'Interior_Finishes': {
-    label: 'Interior Finishes',
-    phases: ['Drywall & Sheetrock', 'Cabinets & Trim Carpentry', 'Quartz & Countertops', 'Glass Work']
-  },
-  'Paint_Tile': {
-    label: 'Paint & Tile',
-    phases: ['Tile', 'Paint']
-  },
-  'House_Exterior_&_Yard': {
-    label: 'House Exterior & Yard',
-    phases: ['Stucco & Masonry', 'Garage Doors', 'Driveway & Sidewalks', 'Cantera Stone Detail', 'Fencing & Gates', 'Landscaping & Irrigation']
-  },
-  'Project_Overhead_&_Bills': {
-    label: 'Project Overhead & Bills',
-    phases: ['Monthly Utility Bills', 'Dumpsters & Cleaning', 'Extra Costs & Misc']
-  },
-  'Paperwork_&_Permits': {
-    label: 'Paperwork & Permits',
-    phases: ['Paperwork & Permits']
-  },
-  'Interior_Hardware': {
-    label: 'Interior Hardware',
-    phases: ['Plumbing Hardware Fixtures', 'Electrical Hardware Fixtures']
-  }
-};
-
-const ALLOCATION_COLORS = [
-  { text: '#C5A059', border: '#C5A059', bg: 'rgba(197, 160, 89, 0.12)', darkBg: 'rgba(197, 160, 89, 0.04)' }, // Gold
-  { text: '#38bdf8', border: '#38bdf8', bg: 'rgba(56, 189, 248, 0.12)', darkBg: 'rgba(56, 189, 248, 0.04)' }, // Blue
-  { text: '#34d399', border: '#34d399', bg: 'rgba(52, 211, 153, 0.12)', darkBg: 'rgba(52, 211, 153, 0.04)' }, // Green
-  { text: '#c084fc', border: '#c084fc', bg: 'rgba(192, 132, 252, 0.12)', darkBg: 'rgba(192, 132, 252, 0.04)' }  // Purple
-];
-
-// Helper to check if description contains any of the keywords as a whole word
-function hasWholeWord(desc, keywords) {
-  if (!desc) return false;
-  const lowerDesc = desc.toLowerCase();
-  return keywords.some(word => {
-    const escaped = word.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
-    const regex = new RegExp(`\\b${escaped}\\b`, 'i');
-    return regex.test(lowerDesc);
-  });
-}
-
-// Helper to suggest the best split ID for a given line item description based on keywords
-function suggestSplitId(description, splits) {
-  if (!description || !splits || splits.length === 0) return null;
-  
-  const keywords = {
-    plumbing: ['pvc', 'elbow', 'valve', 'pipe', 'drain', 'shower', 'solder', 'copper', 'faucet', 'sink', 'toilet', 'brass', 'tee', 'flange', 'abs', 'cpvc', 'nipple', 'plumb', 'hose', 'washer', 'coupling', 'tub', 'cleanout'],
-    electrical: ['wire', 'box', 'switch', 'outlet', 'breaker', 'conduit', 'gang', 'romex', 'cable', 'lamp', 'bulb', 'light', 'electric', 'receptacle', 'connector', 'dimmer', 'ground', 'fuse', 'tape', 'pigtail', 'fixture', 'junction'],
-    hvac: ['duct', 'register', 'vent', 'grille', 'thermostat', 'ac', 'furnace', 'hvac', 'damper', 'flex', 'insulation', 'compressor', 'fan', 'filter', 'baffle'],
-    framing: ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie'],
-    cabinets: ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity'],
-    drywall: ['drywall', 'sheetrock', 'mud', 'joint', 'compound', 'plaster', 'gypsum'],
-    paint: ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']
-  };
-
-  const isPlumbingItem = hasWholeWord(description, keywords.plumbing);
-  const isElectricalItem = hasWholeWord(description, keywords.electrical);
-  const isHVACItem = hasWholeWord(description, keywords.hvac);
-  const isFramingItem = hasWholeWord(description, keywords.framing);
-  const isCabinetItem = hasWholeWord(description, keywords.cabinets);
-  const isDrywallItem = hasWholeWord(description, keywords.drywall);
-  const isPaintItem = hasWholeWord(description, keywords.paint);
-
-  // Find a split that matches the category of the item
-  for (const s of splits) {
-    const phaseLower = (s.tradePhase || '').toLowerCase();
-    const catLower = (s.tradeCategory || '').toLowerCase();
-
-    if (isPlumbingItem && (phaseLower.includes('plumb') || phaseLower.includes('sewer') || phaseLower.includes('water') || catLower.includes('plumb'))) {
-      return s.id;
-    }
-    if (isElectricalItem && (phaseLower.includes('elect') || phaseLower.includes('light') || phaseLower.includes('power') || phaseLower.includes('wire') || catLower.includes('elect'))) {
-      return s.id;
-    }
-    if (isHVACItem && (phaseLower.includes('hvac') || phaseLower.includes('duct') || phaseLower.includes('heat') || phaseLower.includes('vent') || phaseLower.includes('air') || phaseLower.includes('ac '))) {
-      return s.id;
-    }
-    if (isFramingItem && (phaseLower.includes('frame') || phaseLower.includes('lumber') || phaseLower.includes('wood') || phaseLower.includes('truss') || catLower.includes('frame') || catLower.includes('lumb'))) {
-      return s.id;
-    }
-    if (isCabinetItem && (phaseLower.includes('cabinet') || phaseLower.includes('trim') || phaseLower.includes('closet') || phaseLower.includes('rod') || phaseLower.includes('bracket') || phaseLower.includes('shelf') || phaseLower.includes('molding') || phaseLower.includes('door') || catLower.includes('finish'))) {
-      return s.id;
-    }
-    if (isDrywallItem && (phaseLower.includes('drywall') || phaseLower.includes('sheetrock') || phaseLower.includes('mud') || phaseLower.includes('joint') || phaseLower.includes('compound') || catLower.includes('finish'))) {
-      return s.id;
-    }
-    if (isPaintItem && (phaseLower.includes('paint') || phaseLower.includes('brush') || phaseLower.includes('roller') || phaseLower.includes('primer') || catLower.includes('paint') || catLower.includes('tile'))) {
-      return s.id;
-    }
-  }
-
-  return null;
-}
+import { ArrowLeft, Save, Trash2, Calendar, User, DollarSign, Tag, CheckSquare, MapPin } from 'lucide-react';
+import EditFormAttachments from './EditFormAttachments';
+import EditFormCamera from './EditFormCamera';
+import {
+  ALLOCATION_COLORS,
+  TRADE_SECTIONS_CONFIG,
+  compressImage,
+  hasWholeWord,
+  suggestSplitId
+} from '../services/editFormHelpers';
 
 export default function EditForm({ stagedItem, onSave, onCancel, history = [], stagedItems = [], projects = [] }) {
   // Fallback mock items for existing user drafts
@@ -577,41 +424,11 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
   if (showCamera) {
     return (
-      <div className="edit-overlay-container" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Inline Camera</h2>
-          <button 
-            type="button" 
-            onClick={stopCamera} 
-            className="btn btn-secondary" 
-            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.8rem' }}
-          >
-            Cancel
-          </button>
-        </div>
-
-        <div className="camera-container">
-          <video 
-            ref={videoRef} 
-            className="camera-video" 
-            autoPlay 
-            playsInline
-            muted
-          />
-          <div className="camera-overlay">
-            <div className="camera-target-box"></div>
-          </div>
-        </div>
-
-        <div className="camera-controls">
-          <button 
-            type="button" 
-            onClick={capturePhoto} 
-            className="shutter-btn"
-            title="Capture photo"
-          />
-        </div>
-      </div>
+      <EditFormCamera
+        videoRef={videoRef}
+        onCapturePhoto={capturePhoto}
+        onStopCamera={stopCamera}
+      />
     );
   }
 
@@ -1316,118 +1133,14 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
           )}
         </div>
 
-        {/* File attachments upload sections */}
-        <div className="form-group" style={{ marginTop: '4px' }}>
-          <label className="form-label" style={{ fontSize: '0.72rem' }}>Attachments</label>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-            
-            {/* Primary Image Thumbnail */}
-            {mainImageUrl && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', backgroundColor: 'var(--color-zinc-950)', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}>
-                {mainImageUrl.startsWith('data:application/pdf') ? (
-                  <div 
-                    onClick={() => window.open(mainImageUrl, '_blank')}
-                    style={{ 
-                      cursor: 'pointer', 
-                      width: '40px', 
-                      height: '40px', 
-                      borderRadius: '4px', 
-                      backgroundColor: 'rgba(239, 68, 68, 0.1)', 
-                      color: '#ef4444', 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      justifyContent: 'center',
-                      fontSize: '0.62rem',
-                      fontWeight: 'bold',
-                      fontFamily: 'monospace',
-                      border: '1px solid rgba(239, 68, 68, 0.2)',
-                      flexShrink: 0
-                    }}
-                    title="Click to view PDF in new tab"
-                  >
-                    PDF
-                  </div>
-                ) : (
-                  <img src={mainImageUrl} alt="Primary Scan" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover', flexShrink: 0 }} />
-                )}
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>
-                    {mainImageUrl.startsWith('data:application/pdf') ? 'Primary PDF Document' : 'Primary scan'}
-                  </div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {mainImageUrl.startsWith('data:application/pdf') ? 'Click PDF icon to view document' : 'Original receipt or check photo'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Secondary Image Attachment */}
-            {secondaryImageUrl ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '6px', backgroundColor: 'var(--color-zinc-950)', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}>
-                <img src={secondaryImageUrl} alt="Attached Receipt" style={{ width: '40px', height: '40px', borderRadius: '4px', objectFit: 'cover' }} />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>Attached Receipt</div>
-                  <div style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Additional paper receipt reference</div>
-                </div>
-                <button 
-                  type="button" 
-                  onClick={handleRemoveReceipt}
-                  className="nav-item" 
-                  style={{ width: 'auto', padding: '6px', color: 'var(--color-rose-500)', flex: 'none' }}
-                >
-                  <Trash2 size={14} />
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                {cameraError && (
-                  <div className="alert-box alert-error" style={{ padding: '6px', fontSize: '0.75rem' }}>
-                    {cameraError}
-                  </div>
-                )}
-                <div style={{ display: 'flex', gap: '8px' }}>
-                  {/* Take Photo Button - triggers WebRTC camera */}
-                  <button 
-                    type="button" 
-                    onClick={startCamera}
-                    className="btn btn-secondary" 
-                    style={{ borderStyle: 'dashed', padding: '8px', fontSize: '0.8rem', flex: 1, height: '36px' }}
-                  >
-                    <Camera size={14} />
-                    Take Photo
-                  </button>
-
-                  {/* Choose from Gallery Overlay Button */}
-                  <div style={{ position: 'relative', flex: 1 }}>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary" 
-                      style={{ borderStyle: 'dashed', padding: '8px', fontSize: '0.8rem', width: '100%', height: '36px' }}
-                    >
-                      <Plus size={14} />
-                      Choose Photo
-                    </button>
-                    <input 
-                      type="file" 
-                      onChange={handleFileChange}
-                      accept="image/*"
-                      style={{ 
-                        position: 'absolute', 
-                        top: 0, 
-                        left: 0, 
-                        width: '100%', 
-                        height: '100%', 
-                        opacity: 0, 
-                        cursor: 'pointer',
-                        zIndex: 10
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <EditFormAttachments
+          cameraError={cameraError}
+          mainImageUrl={mainImageUrl}
+          secondaryImageUrl={secondaryImageUrl}
+          onFileChange={handleFileChange}
+          onRemoveReceipt={handleRemoveReceipt}
+          onStartCamera={startCamera}
+        />
 
         {/* Action Buttons */}
         <div style={{ display: 'flex', gap: '10px', marginTop: '4px' }}>
