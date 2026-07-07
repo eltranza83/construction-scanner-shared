@@ -5,6 +5,16 @@
 const GOOGLE_DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_SHEETS_API_BASE = 'https://sheets.googleapis.com/v4/spreadsheets';
 
+function escapeDriveQueryString(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+function assertDriveFolderParent(parentId, action) {
+  if (!parentId) {
+    throw new Error(`Could not ${action}. No project folder is selected.`);
+  }
+}
+
 export function getDriveFileMediaUrl(fileId) {
   return `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?alt=media`;
 }
@@ -285,7 +295,11 @@ export async function appendRowToSheet(accessToken, sheetId, rowData) {
  * Find or create a subfolder inside a parent folder in Google Drive.
  */
 export async function findOrCreateFolder(accessToken, folderName, parentId) {
-  const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  assertDriveFolderParent(parentId, `find or create folder ${folderName}`);
+
+  const safeFolderName = escapeDriveQueryString(folderName);
+  const safeParentId = escapeDriveQueryString(parentId);
+  const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${safeParentId}' in parents and trashed=false`;
   const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
 
   const response = await fetch(url, {
@@ -295,7 +309,8 @@ export async function findOrCreateFolder(accessToken, folderName, parentId) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to search for folder ${folderName}`);
+    const errText = await response.text();
+    throw new Error(`Failed to search for folder ${folderName}: ${errText}`);
   }
 
   const data = await response.json();
@@ -331,7 +346,11 @@ export async function uploadPhotoToPhaseFolder(accessToken, rootFolderId, catego
  * Finds a folder ID by name and parent ID. Returns null if not found.
  */
 export async function findFolder(accessToken, folderName, parentId) {
-  const query = `name='${folderName}' and mimeType='application/vnd.google-apps.folder' and '${parentId}' in parents and trashed=false`;
+  assertDriveFolderParent(parentId, `find folder ${folderName}`);
+
+  const safeFolderName = escapeDriveQueryString(folderName);
+  const safeParentId = escapeDriveQueryString(parentId);
+  const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${safeParentId}' in parents and trashed=false`;
   const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
 
   const response = await fetch(url, {
@@ -341,7 +360,8 @@ export async function findFolder(accessToken, folderName, parentId) {
   });
 
   if (!response.ok) {
-    throw new Error(`Failed to search for folder ${folderName}`);
+    const errText = await response.text();
+    throw new Error(`Failed to search for folder ${folderName}: ${errText}`);
   }
 
   const data = await response.json();
