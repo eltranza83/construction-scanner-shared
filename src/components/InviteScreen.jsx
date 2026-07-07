@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
-import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore';
+import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore/lite';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';

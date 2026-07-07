@@ -13,7 +13,7 @@ export function useInviteGate() {
     const fetchSharedGeminiKey = async () => {
       const [{ getFirebaseDb }, { doc, getDoc }] = await Promise.all([
         import('../services/firebase'),
-        import('firebase/firestore')
+        import('firebase/firestore/lite')
       ]);
       const db = getFirebaseDb();
       if (!db) return;

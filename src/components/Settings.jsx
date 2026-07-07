@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle } from 'lucide-react';
 import { createProjectFolder, listProjectFolders } from '../services/settingsDrive';
-import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore/lite';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 import { APP_STORAGE_KEYS } from '../services/appStorage';
