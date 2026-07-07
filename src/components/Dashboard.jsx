@@ -2,8 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { STATUS_MESSAGES, getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import {
+  getCachedDashboardSpreadsheetId,
+  loadCachedDashboard,
   listDashboardPhasePhotos,
   loadProjectDashboardFromFolder,
+  persistDashboardCache,
+  persistDashboardSpreadsheetId,
   uploadDashboardPhasePhoto
 } from '../services/dashboardDrive';
 import DashboardContractorSearch from './DashboardContractorSearch';
@@ -182,19 +186,19 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     setError(null);
 
     try {
-      const cachedSpreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
+      const cachedSpreadsheetId = getCachedDashboardSpreadsheetId(localStorage, activeProject?.id);
       const { spreadsheetId, data: parsedData } = await loadProjectDashboardFromFolder({
         accessToken: googleToken,
         projectFolderId: selectedFolder.id,
         cachedSpreadsheetId
       });
       if (spreadsheetId !== cachedSpreadsheetId) {
-        localStorage.setItem(`jobscan_sheet_id_${activeProject.id}`, spreadsheetId);
+        persistDashboardSpreadsheetId(localStorage, activeProject.id, spreadsheetId);
       }
       setData(parsedData);
 
       // Cache values for offline usage
-      localStorage.setItem(`jobscan_cached_dashboard_${activeProject.id}`, JSON.stringify(parsedData));
+      persistDashboardCache(localStorage, activeProject.id, parsedData);
 
     } catch (err) {
       console.error(err);
@@ -205,9 +209,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         }
       }
       // Try to load cached data offline
-      const cached = localStorage.getItem(`jobscan_cached_dashboard_${activeProject?.id}`);
+      const cached = loadCachedDashboard(localStorage, activeProject?.id);
       if (cached) {
-        setData(JSON.parse(cached));
+        setData(cached);
         setError('Could not load live dashboard data. Displaying cached report from last load.');
       } else {
         setError(getDriveErrorMessage(err, 'load dashboard data'));
@@ -221,9 +225,9 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   useEffect(() => {
     if (activeProject && selectedFolder) {
       // Load cached first for instant responsiveness
-      const cached = localStorage.getItem(`jobscan_cached_dashboard_${activeProject.id}`);
+      const cached = loadCachedDashboard(localStorage, activeProject.id);
       if (cached) {
-        setData(JSON.parse(cached));
+        setData(cached);
       }
       loadDashboardData();
     } else {

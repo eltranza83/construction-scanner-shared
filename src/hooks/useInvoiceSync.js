@@ -8,6 +8,11 @@ import {
 import { STATUS_MESSAGES, getDriveErrorMessage, isAuthError } from '../services/appErrors';
 import { fetchDriveFileBlob } from '../services/googleDrive';
 import { syncInvoiceDocument } from '../services/invoiceUpload';
+import {
+  buildAppsScriptSyncUrl,
+  getHistoryFileId,
+  shouldFlagUnprocessedUpload
+} from '../services/invoiceSyncState';
 
 function writePdfLoadingState(newWindow) {
   if (!newWindow) return;
@@ -65,11 +70,11 @@ export function useInvoiceSync({
   };
 
   const handleTriggerAppsScriptSync = async () => {
-    if (!activeProject?.appsScriptUrl) return;
+    const syncUrl = buildAppsScriptSyncUrl(activeProject);
+    if (!syncUrl) return;
     setTriggeringSync(true);
     setError(null);
     try {
-      const syncUrl = `${activeProject.appsScriptUrl}?action=sync&folderId=${activeProject.folderId}`;
       await fetch(syncUrl, {
         method: 'POST',
         mode: 'no-cors'
@@ -106,7 +111,7 @@ export function useInvoiceSync({
 
       saveHistory([...result.logs, ...history]);
 
-      if (result.hasDriveUpload && activeProject?.appsScriptUrl) {
+      if (shouldFlagUnprocessedUpload(result, activeProject)) {
         setHasUnprocessedUploads(true);
         setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
       }
@@ -135,7 +140,7 @@ export function useInvoiceSync({
 
     if (googleToken) {
       try {
-        const fileId = item.id.split('_split_')[0];
+        const fileId = getHistoryFileId(item);
         const blob = await fetchDriveFileBlob(googleToken, fileId);
         const fileURL = URL.createObjectURL(blob);
         if (newWindow) {

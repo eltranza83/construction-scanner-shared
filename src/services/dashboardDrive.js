@@ -10,6 +10,45 @@ export function buildDashboardPhotoFileName(originalName, now = new Date()) {
   return `Photo_${timestamp}_${originalName}`;
 }
 
+export function getDashboardStorageKeys(projectId) {
+  return {
+    spreadsheetId: `jobscan_sheet_id_${projectId}`,
+    cachedDashboard: `jobscan_cached_dashboard_${projectId}`
+  };
+}
+
+export function loadCachedDashboard(storage, projectId) {
+  if (!storage || !projectId) return null;
+
+  const { cachedDashboard } = getDashboardStorageKeys(projectId);
+  const cached = storage.getItem(cachedDashboard);
+  if (!cached) return null;
+
+  try {
+    return JSON.parse(cached);
+  } catch {
+    return null;
+  }
+}
+
+export function persistDashboardCache(storage, projectId, dashboardData) {
+  if (!storage || !projectId || !dashboardData) return;
+  const { cachedDashboard } = getDashboardStorageKeys(projectId);
+  storage.setItem(cachedDashboard, JSON.stringify(dashboardData));
+}
+
+export function getCachedDashboardSpreadsheetId(storage, projectId) {
+  if (!storage || !projectId) return null;
+  const { spreadsheetId } = getDashboardStorageKeys(projectId);
+  return storage.getItem(spreadsheetId);
+}
+
+export function persistDashboardSpreadsheetId(storage, projectId, spreadsheetId) {
+  if (!storage || !projectId || !spreadsheetId) return;
+  const { spreadsheetId: spreadsheetIdKey } = getDashboardStorageKeys(projectId);
+  storage.setItem(spreadsheetIdKey, spreadsheetId);
+}
+
 export async function loadProjectDashboardFromFolder({
   accessToken,
   projectFolderId,
