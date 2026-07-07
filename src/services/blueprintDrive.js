@@ -3,14 +3,20 @@ import {
   findFileInFolder,
   findOrCreateFolder,
   getFileContent,
+  getDriveFileMediaUrl,
+  listPhotosInPhase,
   updateFileContent,
   uploadFileToDrive,
   uploadPhotoToPhaseFolder
-} from './googleDrive';
+} from './googleDrive.js';
 
 const X_RAY_FOLDER_NAME = 'X-Ray Photos';
 const BLUEPRINT_CONFIG_FILE = 'blueprint_data.json';
 const BLUEPRINT_CONFIG_MIME_TYPE = 'application/json';
+
+export function getBlueprintPhotoMediaUrl(fileId) {
+  return getDriveFileMediaUrl(fileId);
+}
 
 function buildJsonBlob(data) {
   return new Blob([JSON.stringify(data, null, 2)], { type: BLUEPRINT_CONFIG_MIME_TYPE });
@@ -142,6 +148,38 @@ export async function addBlueprintPin({
   );
 
   return { newPin, updatedPins };
+}
+
+export function buildBlueprintAlbumPhotoFileName(phaseName, originalName, timestamp = Date.now()) {
+  const extension = originalName.split('.').pop();
+  return `${phaseName.replace(/[^a-zA-Z0-9_]/g, '_')}_Album_${timestamp}.${extension}`;
+}
+
+export async function listBlueprintPhasePhotos({
+  accessToken,
+  projectFolderId,
+  category,
+  phase
+}) {
+  return await listPhotosInPhase(accessToken, projectFolderId, category, phase);
+}
+
+export async function uploadBlueprintAlbumPhoto({
+  accessToken,
+  projectFolderId,
+  activeAlbumPhase,
+  file
+}) {
+  const photoFileName = buildBlueprintAlbumPhotoFileName(activeAlbumPhase.phase, file.name);
+  return await uploadPhotoToPhaseFolder(
+    accessToken,
+    projectFolderId,
+    activeAlbumPhase.category,
+    activeAlbumPhase.phase,
+    photoFileName,
+    file.type,
+    file
+  );
 }
 
 export async function deleteBlueprintPin({

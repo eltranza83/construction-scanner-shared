@@ -4,15 +4,13 @@ import {
   AlertTriangle, Loader2,
 } from 'lucide-react';
 import { getDriveErrorMessage, getUploadErrorMessage } from '../services/appErrors';
-import { 
-  uploadPhotoToPhaseFolder,
-  listPhotosInPhase
-} from '../services/googleDrive';
 import {
   addBlueprintPin,
   deleteBlueprintPin,
+  listBlueprintPhasePhotos,
   loadBlueprintVault,
   resetBlueprintVault,
+  uploadBlueprintAlbumPhoto,
   uploadBlueprintVaultFile
 } from '../services/blueprintDrive';
 import BlueprintAddPinModal from './BlueprintAddPinModal';
@@ -140,7 +138,12 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   const loadPhasePhotos = async (category, phase) => {
     setLoadingAlbumPhotos(true);
     try {
-      const list = await listPhotosInPhase(googleToken, selectedFolder.id, category, phase);
+      const list = await listBlueprintPhasePhotos({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        category,
+        phase
+      });
       setAlbumPhotos(list || []);
     } catch (err) {
       console.error(err);
@@ -158,16 +161,12 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setUploadingAlbumPhoto(true);
     setError(null);
     try {
-      const photoFileName = `${activeAlbumPhase.phase.replace(/[^a-zA-Z0-9_]/g, '_')}_Album_${Date.now()}.${file.name.split('.').pop()}`;
-      await uploadPhotoToPhaseFolder(
-        googleToken,
-        selectedFolder.id,
-        activeAlbumPhase.category,
-        activeAlbumPhase.phase,
-        photoFileName,
-        file.type,
+      await uploadBlueprintAlbumPhoto({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        activeAlbumPhase,
         file
-      );
+      });
       await loadPhasePhotos(activeAlbumPhase.category, activeAlbumPhase.phase);
       setSuccess('Progress photo uploaded successfully!');
       setTimeout(() => setSuccess(null), 2500);

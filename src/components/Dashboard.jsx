@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react';
 import { getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
-import { fetchProjectDashboardData } from '../services/sheetsDataService';
-import { findSpreadsheetInFolder, uploadPhotoToPhaseFolder, listPhotosInPhase } from '../services/googleDrive';
+import {
+  listDashboardPhasePhotos,
+  loadProjectDashboardFromFolder,
+  uploadDashboardPhasePhoto
+} from '../services/dashboardDrive';
 import DashboardContractorSearch from './DashboardContractorSearch';
 import DashboardKpiCards from './DashboardKpiCards';
 import DashboardPhotoReminders from './DashboardPhotoReminders';
@@ -46,12 +49,11 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       if (!googleToken || !selectedFolder || !activeGalleryPhase) return;
       setLoadingPhotos(true);
       try {
-        const list = await listPhotosInPhase(
-          googleToken,
-          selectedFolder.id,
-          activeGalleryPhase.category,
-          activeGalleryPhase.phase
-        );
+        const list = await listDashboardPhasePhotos({
+          accessToken: googleToken,
+          projectFolderId: selectedFolder.id,
+          phase: activeGalleryPhase
+        });
         setPhotos(list);
       } catch (err) {
         console.error(err);
@@ -71,26 +73,12 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
     setUploadingPhoto(true);
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const fileName = `Photo_${timestamp}_${file.name}`;
-
-      await uploadPhotoToPhaseFolder(
-        googleToken,
-        selectedFolder.id,
-        targetPhase.category,
-        targetPhase.phase,
-        fileName,
-        file.type,
+      const updatedList = await uploadDashboardPhasePhoto({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        phase: targetPhase,
         file
-      );
-
-      // Reload gallery list
-      const updatedList = await listPhotosInPhase(
-        googleToken,
-        selectedFolder.id,
-        targetPhase.category,
-        targetPhase.phase
-      );
+      });
       setPhotos(updatedList);
     } catch (err) {
       console.error(err);
@@ -194,20 +182,15 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     setError(null);
 
     try {
-      let spreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
-
-      if (!spreadsheetId) {
-        const spreadsheet = await findSpreadsheetInFolder(googleToken, selectedFolder.id);
-        if (spreadsheet) {
-          spreadsheetId = spreadsheet.id;
-          localStorage.setItem(`jobscan_sheet_id_${activeProject.id}`, spreadsheetId);
-        } else {
-          throw new Error("No spreadsheet found in your project folder. Please move your project spreadsheet (e.g. 'test project spreadsheet') into this folder.");
-        }
+      const cachedSpreadsheetId = localStorage.getItem(`jobscan_sheet_id_${activeProject?.id}`);
+      const { spreadsheetId, data: parsedData } = await loadProjectDashboardFromFolder({
+        accessToken: googleToken,
+        projectFolderId: selectedFolder.id,
+        cachedSpreadsheetId
+      });
+      if (spreadsheetId !== cachedSpreadsheetId) {
+        localStorage.setItem(`jobscan_sheet_id_${activeProject.id}`, spreadsheetId);
       }
-
-      // Fetch batch data from Sheets API
-      const parsedData = await fetchProjectDashboardData(googleToken, spreadsheetId);
       setData(parsedData);
 
       // Cache values for offline usage

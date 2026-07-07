@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { HelpCircle } from 'lucide-react';
-import { listFolders, createFolder } from '../services/googleDrive';
+import { createProjectFolder, listProjectFolders } from '../services/settingsDrive';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
@@ -366,7 +366,7 @@ export default function Settings({
     setLoadingFolders(true);
     setError(null);
     try {
-      const folderList = await listFolders(googleToken, parentId);
+      const folderList = await listProjectFolders(googleToken, parentId);
       setFolders(folderList);
     } catch (err) {
       console.error(err);
@@ -383,7 +383,7 @@ export default function Settings({
     setError(null);
     setSuccess(null);
     try {
-      await createFolder(
+      await createProjectFolder(
         googleToken, 
         newFolderName.trim(), 
         currentParentId === 'root' ? null : currentParentId

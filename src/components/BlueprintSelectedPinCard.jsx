@@ -1,6 +1,6 @@
 import React from 'react';
 import { Eye, X } from 'lucide-react';
-import { getDriveFileMediaUrl } from '../services/googleDrive';
+import { getBlueprintPhotoMediaUrl } from '../services/blueprintDrive';
 
 export default function BlueprintSelectedPinCard({
   pin,
@@ -38,7 +38,7 @@ export default function BlueprintSelectedPinCard({
               <Eye size={10} /> Open in Drive
             </div>
             <img
-              src={getDriveFileMediaUrl(pin.photoFileId)}
+              src={getBlueprintPhotoMediaUrl(pin.photoFileId)}
               alt="Verification preview"
               style={{ width: '100%', maxHeight: '180px', objectFit: 'cover' }}
               onError={(e) => {
