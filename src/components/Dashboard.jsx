@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, AlertCircle } from 'lucide-react';
-import { getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
+import { STATUS_MESSAGES, getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import {
   listDashboardPhasePhotos,
   loadProjectDashboardFromFolder,
@@ -334,7 +334,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
           disabled={loading}
         >
           <RefreshCw size={12} className={loading ? 'spin' : ''} />
-          {loading ? 'Refreshing...' : 'Refresh'}
+          {loading ? STATUS_MESSAGES.refreshing : STATUS_MESSAGES.refresh}
         </button>
       </div>
 
@@ -349,7 +349,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       {loading && !data && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '40px 0', alignItems: 'center' }}>
           <div className="spinner" style={{ width: '28px', height: '28px', borderWidth: '3px' }}></div>
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)' }}>Syncing spreadsheet variables...</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)' }}>{STATUS_MESSAGES.loadingDashboard}</span>
         </div>
       )}
 

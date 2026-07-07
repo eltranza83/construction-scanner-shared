@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Camera, ChevronDown, ChevronUp, Image, Loader2 } from 'lucide-react';
+import { STATUS_MESSAGES } from '../services/appErrors';
 
 export default function BlueprintPhaseAlbums({
   activeAlbumPhase,
@@ -69,7 +70,7 @@ export default function BlueprintPhaseAlbums({
             {uploadingAlbumPhoto ? (
               <>
                 <Loader2 className="animate-spin" size={16} style={{ color: 'var(--color-amber-500)' }} />
-                <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-400)' }}>Uploading to Drive...</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-400)' }}>{STATUS_MESSAGES.uploadingToDrive}</span>
               </>
             ) : (
               <>
@@ -90,7 +91,7 @@ export default function BlueprintPhaseAlbums({
           {loadingAlbumPhotos ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '8px' }}>
               <Loader2 className="animate-spin" size={24} style={{ color: 'var(--color-amber-500)' }} />
-              <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)' }}>Fetching files...</span>
+              <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)' }}>{STATUS_MESSAGES.loadingPhotos}</span>
             </div>
           ) : albumPhotos.length === 0 ? (
             <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.78rem' }}>

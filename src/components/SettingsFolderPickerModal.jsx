@@ -1,5 +1,6 @@
 import React from 'react';
 import { Check, ChevronRight, Folder, FolderOpen, FolderPlus, X } from 'lucide-react';
+import { STATUS_MESSAGES } from '../services/appErrors';
 
 export default function SettingsFolderPickerModal({
   isOpen,
@@ -109,7 +110,7 @@ export default function SettingsFolderPickerModal({
           {loadingFolders ? (
             <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.85rem' }}>
               <div className="spinner" style={{ width: '20px', height: '20px', borderWidth: '2px', margin: '0 auto 8px auto' }}></div>
-              Loading directories...
+              {STATUS_MESSAGES.loadingFolders}
             </div>
           ) : folders.length === 0 ? (
             <div style={{ padding: '30px 10px', textAlign: 'center', color: 'var(--color-zinc-600)', fontSize: '0.85rem' }}>

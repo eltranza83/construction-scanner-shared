@@ -1,5 +1,6 @@
 import React from 'react';
 import { Camera, Image, Plus, X } from 'lucide-react';
+import { STATUS_MESSAGES } from '../services/appErrors';
 
 export default function DashboardPhotoGallery({
   activeGalleryPhase,
@@ -70,7 +71,7 @@ export default function DashboardPhotoGallery({
               {loadingPhotos ? (
                 <div style={{ padding: '40px 0', textAlign: 'center' }}>
                   <div className="spinner" style={{ width: '24px', height: '24px', margin: '0 auto' }}></div>
-                  <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)', display: 'block', marginTop: '8px' }}>Loading photos from Google Drive...</span>
+                  <span style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)', display: 'block', marginTop: '8px' }}>{STATUS_MESSAGES.loadingPhotos}</span>
                 </div>
               ) : photos.length === 0 ? (
                 <div style={{
@@ -133,7 +134,7 @@ export default function DashboardPhotoGallery({
                   }}
                 >
                   <Plus size={14} />
-                  {uploadingPhoto ? 'Uploading to Drive...' : '📸 Add Photo (Camera/Gallery)'}
+                  {uploadingPhoto ? STATUS_MESSAGES.uploadingToDrive : 'Add Photo (Camera/Gallery)'}
                   <input
                     type="file"
                     accept="image/*"

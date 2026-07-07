@@ -1,5 +1,17 @@
 export const SESSION_EXPIRED_MESSAGE = 'Google Drive session expired. Please sign in again.';
 
+export const STATUS_MESSAGES = {
+  loadingDashboard: 'Loading dashboard data...',
+  loadingBlueprint: 'Loading blueprint vault...',
+  loadingPhotos: 'Loading project photos...',
+  loadingFolders: 'Loading Google Drive folders...',
+  retrievingPdf: 'Opening PDF from Google Drive...',
+  uploadingToDrive: 'Uploading to Google Drive...',
+  syncingSpreadsheet: 'Syncing spreadsheet...',
+  refreshing: 'Refreshing...',
+  refresh: 'Refresh'
+};
+
 export function isAuthError(error) {
   if (!error) return false;
 
@@ -42,4 +54,12 @@ export function getUploadErrorMessage(error, target = 'file') {
   return message
     ? `Could not upload ${target}. ${message}`
     : `Could not upload ${target}. Please try again.`;
+}
+
+export function getFolderErrorMessage(error, action = 'load Google Drive folders') {
+  return getDriveErrorMessage(error, action);
+}
+
+export function getValidationErrorMessage(message) {
+  return message || 'Please check the highlighted fields and try again.';
 }

@@ -3,8 +3,11 @@ import test from 'node:test';
 
 import {
   SESSION_EXPIRED_MESSAGE,
+  STATUS_MESSAGES,
   getDriveErrorMessage,
+  getFolderErrorMessage,
   getUploadErrorMessage,
+  getValidationErrorMessage,
   isAuthError
 } from '../src/services/appErrors.js';
 
@@ -35,5 +38,17 @@ test('Drive error messages include action context for non-auth failures', () => 
   assert.equal(
     getUploadErrorMessage(null, 'blueprint'),
     'Could not upload blueprint. Please try again.'
+  );
+});
+
+test('status and validation helpers keep common UI copy consistent', () => {
+  assert.equal(STATUS_MESSAGES.uploadingToDrive, 'Uploading to Google Drive...');
+  assert.equal(
+    getFolderErrorMessage(new Error('Permission denied'), 'load Google Drive folders'),
+    'Could not load Google Drive folders. Permission denied'
+  );
+  assert.equal(
+    getValidationErrorMessage('Project name is required.'),
+    'Project name is required.'
   );
 });

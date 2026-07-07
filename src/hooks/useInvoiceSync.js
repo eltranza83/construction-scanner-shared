@@ -5,7 +5,7 @@ import {
   persistHistory,
   setStoredBoolean
 } from '../services/appStorage';
-import { getDriveErrorMessage, isAuthError } from '../services/appErrors';
+import { STATUS_MESSAGES, getDriveErrorMessage, isAuthError } from '../services/appErrors';
 import { fetchDriveFileBlob } from '../services/googleDrive';
 import { syncInvoiceDocument } from '../services/invoiceUpload';
 
@@ -33,7 +33,7 @@ function writePdfLoadingState(newWindow) {
         border-radius: 50%;
         animation: spin 0.8s linear infinite;
       "></div>
-      <span style="font-size: 0.95rem; font-weight: 500; letter-spacing: 0.02em;">Retrieving PDF from Google Drive...</span>
+      <span style="font-size: 0.95rem; font-weight: 500; letter-spacing: 0.02em;">${STATUS_MESSAGES.retrievingPdf}</span>
       <style>
         @keyframes spin { to { transform: rotate(360deg); } }
       </style>

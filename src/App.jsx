@@ -6,6 +6,7 @@ import { useInvoiceSync } from './hooks/useInvoiceSync';
 import { useInviteGate } from './hooks/useInviteGate';
 import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
+import { STATUS_MESSAGES } from './services/appErrors';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -331,7 +332,7 @@ export default function App() {
               {triggeringSync ? (
                 <>
                   <div className="spinner" style={{ width: '10px', height: '10px', borderWidth: '1.2px', borderColor: '#000', borderTopColor: 'transparent', margin: 0 }}></div>
-                  Syncing...
+                  {STATUS_MESSAGES.syncingSpreadsheet}
                 </>
               ) : (
                 "Sync Now"

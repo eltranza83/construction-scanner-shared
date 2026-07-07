@@ -5,6 +5,7 @@ import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/fi
 import { getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 import { APP_STORAGE_KEYS } from '../services/appStorage';
+import { getDriveErrorMessage, getFolderErrorMessage, getValidationErrorMessage } from '../services/appErrors';
 import SettingsDeleteProjectModal from './SettingsDeleteProjectModal';
 import SettingsFolderPickerModal from './SettingsFolderPickerModal';
 import SettingsProjectModal from './SettingsProjectModal';
@@ -245,11 +246,11 @@ export default function Settings({
   const handleSaveProject = (e) => {
     if (e && e.preventDefault) e.preventDefault();
     if (!projectNameInput.trim()) {
-      setError('Please enter a Project Name');
+      setError(getValidationErrorMessage('Please enter a Project Name'));
       return;
     }
     if (!tempSelectedFolder) {
-      setError('Please select a target Google Drive folder first');
+      setError(getValidationErrorMessage('Please select a target Google Drive folder first'));
       return;
     }
 
@@ -370,7 +371,7 @@ export default function Settings({
       setFolders(folderList);
     } catch (err) {
       console.error(err);
-      setError('Could not retrieve Google Drive folders. The session may have expired.');
+      setError(getFolderErrorMessage(err, 'load Google Drive folders'));
     } finally {
       setLoadingFolders(false);
     }
@@ -393,7 +394,7 @@ export default function Settings({
       await fetchFolders(currentParentId); // refresh current view
     } catch (err) {
       console.error(err);
-      setError('Failed to create folder. Make sure you have permission.');
+      setError(getDriveErrorMessage(err, 'create folder'));
     }
   };
 

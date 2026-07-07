@@ -3,7 +3,7 @@ import {
   MapPin, X, ZoomIn, ZoomOut, RotateCcw,
   AlertTriangle, Loader2,
 } from 'lucide-react';
-import { getDriveErrorMessage, getUploadErrorMessage } from '../services/appErrors';
+import { STATUS_MESSAGES, getDriveErrorMessage, getUploadErrorMessage, getValidationErrorMessage } from '../services/appErrors';
 import {
   addBlueprintPin,
   deleteBlueprintPin,
@@ -225,7 +225,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
     // Filter for images only
     if (!file.type.startsWith('image/')) {
-      setError('Please upload your floor plan as a standard image (PNG, JPEG, WebP, or SVG). PDF support is coming soon.');
+      setError(getValidationErrorMessage('Please upload your floor plan as a standard image (PNG, JPEG, WebP, or SVG). PDF support is coming soon.'));
       return;
     }
 
@@ -299,7 +299,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   const handleSavePin = async (e) => {
     e.preventDefault();
     if (!formData.note.trim()) {
-      setError('Please add a brief description of the work.');
+      setError(getValidationErrorMessage('Please add a brief description of the work.'));
       return;
     }
 
@@ -424,7 +424,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '60px 20px', gap: '12px' }}>
           <Loader2 className="animate-spin" size={32} style={{ color: 'var(--color-amber-500)' }} />
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-400)' }}>Syncing blueprint vault...</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-400)' }}>{STATUS_MESSAGES.loadingBlueprint}</span>
         </div>
       ) : viewMode === 'albums' ? (
         <BlueprintPhaseAlbums

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Edit2, CloudLightning, FileText, CheckCircle, Trash2, Clock } from 'lucide-react';
+import { STATUS_MESSAGES } from '../services/appErrors';
 
 function formatTime(ms) {
   const totalSecs = Math.floor(ms / 1000);
@@ -343,7 +344,7 @@ export default function StagingCard({
             {uploading ? (
               <>
                 <div className="spinner" style={{ width: '12px', height: '12px', borderWidth: '1.5px', borderColor: 'var(--color-zinc-950)', borderTopColor: 'transparent', margin: 0 }}></div>
-                Syncing...
+                {STATUS_MESSAGES.syncingSpreadsheet}
               </>
             ) : isMockMode ? (
               <>
