@@ -39,9 +39,8 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
   useEffect(() => {
     const normalizeStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
-    // 1. Find matching subcontractor payee from the sheet
+    // 1. Find matching subcontractor payee from the sheet (matching by phase name, just like the dashboard does)
     const matchedSub = subcontractors.find(sub => 
-      normalizeStr(sub.category) === normalizeStr(category) && 
       normalizeStr(sub.phase) === normalizeStr(tradePhase)
     );
     let name = matchedSub?.payee || '';
@@ -58,7 +57,7 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
     if (!name && issues && issues.length > 0) {
       const pastIssue = [...issues]
         .reverse()
-        .find(i => normalizeStr(i.category) === normalizeStr(category) && (!tradePhase || normalizeStr(i.tradePhase) === normalizeStr(tradePhase)) && i.contractorName);
+        .find(i => (!tradePhase || normalizeStr(i.tradePhase) === normalizeStr(tradePhase)) && i.contractorName);
       if (pastIssue) name = pastIssue.contractorName;
     }
 
