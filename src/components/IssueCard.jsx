@@ -142,12 +142,23 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
 
       const text = buildMessageText(issue);
 
+      // Copy text to clipboard so they can paste it as a caption in WhatsApp/SMS
+      try {
+        await navigator.clipboard.writeText(text);
+      } catch (clipErr) {
+        console.warn('Failed to copy to clipboard:', clipErr);
+      }
+
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        // Share ONLY the file to bypass WhatsApp text+file bugs on mobile devices
         await navigator.share({
-          files: [file],
-          title: `Punch List: ${issue.title}`,
-          text: text
+          files: [file]
         });
+        
+        // Alert AFTER share sheet triggers so it doesn't break user interaction token
+        setTimeout(() => {
+          alert('📋 Photo shared! Description copied to clipboard. You can paste it in the chat.');
+        }, 800);
       } else if (navigator.share) {
         await navigator.share({
           title: `Punch List: ${issue.title}`,
