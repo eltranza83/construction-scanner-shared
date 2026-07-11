@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
-import { buildMessageLink } from '../services/messageLinkHelper';
+import { buildMessageLink, buildMessageText } from '../services/messageLinkHelper';
 
 export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
   const [showShareMenu, setShowShareMenu] = useState(false);
@@ -93,6 +93,56 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
     const link = buildMessageLink(issue, platform);
     window.open(link, '_blank');
     setShowShareMenu(false);
+  };
+
+  const handleNativeShare = async () => {
+    try {
+      let file = null;
+      
+      // If we have local base64, convert to File
+      if (issue.photoBase64) {
+        const mimeType = issue.photoBase64.match(/:(.*?);/)[1] || 'image/jpeg';
+        const parts = issue.photoBase64.split(';base64,');
+        const raw = window.atob(parts[1] || parts[0]);
+        const rawLength = raw.length;
+        const u8arr = new Uint8Array(rawLength);
+        for (let i = 0; i < rawLength; ++i) {
+          u8arr[i] = raw.charCodeAt(i);
+        }
+        const blob = new Blob([u8arr], { type: mimeType });
+        file = new File([blob], `issue_photo.jpg`, { type: mimeType });
+      } else if (issue.photoUrl) {
+        try {
+          const res = await fetch(issue.photoUrl);
+          const blob = await res.blob();
+          const mimeType = blob.type || 'image/jpeg';
+          file = new File([blob], `issue_photo.jpg`, { type: mimeType });
+        } catch (fetchErr) {
+          console.warn('Failed to fetch remote photo for native share:', fetchErr);
+        }
+      }
+
+      const text = buildMessageText(issue);
+
+      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title: `Punch List: ${issue.title}`,
+          text: text,
+          files: [file]
+        });
+      } else if (navigator.share) {
+        await navigator.share({
+          title: `Punch List: ${issue.title}`,
+          text: text
+        });
+      } else {
+        alert('Sharing is not supported on this device/browser.');
+      }
+    } catch (err) {
+      console.warn('Native share failed or cancelled:', err);
+    } finally {
+      setShowShareMenu(false);
+    }
   };
 
   return (
@@ -303,6 +353,31 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                     }}>
                       ⚠️ Photo upload pending sync. Tap "Sync" first.
                     </div>
+                  )}
+
+                  {(issue.photoBase64 || issue.photoUrl) && (
+                    <button
+                      onClick={handleNativeShare}
+                      style={{
+                        padding: '8px 12px',
+                        fontSize: '0.8rem',
+                        color: 'var(--color-zinc-200)',
+                        backgroundColor: 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                        borderRadius: '4px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        borderBottom: '1px solid var(--color-zinc-800)'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-zinc-800)'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <span style={{ color: 'var(--color-amber-500)', fontWeight: 'bold' }}>📤</span>
+                      <span>Share Photo + Text</span>
+                    </button>
                   )}
                   <button
                     onClick={() => handleShareClick('whatsapp')}
