@@ -137,6 +137,16 @@ export function useIssues({ googleToken, activeProject }) {
             const uploadResult = await uploadIssuePhoto(googleToken, activeProject.folderId, fileObj);
             op.payload.photoUrl = uploadResult.url;
             op.payload.photoFileId = uploadResult.id;
+
+            // Cache base64 photo locally on this device before stripping it from operations payload
+            if (op.payload.photoBase64) {
+              try {
+                localStorage.setItem(`jobscan_photo_${op.id}`, op.payload.photoBase64);
+              } catch (e) {
+                console.warn('Failed to cache base64 photo locally during sync:', e);
+              }
+            }
+
             delete op.payload.photoBase64; // Remove base64 data to keep JSON light
           } catch (uploadErr) {
             console.error('Failed to upload offline photo during sync:', uploadErr);
@@ -253,6 +263,15 @@ export function useIssues({ googleToken, activeProject }) {
     const updatedList = [...issues, localNewIssue];
     setIssues(updatedList);
     localStorage.setItem(cacheKey, JSON.stringify(updatedList));
+
+    // Cache the base64 photo locally on this device permanently
+    if (photoBase64) {
+      try {
+        localStorage.setItem(`jobscan_photo_${newId}`, photoBase64);
+      } catch (e) {
+        console.warn('Failed to cache base64 photo locally:', e);
+      }
+    }
 
     // Try to trigger online sync
     if (googleToken && activeProject?.folderId) {

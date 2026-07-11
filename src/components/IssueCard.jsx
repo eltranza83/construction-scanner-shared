@@ -114,12 +114,13 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
   const handleNativeShare = async () => {
     try {
       let file = null;
+      const cachedBase64 = issue.photoBase64 || localStorage.getItem(`jobscan_photo_${issue.id}`);
       
       // If we have local base64, convert to File
-      if (issue.photoBase64) {
-        const mimeTypeMatch = issue.photoBase64.match(/:(.*?);/);
+      if (cachedBase64) {
+        const mimeTypeMatch = cachedBase64.match(/:(.*?);/);
         const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
-        const parts = issue.photoBase64.split(';base64,');
+        const parts = cachedBase64.split(';base64,');
         const raw = window.atob(parts[1] || parts[0]);
         const rawLength = raw.length;
         const u8arr = new Uint8Array(rawLength);
@@ -360,7 +361,7 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                   zIndex: 1000,
                   minWidth: '160px'
                 }}>
-                  {issue.photoBase64 && !issue.photoUrl && (
+                  {!issue.photoUrl && (issue.photoBase64 || localStorage.getItem(`jobscan_photo_${issue.id}`)) && (
                     <div style={{
                       padding: '6px 8px',
                       fontSize: '0.68rem',
@@ -371,11 +372,11 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                       lineHeight: '1.3',
                       textAlign: 'center'
                     }}>
-                      ⚠️ Photo upload pending sync. Tap "Sync" first.
+                      ⚠️ Photo upload pending sync. Direct links won't include photo.
                     </div>
                   )}
 
-                  {(issue.photoBase64 || issue.photoUrl) && (
+                  {(issue.photoBase64 || issue.photoUrl || localStorage.getItem(`jobscan_photo_${issue.id}`)) && (
                     <button
                       onClick={handleNativeShare}
                       style={{
