@@ -37,18 +37,28 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
 
   // Pre-fill contractor name and phone number from sheet or cloud contacts or past issues
   useEffect(() => {
+    const normalizeStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+
     // 1. Find matching subcontractor payee from the sheet
     const matchedSub = subcontractors.find(sub => 
-      sub.category === category && 
-      sub.phase?.toLowerCase() === tradePhase?.toLowerCase()
+      normalizeStr(sub.category) === normalizeStr(category) && 
+      normalizeStr(sub.phase) === normalizeStr(tradePhase)
     );
     let name = matchedSub?.payee || '';
+    
+    // Ignore default placeholder payee names
+    const isPlaceholder = name.toLowerCase().endsWith('payee') || 
+                          name.toLowerCase().includes('placeholder') ||
+                          name.toLowerCase() === `${tradePhase.toLowerCase()} contractor`;
+    if (isPlaceholder) {
+      name = '';
+    }
     
     // 2. If no payee name found in spreadsheet for this phase, look up past issues
     if (!name && issues && issues.length > 0) {
       const pastIssue = [...issues]
         .reverse()
-        .find(i => i.category === category && (!tradePhase || i.tradePhase === tradePhase) && i.contractorName);
+        .find(i => normalizeStr(i.category) === normalizeStr(category) && (!tradePhase || normalizeStr(i.tradePhase) === normalizeStr(tradePhase)) && i.contractorName);
       if (pastIssue) name = pastIssue.contractorName;
     }
 
