@@ -451,3 +451,27 @@ export async function updateFileContent(accessToken, fileId, fileBlob, mimeType)
   return await response.json();
 }
 
+/**
+ * Updates a file's permission on Google Drive to be publicly readable by anyone with the link.
+ */
+export async function makeFilePubliclyReadable(accessToken, fileId) {
+  const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileId}/permissions`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      role: 'reader',
+      type: 'anyone'
+    })
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to make file publicly readable: ${errText}`);
+  }
+  return true;
+}
+
+

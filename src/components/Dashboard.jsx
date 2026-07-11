@@ -15,6 +15,8 @@ import DashboardKpiCards from './DashboardKpiCards';
 import DashboardPhotoReminders from './DashboardPhotoReminders';
 import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
+import { useIssues } from '../hooks/useIssues';
+import DashboardPunchList from './DashboardPunchList';
 
 export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired }) {
   const [data, setData] = useState(null);
@@ -23,6 +25,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSub, setSelectedSub] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
+  const [subTab, setSubTab] = useState('financials'); // 'financials' or 'punch_list'
+
+  const issuesState = useIssues({ googleToken, activeProject });
+
 
   // Inspection Photos & Reminders State
   const [activeGalleryPhase, setActiveGalleryPhase] = useState(null);
@@ -324,80 +330,157 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       {/* Header Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>Project Financial Dashboard</h2>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>
+            {subTab === 'financials' ? 'Project Financial Dashboard' : 'Project Punch List'}
+          </h2>
           {data?.projectInfo?.address && (
             <p style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
               {data.projectInfo.address}, {data.projectInfo.cityStateZip}
             </p>
           )}
         </div>
+        {subTab === 'financials' && (
+          <button
+            onClick={() => loadDashboardData(true)}
+            className="btn btn-secondary"
+            style={{ width: 'auto', padding: '6px 10px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}
+            disabled={loading}
+          >
+            <RefreshCw size={12} className={loading ? 'spin' : ''} />
+            {loading ? STATUS_MESSAGES.refreshing : STATUS_MESSAGES.refresh}
+          </button>
+        )}
+      </div>
+
+      {/* Top Toggle Controls */}
+      <div style={{
+        display: 'flex',
+        backgroundColor: 'var(--color-zinc-950)',
+        border: '1px solid var(--color-zinc-800)',
+        borderRadius: '8px',
+        padding: '3px',
+        margin: '2px 0 6px 0'
+      }}>
         <button
-          onClick={() => loadDashboardData(true)}
-          className="btn btn-secondary"
-          style={{ width: 'auto', padding: '6px 10px', height: '32px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem' }}
-          disabled={loading}
+          onClick={() => setSubTab('financials')}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            border: 'none',
+            borderRadius: '6px',
+            backgroundColor: subTab === 'financials' ? 'var(--color-zinc-800)' : 'transparent',
+            color: subTab === 'financials' ? '#fff' : 'var(--color-zinc-400)',
+            cursor: 'pointer',
+            transition: 'all 0.2s'
+          }}
         >
-          <RefreshCw size={12} className={loading ? 'spin' : ''} />
-          {loading ? STATUS_MESSAGES.refreshing : STATUS_MESSAGES.refresh}
+          Financials
+        </button>
+        <button
+          onClick={() => setSubTab('punch_list')}
+          style={{
+            flex: 1,
+            padding: '8px 12px',
+            fontSize: '0.85rem',
+            fontWeight: 600,
+            border: 'none',
+            borderRadius: '6px',
+            backgroundColor: subTab === 'punch_list' ? 'var(--color-zinc-800)' : 'transparent',
+            color: subTab === 'punch_list' ? '#fff' : 'var(--color-zinc-400)',
+            cursor: 'pointer',
+            transition: 'all 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px'
+          }}
+        >
+          <span>Punch List</span>
+          {issuesState.issues.filter(i => !i.deletedAt && i.status !== 'resolved').length > 0 && (
+            <span style={{
+              backgroundColor: '#ef4444',
+              color: '#fff',
+              fontSize: '0.7rem',
+              fontWeight: 700,
+              borderRadius: '10px',
+              padding: '2px 6px',
+              lineHeight: 1
+            }}>
+              {issuesState.issues.filter(i => !i.deletedAt && i.status !== 'resolved').length}
+            </span>
+          )}
         </button>
       </div>
 
-      {error && (
+      {error && subTab === 'financials' && (
         <div className="alert-box alert-error" style={{ fontSize: '0.78rem', margin: 0, padding: '10px 12px' }}>
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
           {error}
         </div>
       )}
 
-      {/* Loading Placeholder */}
-      {loading && !data && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '40px 0', alignItems: 'center' }}>
-          <div className="spinner" style={{ width: '28px', height: '28px', borderWidth: '3px' }}></div>
-          <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)' }}>{STATUS_MESSAGES.loadingDashboard}</span>
-        </div>
-      )}
-
-      {data && (
+      {subTab === 'punch_list' ? (
+        <DashboardPunchList
+          issuesState={issuesState}
+          googleToken={googleToken}
+          activeProject={activeProject}
+        />
+      ) : (
         <>
-          <DashboardKpiCards
-            projectInfo={data.projectInfo}
-            formatCurrency={formatCurrency}
-          />
+          {/* Loading Placeholder */}
+          {loading && !data && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', padding: '40px 0', alignItems: 'center' }}>
+              <div className="spinner" style={{ width: '28px', height: '28px', borderWidth: '3px' }}></div>
+              <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)' }}>{STATUS_MESSAGES.loadingDashboard}</span>
+            </div>
+          )}
 
-          <DashboardPhotoReminders
-            reminders={activeReminders}
-            getPhaseReminderTip={getPhaseReminderTip}
-            onSnoozeReminder={snoozeReminder}
-            onDismissReminder={dismissReminder}
-            onPhotoUpload={handlePhotoUpload}
-          />
+          {data && (
+            <>
+              <DashboardKpiCards
+                projectInfo={data.projectInfo}
+                formatCurrency={formatCurrency}
+              />
 
-          <DashboardContractorSearch
-            searchTerm={searchTerm}
-            suggestions={suggestions}
-            selectedSub={selectedSub}
-            formatCurrency={formatCurrency}
-            getStatusStyle={getStatusStyle}
-            onSearchTermChange={(value) => {
-              setSearchTerm(value);
-              setSelectedSub(null);
-            }}
-            onSelectSubcontractor={selectSubcontractor}
-            onClearSelection={() => setSelectedSub(null)}
-            onViewPhasePhotos={setActiveGalleryPhase}
-          />
+              <DashboardPhotoReminders
+                reminders={activeReminders}
+                getPhaseReminderTip={getPhaseReminderTip}
+                onSnoozeReminder={snoozeReminder}
+                onDismissReminder={dismissReminder}
+                onPhotoUpload={handlePhotoUpload}
+              />
 
-          {/* Trade Phase Categories Accordion List */}
-          <DashboardTradeSections
-            categories={data.categories}
-            subcontractors={data.subcontractors}
-            expandedCategories={expandedCategories}
-            onToggleCategory={toggleCategory}
-            onSelectSubcontractor={selectSubcontractor}
-            formatCurrency={formatCurrency}
-          />
+              <DashboardContractorSearch
+                searchTerm={searchTerm}
+                suggestions={suggestions}
+                selectedSub={selectedSub}
+                formatCurrency={formatCurrency}
+                getStatusStyle={getStatusStyle}
+                onSearchTermChange={(value) => {
+                  setSearchTerm(value);
+                  setSelectedSub(null);
+                }}
+                onSelectSubcontractor={selectSubcontractor}
+                onClearSelection={() => setSelectedSub(null)}
+                onViewPhasePhotos={setActiveGalleryPhase}
+              />
+
+              {/* Trade Phase Categories Accordion List */}
+              <DashboardTradeSections
+                categories={data.categories}
+                subcontractors={data.subcontractors}
+                expandedCategories={expandedCategories}
+                onToggleCategory={toggleCategory}
+                onSelectSubcontractor={selectSubcontractor}
+                formatCurrency={formatCurrency}
+              />
+            </>
+          )}
         </>
       )}
+
       <DashboardPhotoGallery
         activeGalleryPhase={activeGalleryPhase}
         photos={photos}
@@ -408,6 +491,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         onPhotoUpload={handlePhotoUpload}
         onOpenPhoto={setFullscreenPhoto}
         onClosePhoto={() => setFullscreenPhoto(null)}
+
         getPhaseReminderTip={getPhaseReminderTip}
       />
     </div>
