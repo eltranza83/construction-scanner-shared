@@ -6,6 +6,9 @@ import BlueprintCanvasView from './BlueprintCanvasView';
 import BlueprintFullscreenPhotoModal from './BlueprintFullscreenPhotoModal';
 import BlueprintPhaseAlbums from './BlueprintPhaseAlbums';
 import BlueprintSetupPrompt from './BlueprintSetupPrompt';
+import { useIssues } from '../hooks/useIssues';
+import DashboardPunchList from './DashboardPunchList';
+
 
 // Subcontractor categories and phases matching EditForm config
 export const TRADE_SECTIONS_CONFIG = {
@@ -56,7 +59,7 @@ export const TRADE_SECTIONS_CONFIG = {
   }
 };
 
-function BlueprintViewModeToggle({ viewMode, onSetViewMode }) {
+function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount }) {
   return (
     <div style={{ display: 'flex', gap: '8px', padding: '2px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '8px', width: 'fit-content' }}>
       <button
@@ -91,6 +94,38 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode }) {
       >
         Phase Albums
       </button>
+      <button
+        onClick={() => onSetViewMode('punch_list')}
+        style={{
+          padding: '6px 12px',
+          fontSize: '0.74rem',
+          fontWeight: 700,
+          borderRadius: '6px',
+          border: 'none',
+          backgroundColor: viewMode === 'punch_list' ? 'var(--color-amber-500)' : 'transparent',
+          color: viewMode === 'punch_list' ? '#000' : 'var(--color-zinc-400)',
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px'
+        }}
+      >
+        <span>Punch List</span>
+        {activeIssuesCount > 0 && (
+          <span style={{
+            backgroundColor: viewMode === 'punch_list' ? '#000' : '#ef4444',
+            color: viewMode === 'punch_list' ? 'var(--color-amber-500)' : '#fff',
+            fontSize: '0.65rem',
+            fontWeight: 700,
+            borderRadius: '10px',
+            padding: '1px 5px',
+            lineHeight: 1
+          }}>
+            {activeIssuesCount}
+          </span>
+        )}
+      </button>
     </div>
   );
 }
@@ -112,20 +147,29 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     tradeSectionsConfig: TRADE_SECTIONS_CONFIG
   });
 
+  const issuesState = useIssues({ googleToken, activeProject });
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {pinboard.success && <div className="alert-box alert-success">{pinboard.success}</div>}
       {pinboard.error && <div className="alert-box alert-error">{pinboard.error}</div>}
 
-      {!pinboard.loading && pinboard.imageSrc && (
+      {!pinboard.loading && (
         <BlueprintViewModeToggle
           viewMode={pinboard.viewMode}
           onSetViewMode={pinboard.setViewMode}
+          activeIssuesCount={issuesState.issues.filter(i => !i.deletedAt && i.status !== 'resolved').length}
         />
       )}
 
       {pinboard.loading ? (
         <BlueprintLoadingState message={pinboard.statusMessages.loadingBlueprint} />
+      ) : pinboard.viewMode === 'punch_list' ? (
+        <DashboardPunchList
+          issuesState={issuesState}
+          googleToken={googleToken}
+          activeProject={activeProject}
+        />
       ) : pinboard.viewMode === 'albums' ? (
         <BlueprintPhaseAlbums
           activeAlbumPhase={pinboard.activeAlbumPhase}
@@ -164,6 +208,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           zoomScale={pinboard.zoomScale}
         />
       )}
+
 
       <BlueprintAddPinModal
         isOpen={pinboard.showAddForm}
