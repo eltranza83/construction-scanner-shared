@@ -288,8 +288,22 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                   gap: '2px',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                   zIndex: 1000,
-                  minWidth: '140px'
+                  minWidth: '160px'
                 }}>
+                  {issue.photoBase64 && !issue.photoUrl && (
+                    <div style={{
+                      padding: '6px 8px',
+                      fontSize: '0.68rem',
+                      color: 'var(--color-amber-500)',
+                      backgroundColor: 'rgba(197, 160, 89, 0.08)',
+                      borderBottom: '1px solid var(--color-zinc-800)',
+                      borderRadius: '4px 4px 0 0',
+                      lineHeight: '1.3',
+                      textAlign: 'center'
+                    }}>
+                      ⚠️ Photo upload pending sync. Tap "Sync" first.
+                    </div>
+                  )}
                   <button
                     onClick={() => handleShareClick('whatsapp')}
                     style={{
