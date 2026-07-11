@@ -28,9 +28,9 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
     }
   }, [category]);
 
-  // Detect support for Contacts Picker API
+  // Detect support for Contacts Picker API (supported on mobile devices)
   useEffect(() => {
-    if (navigator.contacts && window.ContactsManager) {
+    if (navigator.contacts && typeof navigator.contacts.select === 'function') {
       setShowContactPickerBtn(true);
     }
   }, []);
