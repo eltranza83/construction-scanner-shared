@@ -27,3 +27,4 @@ dist-ssr/
 *.njsproj
 *.sln
 *.swp
+.vercel

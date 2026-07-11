@@ -117,7 +117,8 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
       
       // If we have local base64, convert to File
       if (issue.photoBase64) {
-        const mimeType = issue.photoBase64.match(/:(.*?);/)[1] || 'image/jpeg';
+        const mimeTypeMatch = issue.photoBase64.match(/:(.*?);/);
+        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
         const parts = issue.photoBase64.split(';base64,');
         const raw = window.atob(parts[1] || parts[0]);
         const rawLength = raw.length;
@@ -142,9 +143,9 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
 
       if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
+          files: [file],
           title: `Punch List: ${issue.title}`,
-          text: text,
-          files: [file]
+          text: text
         });
       } else if (navigator.share) {
         await navigator.share({
@@ -156,6 +157,9 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
       }
     } catch (err) {
       console.warn('Native share failed or cancelled:', err);
+      if (err.name !== 'AbortError' && !String(err).includes('cancel')) {
+        alert('Share failed: ' + (err.message || err));
+      }
     } finally {
       setShowShareMenu(false);
     }
