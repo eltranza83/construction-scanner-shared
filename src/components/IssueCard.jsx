@@ -2,6 +2,22 @@ import React, { useState } from 'react';
 import { MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
 import { buildMessageLink, buildMessageText } from '../services/messageLinkHelper';
 
+function getDisplayImageUrl(url, base64, size = 'w200') {
+  if (base64) return base64;
+  if (!url) return '';
+  
+  if (url.startsWith('data:')) return url;
+  
+  const driveIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+  if (driveIdMatch && driveIdMatch[1]) {
+    const fileId = driveIdMatch[1];
+    const widthParam = size === 'w1000' ? 'w1000' : 'w200';
+    return `https://drive.google.com/thumbnail?id=${fileId}&sz=${widthParam}`;
+  }
+  
+  return url;
+}
+
 export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [isFullscreenPhoto, setIsFullscreenPhoto] = useState(false);
@@ -237,10 +253,10 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
           )}
         </div>
 
-        {photoUrl && (
+        {(photoUrl || issue.photoBase64) && (
           <div style={{ position: 'relative' }}>
             <img
-              src={photoUrl}
+              src={getDisplayImageUrl(photoUrl, issue.photoBase64, 'w200')}
               alt="Issue thumbnail"
               onClick={() => setIsFullscreenPhoto(true)}
               style={{
@@ -248,8 +264,8 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                 height: '60px',
                 objectFit: 'cover',
                 borderRadius: '8px',
-                border: '1px solid var(--color-zinc-800)',
-                cursor: 'pointer'
+                cursor: 'pointer',
+                border: '1px solid var(--color-zinc-800)'
               }}
             />
           </div>
@@ -464,7 +480,7 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
             <X size={24} />
           </button>
           <img
-            src={photoUrl}
+            src={getDisplayImageUrl(photoUrl, issue.photoBase64, 'w1000')}
             alt="Fullscreen Issue proof"
             style={{
               maxWidth: '100%',
