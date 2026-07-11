@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
-import { buildMessageLink, buildMessageText } from '../services/messageLinkHelper';
+import { buildMessageLink } from '../services/messageLinkHelper';
 
 function getDisplayImageUrl(url, base64, size = 'w200') {
   if (base64) return base64;
@@ -111,71 +111,7 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
     setShowShareMenu(false);
   };
 
-  const handleNativeShare = async () => {
-    try {
-      let file = null;
-      const cachedBase64 = issue.photoBase64 || localStorage.getItem(`jobscan_photo_${issue.id}`);
-      
-      // If we have local base64, convert to File
-      if (cachedBase64) {
-        const mimeTypeMatch = cachedBase64.match(/:(.*?);/);
-        const mimeType = mimeTypeMatch ? mimeTypeMatch[1] : 'image/jpeg';
-        const parts = cachedBase64.split(';base64,');
-        const raw = window.atob(parts[1] || parts[0]);
-        const rawLength = raw.length;
-        const u8arr = new Uint8Array(rawLength);
-        for (let i = 0; i < rawLength; ++i) {
-          u8arr[i] = raw.charCodeAt(i);
-        }
-        const blob = new Blob([u8arr], { type: mimeType });
-        file = new File([blob], `issue_photo.jpg`, { type: mimeType });
-      } else if (issue.photoUrl) {
-        try {
-          const res = await fetch(issue.photoUrl);
-          const blob = await res.blob();
-          const mimeType = blob.type || 'image/jpeg';
-          file = new File([blob], `issue_photo.jpg`, { type: mimeType });
-        } catch (fetchErr) {
-          console.warn('Failed to fetch remote photo for native share:', fetchErr);
-        }
-      }
 
-      const text = buildMessageText(issue);
-
-      // Copy text to clipboard so they can paste it as a caption in WhatsApp/SMS
-      try {
-        await navigator.clipboard.writeText(text);
-      } catch (clipErr) {
-        console.warn('Failed to copy to clipboard:', clipErr);
-      }
-
-      if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-        // Share ONLY the file to bypass WhatsApp text+file bugs on mobile devices
-        await navigator.share({
-          files: [file]
-        });
-        
-        // Alert AFTER share sheet triggers so it doesn't break user interaction token
-        setTimeout(() => {
-          alert('📋 Photo shared! Description copied to clipboard. You can paste it in the chat.');
-        }, 800);
-      } else if (navigator.share) {
-        await navigator.share({
-          title: `Punch List: ${issue.title}`,
-          text: text
-        });
-      } else {
-        alert('Sharing is not supported on this device/browser.');
-      }
-    } catch (err) {
-      console.warn('Native share failed or cancelled:', err);
-      if (err.name !== 'AbortError' && !String(err).includes('cancel')) {
-        alert('Share failed: ' + (err.message || err));
-      }
-    } finally {
-      setShowShareMenu(false);
-    }
-  };
 
   return (
     <div style={{
@@ -370,47 +306,8 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
                   gap: '2px',
                   boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
                   zIndex: 1000,
-                  minWidth: '160px'
+                  minWidth: '140px'
                 }}>
-                  {!issue.photoUrl && (issue.photoBase64 || localStorage.getItem(`jobscan_photo_${issue.id}`)) && (
-                    <div style={{
-                      padding: '6px 8px',
-                      fontSize: '0.68rem',
-                      color: 'var(--color-amber-500)',
-                      backgroundColor: 'rgba(197, 160, 89, 0.08)',
-                      borderBottom: '1px solid var(--color-zinc-800)',
-                      borderRadius: '4px 4px 0 0',
-                      lineHeight: '1.3',
-                      textAlign: 'center'
-                    }}>
-                      ⚠️ Photo upload pending sync. Direct links won't include photo.
-                    </div>
-                  )}
-
-                  {(issue.photoBase64 || issue.photoUrl || localStorage.getItem(`jobscan_photo_${issue.id}`)) && (
-                    <button
-                      onClick={handleNativeShare}
-                      style={{
-                        padding: '8px 12px',
-                        fontSize: '0.8rem',
-                        color: 'var(--color-zinc-200)',
-                        backgroundColor: 'transparent',
-                        border: 'none',
-                        textAlign: 'left',
-                        cursor: 'pointer',
-                        borderRadius: '4px',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        borderBottom: '1px solid var(--color-zinc-800)'
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-zinc-800)'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                    >
-                      <span style={{ color: 'var(--color-amber-500)', fontWeight: 'bold' }}>📤</span>
-                      <span>Share Photo + Text</span>
-                    </button>
-                  )}
                   <button
                     onClick={() => handleShareClick('whatsapp')}
                     style={{
