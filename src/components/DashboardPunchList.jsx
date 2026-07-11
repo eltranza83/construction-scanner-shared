@@ -7,7 +7,8 @@ import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';
 export default function DashboardPunchList({
   issuesState,
   googleToken,
-  activeProject
+  activeProject,
+  subcontractors = []
 }) {
   const {
     issues = [],
@@ -266,6 +267,8 @@ export default function DashboardPunchList({
       {showAddModal && (
         <IssueFormModal
           issues={issues}
+          contacts={issuesState.contacts || {}}
+          subcontractors={subcontractors}
           onSave={handleSaveIssue}
           onClose={() => setShowAddModal(false)}
         />

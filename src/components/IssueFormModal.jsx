@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Upload, Check } from 'lucide-react';
 import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';
 
-export default function IssueFormModal({ issues, onSave, onClose }) {
+export default function IssueFormModal({ issues, contacts = {}, subcontractors = [], onSave, onClose }) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState(Object.keys(TRADE_SECTIONS_CONFIG)[0]);
@@ -12,6 +12,7 @@ export default function IssueFormModal({ issues, onSave, onClose }) {
   const [priority, setPriority] = useState('medium'); // 'low' | 'medium' | 'high'
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
+  const [showContactPickerBtn, setShowContactPickerBtn] = useState(false);
 
   const fileInputRef = useRef(null);
 
@@ -27,29 +28,67 @@ export default function IssueFormModal({ issues, onSave, onClose }) {
     }
   }, [category]);
 
-  // Pre-fill contractor name and phone number from past issues for this category/phase
+  // Detect support for Contacts Picker API
   useEffect(() => {
-    if (!issues || issues.length === 0) return;
-
-    // Find the latest issue in this category and phase (or just category as fallback)
-    const matchingIssue = [...issues]
-      .reverse() // latest first
-      .find(i => i.category === category && (!tradePhase || i.tradePhase === tradePhase) && (i.contractorName || i.phoneNumber));
-
-    const fallbackIssue = [...issues]
-      .reverse()
-      .find(i => i.category === category && (i.contractorName || i.phoneNumber));
-
-    const selectedIssue = matchingIssue || fallbackIssue;
-
-    if (selectedIssue) {
-      setContractorName(selectedIssue.contractorName || '');
-      setPhoneNumber(selectedIssue.phoneNumber || '');
-    } else {
-      setContractorName('');
-      setPhoneNumber('');
+    if (navigator.contacts && window.ContactsManager) {
+      setShowContactPickerBtn(true);
     }
-  }, [category, tradePhase, issues]);
+  }, []);
+
+  // Pre-fill contractor name and phone number from sheet or cloud contacts or past issues
+  useEffect(() => {
+    // 1. Find matching subcontractor payee from the sheet
+    const matchedSub = subcontractors.find(sub => 
+      sub.category === category && 
+      sub.phase?.toLowerCase() === tradePhase?.toLowerCase()
+    );
+    let name = matchedSub?.payee || '';
+    
+    // 2. If no payee name found in spreadsheet for this phase, look up past issues
+    if (!name && issues && issues.length > 0) {
+      const pastIssue = [...issues]
+        .reverse()
+        .find(i => i.category === category && (!tradePhase || i.tradePhase === tradePhase) && i.contractorName);
+      if (pastIssue) name = pastIssue.contractorName;
+    }
+
+    // 3. Find phone number from the Drive contacts directory
+    let phone = '';
+    if (name) {
+      phone = contacts[name] || '';
+    }
+
+    // 4. If no phone found, check past issues for a phone number for this contractor name or phase
+    if (!phone && name && issues && issues.length > 0) {
+      const pastIssueWithPhone = [...issues]
+        .reverse()
+        .find(i => i.contractorName === name && i.phoneNumber);
+      if (pastIssueWithPhone) {
+        phone = pastIssueWithPhone.phoneNumber;
+      }
+    }
+
+    setContractorName(name);
+    setPhoneNumber(phone);
+  }, [category, tradePhase, subcontractors, contacts, issues]);
+
+  // Handle Contact Picker selection
+  const handleSelectContact = async () => {
+    try {
+      const props = ['name', 'tel'];
+      const opts = { multiple: false };
+      const selected = await navigator.contacts.select(props, opts);
+      if (selected && selected.length > 0) {
+        const contact = selected[0];
+        const rawName = contact.name?.[0] || '';
+        const rawPhone = contact.tel?.[0] || '';
+        if (rawName) setContractorName(rawName);
+        if (rawPhone) setPhoneNumber(rawPhone);
+      }
+    } catch (err) {
+      console.warn('Contact picker cancelled or failed:', err);
+    }
+  };
 
   const handlePhotoChange = (e) => {
     const file = e.target.files[0];
@@ -92,6 +131,7 @@ export default function IssueFormModal({ issues, onSave, onClose }) {
       photoFile
     });
   };
+
 
   return (
     <div className="modal-backdrop">
@@ -249,28 +289,54 @@ export default function IssueFormModal({ issues, onSave, onClose }) {
           </div>
 
           {/* Contractor Details */}
-          <div style={{ display: 'flex', gap: '12px' }}>
-            <div style={{ flex: 1 }}>
-              <label className="form-label" htmlFor="contractor-name">Contractor Name</label>
-              <input
-                id="contractor-name"
-                type="text"
-                className="form-input"
-                value={contractorName}
-                onChange={(e) => setContractorName(e.target.value)}
-                placeholder="e.g. John (Plumbing)"
-              />
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>Contractor Details</label>
+              {showContactPickerBtn && (
+                <button
+                  type="button"
+                  onClick={handleSelectContact}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    backgroundColor: 'var(--color-zinc-900)',
+                    border: '1px solid var(--color-zinc-800)',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    color: 'var(--color-amber-500)',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  <span>👤 Import Contact</span>
+                </button>
+              )}
             </div>
-            <div style={{ flex: 1 }}>
-              <label className="form-label" htmlFor="contractor-phone">Phone Number</label>
-              <input
-                id="contractor-phone"
-                type="tel"
-                className="form-input"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                placeholder="e.g. +15550199"
-              />
+            <div style={{ display: 'flex', gap: '12px', marginTop: '6px' }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label" htmlFor="contractor-name" style={{ fontSize: '0.75rem', opacity: 0.8 }}>Name</label>
+                <input
+                  id="contractor-name"
+                  type="text"
+                  className="form-input"
+                  value={contractorName}
+                  onChange={(e) => setContractorName(e.target.value)}
+                  placeholder="e.g. John (Plumbing)"
+                />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="form-label" htmlFor="contractor-phone" style={{ fontSize: '0.75rem', opacity: 0.8 }}>Phone</label>
+                <input
+                  id="contractor-phone"
+                  type="tel"
+                  className="form-input"
+                  value={phoneNumber}
+                  onChange={(e) => setPhoneNumber(e.target.value)}
+                  placeholder="e.g. +15550199"
+                />
+              </div>
             </div>
           </div>
 

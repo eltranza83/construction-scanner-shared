@@ -32,7 +32,8 @@ export async function loadIssuesVault(accessToken, projectFolderId) {
   if (!configJsonFile) {
     return {
       issuesDataFileId: null,
-      issues: []
+      issues: [],
+      contacts: {}
     };
   }
 
@@ -40,13 +41,15 @@ export async function loadIssuesVault(accessToken, projectFolderId) {
     const data = await getFileContent(accessToken, configJsonFile.id);
     return {
       issuesDataFileId: configJsonFile.id,
-      issues: data?.issues || []
+      issues: data?.issues || [],
+      contacts: data?.contacts || {}
     };
   } catch (err) {
     console.error('Failed to parse issues_data.json content:', err);
     return {
       issuesDataFileId: configJsonFile.id,
-      issues: []
+      issues: [],
+      contacts: {}
     };
   }
 }

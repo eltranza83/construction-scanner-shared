@@ -8,6 +8,8 @@ import BlueprintPhaseAlbums from './BlueprintPhaseAlbums';
 import BlueprintSetupPrompt from './BlueprintSetupPrompt';
 import { useIssues } from '../hooks/useIssues';
 import DashboardPunchList from './DashboardPunchList';
+import { loadCachedDashboard } from '../services/dashboardDrive';
+
 
 
 // Subcontractor categories and phases matching EditForm config
@@ -149,6 +151,10 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
   const issuesState = useIssues({ googleToken, activeProject });
 
+  // Read subcontractor payee directory from cached dashboard data
+  const cachedDashboard = loadCachedDashboard(localStorage, activeProject?.id);
+  const subcontractors = cachedDashboard?.subcontractors || [];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
       {pinboard.success && <div className="alert-box alert-success">{pinboard.success}</div>}
@@ -169,6 +175,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           issuesState={issuesState}
           googleToken={googleToken}
           activeProject={activeProject}
+          subcontractors={subcontractors}
         />
       ) : pinboard.viewMode === 'albums' ? (
         <BlueprintPhaseAlbums

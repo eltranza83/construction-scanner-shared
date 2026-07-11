@@ -30,6 +30,7 @@ function base64ToBlob(base64Str, mimeType) {
 
 export function useIssues({ googleToken, activeProject }) {
   const [issues, setIssues] = useState([]);
+  const [contacts, setContacts] = useState({});
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState(null);
@@ -39,6 +40,7 @@ export function useIssues({ googleToken, activeProject }) {
   const projectId = activeProject?.id || 'default';
   const offlineQueueKey = `${OFFLINE_QUEUE_KEY}_${projectId}`;
   const cacheKey = `${CACHED_ISSUES_PREFIX}_${projectId}`;
+  const contactsCacheKey = `jobscan_cached_contacts_${projectId}`;
 
   // Get local queue
   const getOfflineQueue = () => {
@@ -66,22 +68,32 @@ export function useIssues({ googleToken, activeProject }) {
           setIssues([]);
         }
       }
+      const cachedContacts = localStorage.getItem(contactsCacheKey);
+      if (cachedContacts) {
+        try {
+          setContacts(JSON.parse(cachedContacts));
+        } catch {
+          setContacts({});
+        }
+      }
       return;
     }
 
     setLoading(true);
     setError(null);
     try {
-      const { issuesDataFileId: fileId, issues: remoteList } = await loadIssuesVault(
+      const { issuesDataFileId: fileId, issues: remoteList, contacts: remoteContacts } = await loadIssuesVault(
         googleToken,
         activeProject.folderId
       );
       setIssuesDataFileId(fileId);
+      setContacts(remoteContacts || {});
+      localStorage.setItem(contactsCacheKey, JSON.stringify(remoteContacts || {}));
 
       const queue = getOfflineQueue();
       if (queue.length > 0 || forceSync) {
         // We have pending offline operations, trigger merge & upload
-        await processAndSyncQueue(remoteList, fileId);
+        await processAndSyncQueue(remoteList, fileId, remoteContacts || {});
       } else {
         setIssues(remoteList);
         localStorage.setItem(cacheKey, JSON.stringify(remoteList));
@@ -92,6 +104,8 @@ export function useIssues({ googleToken, activeProject }) {
       // Fallback to cache on error
       const cached = localStorage.getItem(cacheKey);
       if (cached) setIssues(JSON.parse(cached));
+      const cachedContacts = localStorage.getItem(contactsCacheKey);
+      if (cachedContacts) setContacts(JSON.parse(cachedContacts));
     } finally {
       setLoading(false);
     }
@@ -103,7 +117,7 @@ export function useIssues({ googleToken, activeProject }) {
   }, [googleToken, activeProject?.id]);
 
   // Execute and upload the merged operations to Drive & Sheets
-  const processAndSyncQueue = async (remoteList, fileId) => {
+  const processAndSyncQueue = async (remoteList, fileId, updatedContacts = contacts) => {
     if (!googleToken || !activeProject?.folderId) return;
 
     setSyncing(true);
@@ -138,7 +152,7 @@ export function useIssues({ googleToken, activeProject }) {
         googleToken,
         activeProject.folderId,
         currentFileId,
-        { issues: mergedList }
+        { issues: mergedList, contacts: updatedContacts }
       );
       setIssuesDataFileId(savedFileId);
 
@@ -171,6 +185,14 @@ export function useIssues({ googleToken, activeProject }) {
     let photoBase64 = null;
     let photoUrl = null;
     let photoFileId = null;
+
+    // Save/update phone number in contacts registry
+    let updatedContacts = { ...contacts };
+    if (contractorName?.trim() && phoneNumber?.trim()) {
+      updatedContacts[contractorName.trim()] = phoneNumber.trim();
+      setContacts(updatedContacts);
+      localStorage.setItem(contactsCacheKey, JSON.stringify(updatedContacts));
+    }
 
     // Handle photo attachment
     if (photoFile) {
@@ -236,7 +258,7 @@ export function useIssues({ googleToken, activeProject }) {
     if (googleToken && activeProject?.folderId) {
       try {
         const { issues: latestRemote } = await loadIssuesVault(googleToken, activeProject.folderId);
-        await processAndSyncQueue(latestRemote, issuesDataFileId);
+        await processAndSyncQueue(latestRemote, issuesDataFileId, updatedContacts);
       } catch {
         // If sync fails, it will remain in queue and sync next time
       }
@@ -332,6 +354,7 @@ export function useIssues({ googleToken, activeProject }) {
 
   return {
     issues,
+    contacts,
     loading,
     syncing,
     error,
