@@ -920,6 +920,14 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   min-width: 0;
 }
 
+.blueprint-toolbar-meta {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
 .blueprint-toolbar-title {
   font-size: 0.78rem;
   color: var(--color-zinc-400);
@@ -927,7 +935,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 }
 
 .blueprint-toolbar-status {
-  font-size: 0.82rem;
+  font-size: 0.76rem;
   font-weight: 800;
   color: #fff;
   line-height: 1.25;
@@ -981,8 +989,13 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     width: 100%;
   }
 
+  .blueprint-toolbar-meta {
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   .blueprint-toolbar-status {
-    font-size: 0.78rem;
+    font-size: 0.76rem;
     max-width: none;
   }
 

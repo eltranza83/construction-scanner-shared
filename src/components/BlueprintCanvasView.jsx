@@ -64,10 +64,12 @@ export default function BlueprintCanvasView({
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
       <div className="blueprint-toolbar">
         <div className="blueprint-toolbar-copy">
-          <span className="blueprint-toolbar-title">X-Ray Floor Plan</span>
-          <span className="blueprint-toolbar-status">
-            X-Ray: {pins.length} | Issues: {locatedIssues.length}
-          </span>
+          <div className="blueprint-toolbar-meta">
+            <span className="blueprint-toolbar-title">X-Ray Floor Plan</span>
+            <span className="blueprint-toolbar-status">
+              X-Ray: {pins.length} | Issues: {locatedIssues.length}
+            </span>
+          </div>
         </div>
 
         <div className="blueprint-toolbar-actions">
@@ -162,24 +164,24 @@ export default function BlueprintCanvasView({
           className="blueprint-reset-button"
           style={{
             position: 'absolute',
-            top: '10px',
-            right: '10px',
-            width: '36px',
-            height: '36px',
+            top: '8px',
+            right: '8px',
+            width: '30px',
+            height: '30px',
             backgroundColor: 'rgba(10, 10, 10, 0.82)',
             border: '1px solid rgba(255,255,255,0.16)',
             color: 'var(--color-rose-500)',
-            borderRadius: '10px',
+            borderRadius: '8px',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
             zIndex: 60,
-            boxShadow: '0 6px 16px rgba(0,0,0,0.35)'
+            boxShadow: '0 4px 12px rgba(0,0,0,0.32)'
           }}
           title="Remove floor plan"
         >
-          <X size={15} />
+          <X size={13} />
         </button>
 
         <div
@@ -299,14 +301,14 @@ export default function BlueprintCanvasView({
         <div
           style={{
             position: 'absolute',
-            right: '12px',
-            bottom: '12px',
+            right: '8px',
+            bottom: '8px',
             display: 'flex',
             flexDirection: 'column',
-            gap: '6px',
+            gap: '4px',
             zIndex: 50,
-            padding: '6px',
-            borderRadius: '10px',
+            padding: '4px',
+            borderRadius: '9px',
             background: 'rgba(15, 23, 42, 0.92)',
             border: '1px solid rgba(255,255,255,0.1)',
             boxShadow: '0 4px 10px rgba(0,0,0,0.2)'
@@ -315,26 +317,26 @@ export default function BlueprintCanvasView({
           <button
             type="button"
             onClick={() => onSetZoomScale(s => Math.max(s - 0.25, 1))}
-            style={{ width: '34px', height: '34px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ width: '29px', height: '29px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             title="Zoom out"
           >
-            <ZoomOut size={15} />
+            <ZoomOut size={13} />
           </button>
           <button
             type="button"
             onClick={() => onSetZoomScale(s => Math.min(s + 0.25, 3))}
-            style={{ width: '34px', height: '34px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ width: '29px', height: '29px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             title="Zoom in"
           >
-            <ZoomIn size={15} />
+            <ZoomIn size={13} />
           </button>
           <button
             type="button"
             onClick={() => onSetZoomScale(1)}
-            style={{ width: '34px', height: '34px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '8px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+            style={{ width: '29px', height: '29px', background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: '7px', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
             title="Reset zoom"
           >
-            <RotateCcw size={13} />
+            <RotateCcw size={12} />
           </button>
         </div>
       </div>
