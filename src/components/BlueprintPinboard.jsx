@@ -10,8 +10,7 @@ import { useIssues } from '../hooks/useIssues';
 import DashboardPunchList from './DashboardPunchList';
 import IssueFormModal from './IssueFormModal';
 import { loadCachedDashboard } from '../services/dashboardDrive';
-import { uploadIssueFloorPlanSnapshot } from '../services/issuesDrive';
-import { createIssueFloorPlanSnapshotBlob } from '../services/floorPlanSnapshot';
+import { createAndShareIssuePacket } from '../services/issuePacketShare';
 
 
 
@@ -202,20 +201,14 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setEditingIssue(null);
   };
 
-  const handlePrepareIssueShare = async (issue) => {
-    if (issue.floorPlanSnapshotUrl || !googleToken || !activeProject?.folderId || !pinboard.imageSrc) {
-      return issue;
-    }
-
-    const snapshotBlob = await createIssueFloorPlanSnapshotBlob(pinboard.imageSrc, issue);
-    const uploadResult = await uploadIssueFloorPlanSnapshot(googleToken, activeProject.folderId, issue.id, snapshotBlob);
-    const updatedIssue = {
-      ...issue,
-      floorPlanSnapshotUrl: uploadResult.url,
-      floorPlanSnapshotFileId: uploadResult.id
-    };
-    await issuesState.updateIssue(issue.id, updatedIssue);
-    return updatedIssue;
+  const handleSendIssuePacket = async (issue) => {
+    await createAndShareIssuePacket({
+      issue,
+      googleToken,
+      floorPlanImageSrc: pinboard.imageSrc,
+      projectName: activeProject?.name,
+      selectedFolderName: selectedFolder?.name
+    });
   };
 
   return (
@@ -239,6 +232,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           googleToken={googleToken}
           activeProject={activeProject}
           subcontractors={subcontractors}
+          onSendIssuePacket={handleSendIssuePacket}
         />
       ) : pinboard.viewMode === 'albums' ? (
         <BlueprintPhaseAlbums
@@ -274,7 +268,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           onEditIssue={setEditingIssue}
           onEditPin={pinboard.handleEditPin}
           onOpenPhoto={pinboard.setFullscreenAlbumPhoto}
-          onPrepareIssueShare={handlePrepareIssueShare}
+          onSendIssuePacket={handleSendIssuePacket}
           onResetBlueprint={pinboard.handleResetBlueprint}
           onSelectIssue={(issue) => setSelectedIssueId(issue?.id || null)}
           onSelectPin={pinboard.handleSelectPin}

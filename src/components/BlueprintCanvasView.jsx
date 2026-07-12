@@ -26,7 +26,7 @@ export default function BlueprintCanvasView({
   onDeleteIssue,
   onEditIssue,
   onOpenPhoto,
-  onPrepareIssueShare,
+  onSendIssuePacket,
   onResetBlueprint,
   onSelectIssue,
   googleToken,
@@ -369,7 +369,7 @@ export default function BlueprintCanvasView({
           onUpdateStatus={onUpdateIssueStatus}
           onDelete={onDeleteIssue}
           onEdit={onEditIssue}
-          onPrepareShare={onPrepareIssueShare}
+          onSendPacket={onSendIssuePacket}
         />
       ) : selectedPin ? (
         <BlueprintSelectedPinCard

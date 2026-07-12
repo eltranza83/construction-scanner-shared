@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
-import { Edit3, MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
-import { buildMessageLink } from '../services/messageLinkHelper';
+import { Edit3, FileText, Calendar, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
 
 function getDisplayImageUrl(url, base64, size = 'w200') {
   if (base64) return base64;
@@ -18,10 +17,9 @@ function getDisplayImageUrl(url, base64, size = 'w200') {
   return url;
 }
 
-export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onPrepareShare }) {
-  const [showShareMenu, setShowShareMenu] = useState(false);
+export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onSendPacket }) {
   const [isFullscreenPhoto, setIsFullscreenPhoto] = useState(false);
-  const [preparingShare, setPreparingShare] = useState(false);
+  const [preparingPacket, setPreparingPacket] = useState(false);
 
   const {
     id,
@@ -106,15 +104,17 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onP
 
   const statusConfig = getStatusConfig();
 
-  const handleShareClick = async (platform) => {
+  const handleSendPacketClick = async () => {
+    if (!onSendPacket || preparingPacket) return;
+
     try {
-      setPreparingShare(true);
-      const shareIssue = onPrepareShare ? await onPrepareShare(issue) : issue;
-      const link = buildMessageLink(shareIssue || issue, platform);
-      window.open(link, '_blank');
-      setShowShareMenu(false);
+      setPreparingPacket(true);
+      await onSendPacket(issue);
+    } catch (err) {
+      console.error('Failed to prepare issue packet:', err);
+      alert(err?.message || 'Could not create the issue packet PDF.');
     } finally {
-      setPreparingShare(false);
+      setPreparingPacket(false);
     }
   };
 
@@ -290,101 +290,26 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onP
           </div>
         </div>
 
-        {/* Message Contractor Button */}
-        {phoneNumber && (
-          <div style={{ position: 'relative' }}>
+        {/* Send Packet Button */}
+        {onSendPacket && (
+          <div>
             <button
-              onClick={() => setShowShareMenu(!showShareMenu)}
+              onClick={handleSendPacketClick}
               className="btn btn-secondary"
+              disabled={preparingPacket}
               style={{
                 padding: '6px 12px',
                 fontSize: '0.8rem',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '6px',
-                backgroundColor: 'var(--color-zinc-800)'
+                backgroundColor: 'var(--color-zinc-800)',
+                opacity: preparingPacket ? 0.75 : 1
               }}
             >
-              <MessageSquare size={14} />
-              <span>{preparingShare ? 'Preparing...' : 'Message'}</span>
-              <ChevronDown size={12} />
+              <FileText size={14} />
+              <span>{preparingPacket ? 'Preparing...' : 'Send Packet'}</span>
             </button>
-
-            {showShareMenu && (
-              <>
-                {/* Overlay backdrop to close share menu */}
-                <div 
-                  onClick={() => setShowShareMenu(false)}
-                  style={{
-                    position: 'fixed',
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    zIndex: 999
-                  }}
-                />
-                <div style={{
-                  position: 'absolute',
-                  bottom: '100%',
-                  right: 0,
-                  marginBottom: '8px',
-                  backgroundColor: 'var(--color-zinc-950)',
-                  border: '1px solid var(--color-zinc-800)',
-                  borderRadius: '8px',
-                  padding: '4px',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '2px',
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-                  zIndex: 1000,
-                  minWidth: '140px'
-                }}>
-                  <button
-                    onClick={() => handleShareClick('whatsapp')}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '0.8rem',
-                      color: 'var(--color-zinc-200)',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-zinc-800)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <span style={{ color: '#25d366', fontWeight: 'bold' }}>WA</span>
-                    <span>WhatsApp</span>
-                  </button>
-                  <button
-                    onClick={() => handleShareClick('sms')}
-                    style={{
-                      padding: '8px 12px',
-                      fontSize: '0.8rem',
-                      color: 'var(--color-zinc-200)',
-                      backgroundColor: 'transparent',
-                      border: 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      borderRadius: '4px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px'
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = 'var(--color-zinc-800)'}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-                  >
-                    <span style={{ color: '#38bdf8', fontWeight: 'bold' }}>SMS</span>
-                    <span>Text Message</span>
-                  </button>
-                </div>
-              </>
-            )}
           </div>
         )}
       </div>

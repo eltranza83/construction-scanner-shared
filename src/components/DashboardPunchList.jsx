@@ -8,7 +8,8 @@ export default function DashboardPunchList({
   issuesState,
   googleToken,
   activeProject,
-  subcontractors = []
+  subcontractors = [],
+  onSendIssuePacket
 }) {
   const {
     issues = [],
@@ -246,6 +247,7 @@ export default function DashboardPunchList({
               onUpdateStatus={updateIssueStatus}
               onDelete={softDeleteIssue}
               onEdit={setEditingIssue}
+              onSendPacket={onSendIssuePacket}
             />
           ))}
         </div>

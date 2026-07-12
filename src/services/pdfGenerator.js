@@ -1,17 +1,313 @@
 import { jsPDF } from 'jspdf';
 
+const ADEPEC_GOLD = [197, 160, 89];
+const ADEPEC_DARK = [10, 10, 10];
+const ZINC_900 = [24, 24, 27];
+const ZINC_600 = [82, 82, 91];
+const ZINC_500 = [113, 113, 122];
+const ZINC_200 = [228, 228, 231];
+const ZINC_100 = [244, 244, 245];
+const ROSE_500 = [244, 63, 94];
 
 /**
  * Loads an image to get its width and height.
  */
 function loadImageDimensions(dataUrl) {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
       resolve({ width: img.width, height: img.height });
     };
+    img.onerror = () => reject(new Error('Failed to load image for PDF.'));
     img.src = dataUrl;
   });
+}
+
+function blobToDataUrl(blob) {
+  return new Promise((resolve, reject) => {
+    if (!blob) {
+      resolve('');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(new Error('Failed to read image for PDF.'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+function normalizeImageToJpegDataUrl(source) {
+  return new Promise((resolve, reject) => {
+    if (!source) {
+      resolve('');
+      return;
+    }
+
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth || img.width;
+      canvas.height = img.naturalHeight || img.height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => reject(new Error('Failed to prepare image for PDF.'));
+    img.src = source;
+  });
+}
+
+function formatIssueLabel(value) {
+  return String(value || 'N/A').replace(/_/g, ' ');
+}
+
+function formatIssueDate(value) {
+  if (!value) return 'N/A';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'N/A';
+  return date.toLocaleDateString('en-US', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function titleCase(value) {
+  return formatIssueLabel(value).replace(/\b\w/g, letter => letter.toUpperCase());
+}
+
+function drawAdepecHeader(pdf, title, subtitle) {
+  const pageWidth = 210;
+  const margin = 15;
+
+  pdf.setFillColor(...ADEPEC_DARK);
+  pdf.rect(0, 0, pageWidth, 38, 'F');
+
+  pdf.setDrawColor(...ADEPEC_GOLD);
+  pdf.setLineWidth(1.2);
+  pdf.line(margin, 25, margin + 7, 18);
+  pdf.line(margin + 7, 18, margin + 14, 25);
+  pdf.line(margin + 2, 25, margin + 2, 31);
+  pdf.line(margin + 12, 25, margin + 12, 31);
+  pdf.line(margin + 2, 31, margin + 12, 31);
+
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(20);
+  pdf.text('ADEPEC', margin + 20, 18);
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...ADEPEC_GOLD);
+  pdf.text('HOMES', margin + 20, 24);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(10);
+  pdf.setTextColor(255, 255, 255);
+  pdf.text(title, pageWidth - margin, 17, { align: 'right' });
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(161, 161, 170);
+  pdf.text(subtitle, pageWidth - margin, 24, { align: 'right' });
+}
+
+function drawBadge(pdf, x, y, label, fillColor) {
+  pdf.setFillColor(...fillColor);
+  pdf.roundedRect(x, y - 5, 27, 8, 2, 2, 'F');
+  pdf.setTextColor(255, 255, 255);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7);
+  pdf.text(String(label || 'OPEN').toUpperCase(), x + 13.5, y, { align: 'center' });
+}
+
+function addMetaRow(pdf, label, value, x, y, valueMaxWidth = 54) {
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7);
+  pdf.setTextColor(...ZINC_500);
+  pdf.text(label.toUpperCase(), x, y);
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...ZINC_900);
+  const lines = pdf.splitTextToSize(String(value || 'N/A'), valueMaxWidth);
+  pdf.text(lines.slice(0, 2), x, y + 5);
+}
+
+async function addImageSection(pdf, { title, blob, x, y, width, height, emptyText }) {
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...ZINC_500);
+  pdf.text(title.toUpperCase(), x, y);
+
+  pdf.setDrawColor(...ZINC_200);
+  pdf.setFillColor(255, 255, 255);
+  pdf.roundedRect(x, y + 4, width, height, 3, 3, 'FD');
+
+  if (!blob) {
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(9);
+    pdf.setTextColor(...ZINC_500);
+    const lines = pdf.splitTextToSize(emptyText, width - 12);
+    pdf.text(lines, x + 6, y + 18);
+    return;
+  }
+
+  try {
+    const dataUrl = await normalizeImageToJpegDataUrl(await blobToDataUrl(blob));
+    const dims = await loadImageDimensions(dataUrl);
+    const innerPad = 4;
+    const maxWidth = width - (innerPad * 2);
+    const maxHeight = height - (innerPad * 2);
+    const scale = Math.min(maxWidth / dims.width, maxHeight / dims.height);
+    const imgWidth = dims.width * scale;
+    const imgHeight = dims.height * scale;
+    const imgX = x + innerPad + ((maxWidth - imgWidth) / 2);
+    const imgY = y + 4 + innerPad + ((maxHeight - imgHeight) / 2);
+    pdf.addImage(dataUrl, 'JPEG', imgX, imgY, imgWidth, imgHeight, undefined, 'FAST');
+  } catch (err) {
+    console.error('Failed to add issue packet image:', err);
+    pdf.setFont('helvetica', 'italic');
+    pdf.setFontSize(9);
+    pdf.setTextColor(220, 38, 38);
+    pdf.text('Image could not be embedded in this PDF.', x + 6, y + 18);
+  }
+}
+
+export async function generateIssuePacketPDF({
+  issue,
+  projectName = '',
+  selectedFolderName = '',
+  issuePhotoBlob = null,
+  floorPlanSnapshotBlob = null
+}) {
+  const pdf = new jsPDF({
+    orientation: 'p',
+    unit: 'mm',
+    format: 'a4'
+  });
+
+  const pageWidth = 210;
+  const pageHeight = 297;
+  const margin = 15;
+  const contentWidth = pageWidth - (margin * 2);
+  const created = new Date().toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
+
+  drawAdepecHeader(pdf, 'PUNCH ISSUE PACKET', `Generated ${created}`);
+
+  let currentY = 48;
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(18);
+  pdf.setTextColor(...ZINC_900);
+  const titleLines = pdf.splitTextToSize(issue?.title || 'Punch Issue', contentWidth - 38);
+  pdf.text(titleLines.slice(0, 2), margin, currentY);
+
+  const priority = titleCase(issue?.priority || 'open');
+  const status = titleCase(issue?.status || 'open');
+  drawBadge(pdf, pageWidth - margin - 27, currentY - 1, priority, issue?.priority === 'high' ? ROSE_500 : ADEPEC_GOLD);
+  currentY += titleLines.length > 1 ? 14 : 10;
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...ZINC_600);
+  pdf.text(`Project: ${projectName || selectedFolderName || 'N/A'}`, margin, currentY);
+  pdf.text(`Status: ${status}`, pageWidth - margin, currentY, { align: 'right' });
+
+  currentY += 10;
+  const metaHeight = 42;
+  pdf.setFillColor(...ZINC_100);
+  pdf.setDrawColor(...ZINC_200);
+  pdf.roundedRect(margin, currentY, contentWidth, metaHeight, 3, 3, 'FD');
+
+  const col1 = margin + 6;
+  const col2 = margin + 68;
+  const col3 = margin + 130;
+  addMetaRow(pdf, 'Category', formatIssueLabel(issue?.category), col1, currentY + 11);
+  addMetaRow(pdf, 'Phase', issue?.tradePhase || 'N/A', col2, currentY + 11);
+  addMetaRow(pdf, 'Assigned', issue?.contractorName || 'N/A', col3, currentY + 11);
+  addMetaRow(pdf, 'Phone', issue?.phoneNumber || 'N/A', col1, currentY + 29);
+  addMetaRow(pdf, 'Created', formatIssueDate(issue?.createdAt), col2, currentY + 29);
+  addMetaRow(
+    pdf,
+    'Floor Plan',
+    Number.isFinite(Number(issue?.floorPlanX)) && Number.isFinite(Number(issue?.floorPlanY)) ? 'Pin attached' : 'No pin attached',
+    col3,
+    currentY + 29
+  );
+
+  currentY += metaHeight + 12;
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...ZINC_500);
+  pdf.text('DESCRIPTION', margin, currentY);
+  currentY += 6;
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(10);
+  pdf.setTextColor(...ZINC_900);
+  const descriptionLines = pdf.splitTextToSize(issue?.description || 'No description provided.', contentWidth);
+  pdf.text(descriptionLines.slice(0, 6), margin, currentY);
+  currentY += Math.max(16, Math.min(descriptionLines.length, 6) * 5) + 6;
+
+  const halfGap = 8;
+  const halfWidth = (contentWidth - halfGap) / 2;
+  const imageHeight = 82;
+  await addImageSection(pdf, {
+    title: 'Issue Photo',
+    blob: issuePhotoBlob,
+    x: margin,
+    y: currentY,
+    width: halfWidth,
+    height: imageHeight,
+    emptyText: 'No issue photo was attached to this punch item.'
+  });
+  await addImageSection(pdf, {
+    title: 'Floor Plan Location',
+    blob: floorPlanSnapshotBlob,
+    x: margin + halfWidth + halfGap,
+    y: currentY,
+    width: halfWidth,
+    height: imageHeight,
+    emptyText: 'No floor plan pin was attached to this punch item.'
+  });
+
+  currentY += imageHeight + 18;
+  pdf.setDrawColor(...ADEPEC_GOLD);
+  pdf.setLineWidth(0.5);
+  pdf.line(margin, currentY, pageWidth - margin, currentY);
+  currentY += 7;
+
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...ZINC_900);
+  pdf.text('Contractor Note', margin, currentY);
+  currentY += 6;
+
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...ZINC_600);
+  const note = 'Please review the issue photo and marked floor plan location. Reply when complete with a completion photo or update.';
+  pdf.text(pdf.splitTextToSize(note, contentWidth), margin, currentY);
+
+  pdf.setFillColor(...ZINC_900);
+  pdf.rect(0, pageHeight - 13, pageWidth, 13, 'F');
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(7);
+  pdf.setTextColor(...ADEPEC_GOLD);
+  pdf.text('ADEPEC HOMES', margin, pageHeight - 5);
+  pdf.setTextColor(212, 212, 216);
+  pdf.text(`${projectName || selectedFolderName || 'Project'} - ${issue?.id || 'issue'}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+
+  return pdf.output('blob');
 }
 
 /**
