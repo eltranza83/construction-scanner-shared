@@ -46,6 +46,24 @@ test('buildMessageText formats correctly with and without description/photo', ()
   assert.equal(fullText, 'Hi Alice, we have an open issue on site for Paint Tile: "Cracked tile in kitchen" - Backsplash tile has a vertical crack. Photo: https://drive.google.com/file/d/12345');
 });
 
+test('buildMessageText includes floor plan snapshot when available', () => {
+  const issue = {
+    contractorName: 'Rene',
+    category: 'Mechanicals_&_Utilities',
+    tradePhase: 'Plumbing Rough-In',
+    title: 'Pipe needs leveling',
+    description: 'Please fix before inspection.',
+    floorPlanX: 12.5,
+    floorPlanY: 30.5,
+    floorPlanSnapshotUrl: 'https://drive.google.com/file/d/floorplan'
+  };
+
+  assert.equal(
+    buildMessageText(issue),
+    'Hi Rene, we have an open issue on site for Plumbing Rough-In: "Pipe needs leveling" - Please fix before inspection. Floor plan pin: https://drive.google.com/file/d/floorplan'
+  );
+});
+
 test('buildMessageLink formats correct URLs', () => {
   const issue = {
     contractorName: 'Bob',

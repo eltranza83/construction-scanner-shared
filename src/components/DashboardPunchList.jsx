@@ -17,12 +17,14 @@ export default function DashboardPunchList({
     error,
     success,
     addIssue,
+    updateIssue,
     updateIssueStatus,
     softDeleteIssue,
     triggerSync
   } = issuesState;
 
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editingIssue, setEditingIssue] = useState(null);
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all-active'); // 'all-active' | 'open' | 'in_progress' | 'resolved' | 'all'
 
@@ -54,6 +56,12 @@ export default function DashboardPunchList({
   const handleSaveIssue = async (data) => {
     await addIssue(data);
     setShowAddModal(false);
+  };
+
+  const handleSaveIssueEdit = async (data) => {
+    if (!editingIssue) return;
+    await updateIssue(editingIssue.id, data);
+    setEditingIssue(null);
   };
 
   return (
@@ -237,6 +245,7 @@ export default function DashboardPunchList({
               issue={issue}
               onUpdateStatus={updateIssueStatus}
               onDelete={softDeleteIssue}
+              onEdit={setEditingIssue}
             />
           ))}
         </div>
@@ -271,6 +280,16 @@ export default function DashboardPunchList({
           subcontractors={subcontractors}
           onSave={handleSaveIssue}
           onClose={() => setShowAddModal(false)}
+        />
+      )}
+      {editingIssue && (
+        <IssueFormModal
+          issues={issues}
+          contacts={issuesState.contacts || {}}
+          subcontractors={subcontractors}
+          editingIssue={editingIssue}
+          onSave={handleSaveIssueEdit}
+          onClose={() => setEditingIssue(null)}
         />
       )}
     </div>

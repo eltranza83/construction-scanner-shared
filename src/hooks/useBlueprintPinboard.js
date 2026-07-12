@@ -10,6 +10,7 @@ import {
   uploadBlueprintAlbumPhoto,
   uploadBlueprintVaultFile
 } from '../services/blueprintDrive';
+import { normalizeZoomScale } from '../services/blueprintViewport';
 
 const DEFAULT_PIN_FORM = {
   tradeCategory: 'Mechanicals_&_Utilities',
@@ -361,6 +362,10 @@ export function useBlueprintPinboard({
     setEditingPin(null);
   };
 
+  const handleSetZoomScale = (updater) => {
+    setZoomScale((prev) => normalizeZoomScale(typeof updater === 'function' ? updater(prev) : updater));
+  };
+
   const handleSelectPin = (pin) => {
     setSelectedPin(pin);
     if (pin) {
@@ -421,7 +426,7 @@ export function useBlueprintPinboard({
     setFullscreenAlbumPhoto,
     setShowAddForm,
     setViewMode,
-    setZoomScale,
+    setZoomScale: handleSetZoomScale,
     statusMessages: STATUS_MESSAGES
   };
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useBlueprintPinboard } from '../hooks/useBlueprintPinboard';
 import BlueprintAddPinModal from './BlueprintAddPinModal';
@@ -8,7 +8,10 @@ import BlueprintPhaseAlbums from './BlueprintPhaseAlbums';
 import BlueprintSetupPrompt from './BlueprintSetupPrompt';
 import { useIssues } from '../hooks/useIssues';
 import DashboardPunchList from './DashboardPunchList';
+import IssueFormModal from './IssueFormModal';
 import { loadCachedDashboard } from '../services/dashboardDrive';
+import { uploadIssueFloorPlanSnapshot } from '../services/issuesDrive';
+import { createIssueFloorPlanSnapshotBlob } from '../services/floorPlanSnapshot';
 
 
 
@@ -142,6 +145,11 @@ function BlueprintLoadingState({ message }) {
 }
 
 export default function BlueprintPinboard({ googleToken, activeProject, selectedFolder }) {
+  const [isIssueAddMode, setIsIssueAddMode] = useState(false);
+  const [pendingIssueLocation, setPendingIssueLocation] = useState(null);
+  const [selectedIssueId, setSelectedIssueId] = useState(null);
+  const [editingIssue, setEditingIssue] = useState(null);
+
   const pinboard = useBlueprintPinboard({
     activeProject,
     googleToken,
@@ -154,6 +162,61 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   // Read subcontractor payee directory from cached dashboard data
   const cachedDashboard = loadCachedDashboard(localStorage, activeProject?.id);
   const subcontractors = cachedDashboard?.subcontractors || [];
+  const selectedIssue = issuesState.issues.find(issue => issue.id === selectedIssueId && !issue.deletedAt) || null;
+
+  const handleToggleIssueAddMode = () => {
+    setIsIssueAddMode(prev => !prev);
+    setSelectedIssueId(null);
+    if (pinboard.isAddMode) {
+      pinboard.handleToggleAddMode();
+    }
+  };
+
+  const handleToggleBlueprintAddMode = () => {
+    setIsIssueAddMode(false);
+    setSelectedIssueId(null);
+    pinboard.handleToggleAddMode();
+  };
+
+  const handleFloorPlanClick = (e) => {
+    if (isIssueAddMode) {
+      const rect = e.target.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width) * 100;
+      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      setPendingIssueLocation({ x: parseFloat(x.toFixed(2)), y: parseFloat(y.toFixed(2)) });
+      setIsIssueAddMode(false);
+      return;
+    }
+
+    pinboard.handleCanvasClick(e);
+  };
+
+  const handleSaveLocatedIssue = async (data) => {
+    await issuesState.addIssue(data);
+    setPendingIssueLocation(null);
+  };
+
+  const handleSaveIssueEdit = async (data) => {
+    if (!editingIssue) return;
+    await issuesState.updateIssue(editingIssue.id, data);
+    setEditingIssue(null);
+  };
+
+  const handlePrepareIssueShare = async (issue) => {
+    if (issue.floorPlanSnapshotUrl || !googleToken || !activeProject?.folderId || !pinboard.imageSrc) {
+      return issue;
+    }
+
+    const snapshotBlob = await createIssueFloorPlanSnapshotBlob(pinboard.imageSrc, issue);
+    const uploadResult = await uploadIssueFloorPlanSnapshot(googleToken, activeProject.folderId, issue.id, snapshotBlob);
+    const updatedIssue = {
+      ...issue,
+      floorPlanSnapshotUrl: uploadResult.url,
+      floorPlanSnapshotFileId: uploadResult.id
+    };
+    await issuesState.updateIssue(issue.id, updatedIssue);
+    return updatedIssue;
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', height: '100%' }}>
@@ -203,16 +266,25 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           imageContainerRef={pinboard.imageContainerRef}
           imageSrc={pinboard.imageSrc}
           isAddMode={pinboard.isAddMode}
-          onCanvasClick={pinboard.handleCanvasClick}
+          isIssueAddMode={isIssueAddMode}
+          issues={issuesState.issues}
+          onCanvasClick={handleFloorPlanClick}
           onDeletePin={pinboard.handleDeletePin}
+          onDeleteIssue={issuesState.softDeleteIssue}
+          onEditIssue={setEditingIssue}
           onEditPin={pinboard.handleEditPin}
           onOpenPhoto={pinboard.setFullscreenAlbumPhoto}
+          onPrepareIssueShare={handlePrepareIssueShare}
           onResetBlueprint={pinboard.handleResetBlueprint}
+          onSelectIssue={(issue) => setSelectedIssueId(issue?.id || null)}
           onSelectPin={pinboard.handleSelectPin}
           onSetZoomScale={pinboard.setZoomScale}
-          onToggleAddMode={pinboard.handleToggleAddMode}
+          onToggleIssueAddMode={handleToggleIssueAddMode}
+          onToggleAddMode={handleToggleBlueprintAddMode}
+          onUpdateIssueStatus={issuesState.updateIssueStatus}
           googleToken={googleToken}
           pins={pinboard.pins}
+          selectedIssue={selectedIssue}
           selectedPin={pinboard.selectedPin}
           tradeSectionsConfig={TRADE_SECTIONS_CONFIG}
           zoomScale={pinboard.zoomScale}
@@ -239,6 +311,26 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
         photo={pinboard.fullscreenAlbumPhoto}
         onClose={() => pinboard.setFullscreenAlbumPhoto(null)}
       />
+      {pendingIssueLocation && (
+        <IssueFormModal
+          issues={issuesState.issues}
+          contacts={issuesState.contacts || {}}
+          subcontractors={subcontractors}
+          initialFloorLocation={pendingIssueLocation}
+          onSave={handleSaveLocatedIssue}
+          onClose={() => setPendingIssueLocation(null)}
+        />
+      )}
+      {editingIssue && (
+        <IssueFormModal
+          issues={issuesState.issues}
+          contacts={issuesState.contacts || {}}
+          subcontractors={subcontractors}
+          editingIssue={editingIssue}
+          onSave={handleSaveIssueEdit}
+          onClose={() => setEditingIssue(null)}
+        />
+      )}
     </div>
   );
 }

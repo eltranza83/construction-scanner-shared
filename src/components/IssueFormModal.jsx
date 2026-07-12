@@ -2,16 +2,30 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Upload, Check } from 'lucide-react';
 import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';
 
-export default function IssueFormModal({ issues, contacts = {}, subcontractors = [], onSave, onClose }) {
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [category, setCategory] = useState(Object.keys(TRADE_SECTIONS_CONFIG)[0]);
-  const [tradePhase, setTradePhase] = useState('');
-  const [contractorName, setContractorName] = useState('');
-  const [phoneNumber, setPhoneNumber] = useState('');
-  const [priority, setPriority] = useState('medium'); // 'low' | 'medium' | 'high'
+function getDisplayImageUrl(url, base64, size = 'w400') {
+  if (base64) return base64;
+  if (!url) return '';
+  if (url.startsWith('data:')) return url;
+
+  const driveIdMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || url.match(/id=([a-zA-Z0-9_-]+)/);
+  if (driveIdMatch && driveIdMatch[1]) {
+    return `https://drive.google.com/thumbnail?id=${driveIdMatch[1]}&sz=${size}`;
+  }
+
+  return url;
+}
+
+export default function IssueFormModal({ issues, contacts = {}, subcontractors = [], initialFloorLocation = null, editingIssue = null, onSave, onClose }) {
+  const isEditing = Boolean(editingIssue);
+  const [title, setTitle] = useState(editingIssue?.title || '');
+  const [description, setDescription] = useState(editingIssue?.description || '');
+  const [category, setCategory] = useState(editingIssue?.category || Object.keys(TRADE_SECTIONS_CONFIG)[0]);
+  const [tradePhase, setTradePhase] = useState(editingIssue?.tradePhase || '');
+  const [contractorName, setContractorName] = useState(editingIssue?.contractorName || '');
+  const [phoneNumber, setPhoneNumber] = useState(editingIssue?.phoneNumber || '');
+  const [priority, setPriority] = useState(editingIssue?.priority || 'medium'); // 'low' | 'medium' | 'high'
   const [photoFile, setPhotoFile] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [photoPreview, setPhotoPreview] = useState(getDisplayImageUrl(editingIssue?.photoUrl || '', editingIssue?.photoBase64 || '', 'w400') || null);
   const [showContactPickerBtn, setShowContactPickerBtn] = useState(false);
 
   const fileInputRef = useRef(null);
@@ -21,12 +35,12 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
 
   // Update selected phase when category changes
   useEffect(() => {
-    if (phases.length > 0) {
+    if (phases.length > 0 && !phases.includes(tradePhase)) {
       setTradePhase(phases[0]);
-    } else {
+    } else if (phases.length === 0) {
       setTradePhase('');
     }
-  }, [category]);
+  }, [category, phases, tradePhase]);
 
   // Detect support for Contacts Picker API (supported on mobile devices)
   useEffect(() => {
@@ -37,6 +51,8 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
 
   // Pre-fill contractor name and phone number from sheet or cloud contacts or past issues
   useEffect(() => {
+    if (isEditing) return;
+
     const normalizeStr = (str) => String(str || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
 
     // 1. Find matching subcontractor payee from the sheet (matching by phase name, just like the dashboard does)
@@ -79,7 +95,7 @@ export default function IssueFormModal({ issues, contacts = {}, subcontractors =
 
     setContractorName(name);
     setPhoneNumber(phone);
-  }, [category, tradePhase, subcontractors, contacts, issues]);
+  }, [category, tradePhase, subcontractors, contacts, issues, isEditing]);
 
   // Handle Contact Picker selection
   const handleSelectContact = async () => {
@@ -194,7 +210,13 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
       contractorName: contractorName.trim(),
       phoneNumber: phoneNumber.trim(),
       priority,
-      photoFile
+      photoFile,
+      floorPlanX: Number.isFinite(initialFloorLocation?.x)
+        ? initialFloorLocation.x
+        : (Number.isFinite(Number(editingIssue?.floorPlanX)) ? editingIssue.floorPlanX : null),
+      floorPlanY: Number.isFinite(initialFloorLocation?.y)
+        ? initialFloorLocation.y
+        : (Number.isFinite(Number(editingIssue?.floorPlanY)) ? editingIssue.floorPlanY : null)
     });
   };
 
@@ -227,7 +249,7 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
             color: 'var(--color-zinc-100)',
             fontFamily: 'var(--font-serif)'
           }}>
-            Log New Issue
+            {isEditing ? 'Edit Issue' : 'Log New Issue'}
           </h3>
           <button 
             type="button" 
@@ -316,6 +338,20 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
               })}
             </div>
           </div>
+
+          {(initialFloorLocation || Number.isFinite(Number(editingIssue?.floorPlanX))) && (
+            <div style={{
+              padding: '10px 12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              backgroundColor: 'rgba(245, 158, 11, 0.08)',
+              color: 'var(--color-amber-400)',
+              fontSize: '0.78rem',
+              fontWeight: 600
+            }}>
+              Floor plan location attached
+            </div>
+          )}
 
           {/* Trade Category Selection */}
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -497,7 +533,7 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
               style={{ flex: 2, padding: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
             >
               <Check size={16} />
-              <span>Log Issue</span>
+              <span>{isEditing ? 'Save Changes' : 'Log Issue'}</span>
             </button>
           </div>
         </form>

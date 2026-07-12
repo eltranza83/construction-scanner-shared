@@ -489,7 +489,10 @@ export async function syncIssuesToSheet(accessToken, spreadsheetId, issues) {
     'Phone Number',
     'Priority',
     'Status',
-    'Photo URL'
+    'Photo URL',
+    'Floor Plan X',
+    'Floor Plan Y',
+    'Floor Plan Pin Image'
   ];
   
   const rows = [headers];
@@ -505,7 +508,10 @@ export async function syncIssuesToSheet(accessToken, spreadsheetId, issues) {
       issue.phoneNumber || '',
       issue.priority || '',
       issue.status || '',
-      issue.photoUrl || ''
+      issue.photoUrl || '',
+      Number.isFinite(Number(issue.floorPlanX)) ? issue.floorPlanX : '',
+      Number.isFinite(Number(issue.floorPlanY)) ? issue.floorPlanY : '',
+      issue.floorPlanSnapshotUrl || ''
     ]);
   });
   

@@ -36,6 +36,12 @@ export function buildMessageText(issue) {
   if (issue.photoUrl) {
     body += ` Photo: ${issue.photoUrl}`;
   }
+
+  if (issue.floorPlanSnapshotUrl) {
+    body += ` Floor plan pin: ${issue.floorPlanSnapshotUrl}`;
+  } else if (Number.isFinite(Number(issue.floorPlanX)) && Number.isFinite(Number(issue.floorPlanY))) {
+    body += ' Location: marked on the X-Ray floor plan.';
+  }
   
   return body;
 }

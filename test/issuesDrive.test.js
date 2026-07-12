@@ -13,7 +13,9 @@ test('mergeIssues applies CREATE operations correctly', () => {
         category: 'Mechanicals_&_Utilities',
         priority: 'high',
         status: 'open',
-        phoneNumber: '5550100'
+        phoneNumber: '5550100',
+        floorPlanX: 42.5,
+        floorPlanY: 18.25
       },
       timestamp: 1720720485923
     }
@@ -24,6 +26,8 @@ test('mergeIssues applies CREATE operations correctly', () => {
   assert.equal(merged[0].id, 'issue_1');
   assert.equal(merged[0].title, 'Leak under sink');
   assert.equal(merged[0].status, 'open');
+  assert.equal(merged[0].floorPlanX, 42.5);
+  assert.equal(merged[0].floorPlanY, 18.25);
   assert.equal(merged[0].deletedAt, null);
   assert.ok(merged[0].createdAt);
   assert.ok(merged[0].updatedAt);
@@ -56,6 +60,51 @@ test('mergeIssues applies UPDATE_STATUS operations to existing issues', () => {
   assert.equal(merged.length, 1);
   assert.equal(merged[0].status, 'in_progress');
   assert.equal(merged[0].updatedAt, new Date(1720720500000).toISOString());
+});
+
+test('mergeIssues applies UPDATE operations while preserving issue identity', () => {
+  const remoteIssues = [
+    {
+      id: 'issue_1',
+      title: 'Leak under sink',
+      category: 'Mechanicals_&_Utilities',
+      priority: 'high',
+      status: 'open',
+      floorPlanX: 42.5,
+      floorPlanY: 18.25,
+      createdAt: '2026-07-11T12:00:00.000Z',
+      updatedAt: '2026-07-11T12:00:00.000Z',
+      deletedAt: null
+    }
+  ];
+
+  const offlineOps = [
+    {
+      type: 'UPDATE',
+      id: 'issue_1',
+      payload: {
+        title: 'Leak under kitchen sink',
+        category: 'Mechanicals_&_Utilities',
+        tradePhase: 'Plumbing Rough-In',
+        priority: 'medium',
+        photoUrl: 'https://example.com/photo.jpg',
+        floorPlanX: 42.5,
+        floorPlanY: 18.25
+      },
+      timestamp: 1720720550000
+    }
+  ];
+
+  const merged = mergeIssues(remoteIssues, offlineOps);
+  assert.equal(merged.length, 1);
+  assert.equal(merged[0].id, 'issue_1');
+  assert.equal(merged[0].title, 'Leak under kitchen sink');
+  assert.equal(merged[0].priority, 'medium');
+  assert.equal(merged[0].photoUrl, 'https://example.com/photo.jpg');
+  assert.equal(merged[0].floorPlanX, 42.5);
+  assert.equal(merged[0].floorPlanY, 18.25);
+  assert.equal(merged[0].createdAt, '2026-07-11T12:00:00.000Z');
+  assert.equal(merged[0].updatedAt, new Date(1720720550000).toISOString());
 });
 
 test('mergeIssues applies SOFT_DELETE operations by setting deletedAt', () => {

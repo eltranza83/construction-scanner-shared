@@ -128,7 +128,7 @@ export function useIssues({ googleToken, activeProject }) {
 
       // 1. Process any pending image uploads inside the queue
       for (const op of queue) {
-        if (op.type === 'CREATE' && op.payload.photoBase64 && !op.payload.photoUrl) {
+        if ((op.type === 'CREATE' || op.type === 'UPDATE') && op.payload.photoBase64 && !op.payload.photoUrl) {
           try {
             const mimeType = op.payload.photoBase64.match(/:(.*?);/)[1] || 'image/jpeg';
             const blob = base64ToBlob(op.payload.photoBase64, mimeType);
@@ -187,7 +187,18 @@ export function useIssues({ googleToken, activeProject }) {
   };
 
   // Add issue action
-  const addIssue = async ({ title, description, category, tradePhase, contractorName, phoneNumber, priority, photoFile }) => {
+  const addIssue = async ({
+    title,
+    description,
+    category,
+    tradePhase,
+    contractorName,
+    phoneNumber,
+    priority,
+    photoFile,
+    floorPlanX = null,
+    floorPlanY = null
+  }) => {
     setError(null);
     const newId = `issue_${Date.now()}`;
     const timestamp = Date.now();
@@ -238,7 +249,9 @@ export function useIssues({ googleToken, activeProject }) {
       status: 'open',
       photoBase64,
       photoUrl,
-      photoFileId
+      photoFileId,
+      floorPlanX,
+      floorPlanY
     };
 
     const newOp = {
@@ -283,6 +296,106 @@ export function useIssues({ googleToken, activeProject }) {
       }
     } else {
       setSuccess('Issue saved locally. Will sync when online.');
+      setTimeout(() => setSuccess(null), 3000);
+    }
+  };
+
+  // Update status action
+  const updateIssue = async (id, updates) => {
+    setError(null);
+    const timestamp = Date.now();
+    const existingIssue = issues.find(issue => issue.id === id);
+    if (!existingIssue) return;
+
+    let photoBase64 = existingIssue.photoBase64 || null;
+    let photoUrl = existingIssue.photoUrl || null;
+    let photoFileId = existingIssue.photoFileId || null;
+
+    let updatedContacts = { ...contacts };
+    if (updates.contractorName?.trim() && updates.phoneNumber?.trim()) {
+      updatedContacts[updates.contractorName.trim()] = updates.phoneNumber.trim();
+      setContacts(updatedContacts);
+      localStorage.setItem(contactsCacheKey, JSON.stringify(updatedContacts));
+    }
+
+    if (updates.photoFile) {
+      const isOnline = !!(googleToken && activeProject?.folderId);
+      if (isOnline) {
+        setLoading(true);
+        try {
+          const uploadResult = await uploadIssuePhoto(googleToken, activeProject.folderId, updates.photoFile);
+          photoUrl = uploadResult.url;
+          photoFileId = uploadResult.id;
+          photoBase64 = null;
+        } catch (uploadErr) {
+          console.error('Failed to upload updated issue photo immediately:', uploadErr);
+          setError('Failed to upload photo to Drive, queuing issue update locally...');
+          photoBase64 = await fileToBase64(updates.photoFile);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        photoBase64 = await fileToBase64(updates.photoFile);
+      }
+    }
+
+    const payload = {
+      title: updates.title,
+      description: updates.description,
+      category: updates.category,
+      tradePhase: updates.tradePhase || '',
+      contractorName: updates.contractorName || '',
+      phoneNumber: updates.phoneNumber || '',
+      priority: updates.priority,
+      photoBase64,
+      photoUrl,
+      photoFileId,
+      floorPlanX: Number.isFinite(Number(updates.floorPlanX)) ? updates.floorPlanX : null,
+      floorPlanY: Number.isFinite(Number(updates.floorPlanY)) ? updates.floorPlanY : null,
+      floorPlanSnapshotUrl: updates.floorPlanSnapshotUrl || existingIssue.floorPlanSnapshotUrl || '',
+      floorPlanSnapshotFileId: updates.floorPlanSnapshotFileId || existingIssue.floorPlanSnapshotFileId || ''
+    };
+
+    const newOp = {
+      type: 'UPDATE',
+      id,
+      payload,
+      timestamp
+    };
+
+    const queue = [...getOfflineQueue(), newOp];
+    saveOfflineQueue(queue);
+
+    const updatedList = issues.map(issue => {
+      if (issue.id === id) {
+        return {
+          ...issue,
+          ...payload,
+          updatedAt: new Date(timestamp).toISOString()
+        };
+      }
+      return issue;
+    });
+    setIssues(updatedList);
+    localStorage.setItem(cacheKey, JSON.stringify(updatedList));
+
+    if (photoBase64) {
+      try {
+        localStorage.setItem(`jobscan_photo_${id}`, photoBase64);
+      } catch (e) {
+        console.warn('Failed to cache updated base64 photo locally:', e);
+      }
+    }
+
+    if (googleToken && activeProject?.folderId) {
+      try {
+        const { issues: latestRemote } = await loadIssuesVault(googleToken, activeProject.folderId);
+        await processAndSyncQueue(latestRemote, issuesDataFileId, updatedContacts);
+      } catch {
+        // Remains in queue
+      }
+    } else {
+      setSuccess('Issue updated locally. Will sync when online.');
       setTimeout(() => setSuccess(null), 3000);
     }
   };
@@ -379,6 +492,7 @@ export function useIssues({ googleToken, activeProject }) {
     error,
     success,
     addIssue,
+    updateIssue,
     updateIssueStatus,
     softDeleteIssue,
     triggerSync

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
+import { Edit3, MessageSquare, Calendar, ChevronDown, Trash2, CheckCircle, Clock, AlertTriangle, X } from 'lucide-react';
 import { buildMessageLink } from '../services/messageLinkHelper';
 
 function getDisplayImageUrl(url, base64, size = 'w200') {
@@ -18,9 +18,10 @@ function getDisplayImageUrl(url, base64, size = 'w200') {
   return url;
 }
 
-export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
+export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onPrepareShare }) {
   const [showShareMenu, setShowShareMenu] = useState(false);
   const [isFullscreenPhoto, setIsFullscreenPhoto] = useState(false);
+  const [preparingShare, setPreparingShare] = useState(false);
 
   const {
     id,
@@ -105,10 +106,16 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
 
   const statusConfig = getStatusConfig();
 
-  const handleShareClick = (platform) => {
-    const link = buildMessageLink(issue, platform);
-    window.open(link, '_blank');
-    setShowShareMenu(false);
+  const handleShareClick = async (platform) => {
+    try {
+      setPreparingShare(true);
+      const shareIssue = onPrepareShare ? await onPrepareShare(issue) : issue;
+      const link = buildMessageLink(shareIssue || issue, platform);
+      window.open(link, '_blank');
+      setShowShareMenu(false);
+    } finally {
+      setPreparingShare(false);
+    }
   };
 
 
@@ -140,29 +147,54 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
           </span>
         </div>
 
-        <button
-          onClick={() => {
-            if (confirm('Are you sure you want to delete this issue?')) {
-              onDelete(id);
-            }
-          }}
-          style={{
-            background: 'none',
-            border: 'none',
-            color: 'var(--color-zinc-500)',
-            cursor: 'pointer',
-            padding: '4px',
-            borderRadius: '4px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            transition: 'color 0.2s'
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.color = '#f87171'}
-          onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-zinc-500)'}
-        >
-          <Trash2 size={16} />
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(issue)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--color-zinc-500)',
+                cursor: 'pointer',
+                padding: '4px',
+                borderRadius: '4px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'color 0.2s'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--color-amber-500)'}
+              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-zinc-500)'}
+              title="Edit issue"
+            >
+              <Edit3 size={16} />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (confirm('Are you sure you want to delete this issue?')) {
+                onDelete(id);
+              }
+            }}
+            style={{
+              background: 'none',
+              border: 'none',
+              color: 'var(--color-zinc-500)',
+              cursor: 'pointer',
+              padding: '4px',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'color 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = '#f87171'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--color-zinc-500)'}
+          >
+            <Trash2 size={16} />
+          </button>
+        </div>
       </div>
 
       {/* Main Content Area: Title & Description */}
@@ -274,7 +306,7 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete }) {
               }}
             >
               <MessageSquare size={14} />
-              <span>Message</span>
+              <span>{preparingShare ? 'Preparing...' : 'Message'}</span>
               <ChevronDown size={12} />
             </button>
 

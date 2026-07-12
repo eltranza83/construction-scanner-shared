@@ -97,6 +97,26 @@ export async function uploadIssuePhoto(accessToken, projectFolderId, file) {
   };
 }
 
+export async function uploadIssueFloorPlanSnapshot(accessToken, projectFolderId, issueId, fileBlob) {
+  const xRayFolderId = await ensureXRayFolder(accessToken, projectFolderId);
+  const photosFolderId = await ensureIssuePhotosFolder(accessToken, xRayFolderId);
+  const safeIssueId = String(issueId || 'issue').replace(/[^a-zA-Z0-9_-]/g, '_');
+  const fileName = `FloorPlan_Pin_${safeIssueId}_${Date.now()}.jpg`;
+
+  const uploadResult = await uploadFileToDrive(accessToken, photosFolderId, fileName, 'image/jpeg', fileBlob);
+
+  try {
+    await makeFilePubliclyReadable(accessToken, uploadResult.id);
+  } catch (permissionErr) {
+    console.error('Failed to make floor plan snapshot publicly readable:', permissionErr);
+  }
+
+  return {
+    id: uploadResult.id,
+    url: uploadResult.webViewLink
+  };
+}
+
 /**
  * Merges remote issues list with offline operations queue.
  * Handles CREATE, UPDATE_STATUS, and SOFT_DELETE operations in chronological order.
@@ -123,6 +143,15 @@ export function mergeIssues(remoteIssues, offlineOperations) {
       } else {
         merged.push(newIssue);
       }
+    } else if (type === 'UPDATE') {
+      const existingIdx = merged.findIndex(i => i.id === id);
+      if (existingIdx > -1) {
+        merged[existingIdx] = {
+          ...merged[existingIdx],
+          ...payload,
+          updatedAt: isoTimestamp
+        };
+      }
     } else if (type === 'UPDATE_STATUS') {
       const existingIdx = merged.findIndex(i => i.id === id);
       if (existingIdx > -1) {
@@ -146,4 +175,3 @@ export function mergeIssues(remoteIssues, offlineOperations) {
 
   return merged;
 }
-
