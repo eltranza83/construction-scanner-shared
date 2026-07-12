@@ -60,6 +60,33 @@ function normalizeImageToJpegDataUrl(source) {
   });
 }
 
+function loadImageElement(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error('Failed to load image.'));
+    img.src = src;
+  });
+}
+
+async function renderSvgAssetToPngDataUrl(assetUrl, width, height) {
+  const response = await fetch(assetUrl);
+  if (!response.ok) {
+    throw new Error('Failed to load logo asset.');
+  }
+
+  const svgText = await response.text();
+  const source = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svgText)}`;
+  const img = await loadImageElement(source);
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, width, height);
+  ctx.drawImage(img, 0, 0, width, height);
+  return canvas.toDataURL('image/png');
+}
+
 function formatIssueLabel(value) {
   return String(value || 'N/A').replace(/_/g, ' ');
 }
@@ -79,77 +106,26 @@ function titleCase(value) {
   return formatIssueLabel(value).replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
-function drawAdepecHeader(pdf, title, subtitle) {
+async function drawAdepecHeader(pdf, title, subtitle) {
   const pageWidth = 210;
   const margin = 15;
-  const logoX = margin;
-  const logoY = 9;
-  const iconSize = 17;
-  const iconScale = iconSize / 100;
-  const iconOffsetX = logoX;
-  const iconOffsetY = logoY;
-
-  const mapPoint = (x, y) => [
-    iconOffsetX + (x * iconScale),
-    iconOffsetY + (y * iconScale)
-  ];
-
-  const drawPath = (points, close = true) => {
-    const [startX, startY] = mapPoint(points[0][0], points[0][1]);
-    const lines = points.slice(1).map(([x, y]) => {
-      const [nextX, nextY] = mapPoint(x, y);
-      return [nextX - startX, nextY - startY];
-    });
-    pdf.lines(lines, startX, startY, [1, 1], close ? 'F' : 'S');
-  };
 
   pdf.setFillColor(...ADEPEC_DARK);
   pdf.rect(0, 0, pageWidth, 38, 'F');
 
-  pdf.setFillColor(...ADEPEC_GOLD);
-  drawPath([
-    [50, 15],
-    [80, 45],
-    [80, 85],
-    [71, 85],
-    [71, 45],
-    [50, 24],
-    [29, 45],
-    [29, 85],
-    [20, 85],
-    [20, 45]
-  ]);
-  drawPath([
-    [50, 33.5],
-    [66.5, 50],
-    [66.5, 85],
-    [50.5, 85],
-    [50.5, 73],
-    [49.5, 73],
-    [49.5, 85],
-    [33.5, 85],
-    [33.5, 50]
-  ]);
-  drawPath([
-    [50, 42.5],
-    [57.5, 50],
-    [57.5, 63],
-    [42.5, 63],
-    [42.5, 50]
-  ]);
-
-  pdf.setTextColor(255, 255, 255);
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.text('A D E P E C', margin + 25, 16);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(7.5);
-  pdf.setTextColor(...ADEPEC_GOLD);
-  pdf.line(margin + 25, 23, margin + 38, 23);
-  pdf.line(margin + 69, 23, margin + 82, 23);
-  pdf.setTextColor(212, 212, 216);
-  pdf.text('H O M E S', margin + 52, 24.5, { align: 'center' });
+  try {
+    const logoDataUrl = await renderSvgAssetToPngDataUrl('/adepec-logo-dark.svg', 420, 462);
+    pdf.addImage(logoDataUrl, 'PNG', margin - 1, 4, 31, 34, undefined, 'FAST');
+  } catch (err) {
+    console.error('Failed to render Adepec logo asset in PDF:', err);
+    pdf.setTextColor(255, 255, 255);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(15);
+    pdf.text('ADEPEC', margin, 17);
+    pdf.setFontSize(7.5);
+    pdf.setTextColor(...ADEPEC_GOLD);
+    pdf.text('HOMES', margin, 24);
+  }
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
@@ -249,7 +225,7 @@ export async function generateIssuePacketPDF({
     minute: '2-digit'
   });
 
-  drawAdepecHeader(pdf, 'PUNCH ISSUE PACKET', `Generated ${created}`);
+  await drawAdepecHeader(pdf, 'PUNCH ISSUE PACKET', `Generated ${created}`);
 
   let currentY = 48;
   pdf.setFont('helvetica', 'bold');
