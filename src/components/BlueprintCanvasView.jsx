@@ -239,7 +239,6 @@ export default function BlueprintCanvasView({
             />
 
             {pins.map(pin => {
-              const config = tradeSectionsConfig[pin.category] || { color: '#71717a' };
               const isSelected = selectedPin?.id === pin.id;
 
               return (
@@ -256,13 +255,13 @@ export default function BlueprintCanvasView({
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '24px' : '16px',
-                    height: isSelected ? '24px' : '16px',
+                    width: isSelected ? '34px' : '26px',
+                    height: isSelected ? '34px' : '26px',
                     borderRadius: '50%',
-                    backgroundColor: config.color,
+                    backgroundColor: '#10b981',
                     border: '2px solid #fff',
                     cursor: 'pointer',
-                    boxShadow: isSelected ? '0 0 0 4px rgba(245, 158, 11, 0.35), 0 0 10px rgba(0,0,0,0.5)' : '0 0 10px rgba(0,0,0,0.5)',
+                    boxShadow: isSelected ? '0 0 0 4px rgba(16, 185, 129, 0.35), 0 0 10px rgba(0,0,0,0.5)' : '0 0 10px rgba(0,0,0,0.5)',
                     zIndex: isSelected ? 100 : 10,
                     display: 'flex',
                     alignItems: 'center',
@@ -273,7 +272,7 @@ export default function BlueprintCanvasView({
                   className={isSelected ? '' : 'animate-pulse'}
                   title={pin.phase || 'Pin'}
                 >
-                  <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#fff' }} />
+                  <MapPin size={isSelected ? 18 : 14} style={{ color: '#fff' }} />
                 </button>
               );
             })}
@@ -296,9 +295,9 @@ export default function BlueprintCanvasView({
                     left: `${Number(issue.floorPlanX)}%`,
                     top: `${Number(issue.floorPlanY)}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '30px' : '22px',
-                    height: isSelected ? '30px' : '22px',
-                    borderRadius: '8px',
+                    width: isSelected ? '34px' : '26px',
+                    height: isSelected ? '34px' : '26px',
+                    borderRadius: '50%',
                     backgroundColor: markerColor,
                     border: '2px solid #fff',
                     cursor: 'pointer',
