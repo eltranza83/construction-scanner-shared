@@ -14,6 +14,8 @@ function isLocatedIssue(issue) {
   return !issue?.deletedAt && Number.isFinite(Number(issue.floorPlanX)) && Number.isFinite(Number(issue.floorPlanY));
 }
 
+const PIN_FOCUS_ZOOM = 2.25;
+
 function centerScrollOnPoint(container, xPercent, yPercent) {
   if (!container || !Number.isFinite(xPercent) || !Number.isFinite(yPercent)) return;
 
@@ -285,6 +287,7 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectIssue(null);
                     onSelectPin(pin);
+                    onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
                     requestAnimationFrame(() => {
                       centerScrollOnPoint(imageContainerRef.current, Number(pin.x), Number(pin.y));
                     });
@@ -329,6 +332,7 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectPin(null);
                     onSelectIssue(issue);
+                    onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
                     requestAnimationFrame(() => {
                       centerScrollOnPoint(imageContainerRef.current, Number(issue.floorPlanX), Number(issue.floorPlanY));
                     });
