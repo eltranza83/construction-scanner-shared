@@ -83,7 +83,11 @@ export default function BlueprintCanvasView({
               borderColor: isIssueAddMode ? 'rgba(248, 113, 113, 0.55)' : 'rgba(255,255,255,0.08)'
             }}
           >
-            <AlertTriangle size={14} className={isIssueAddMode ? 'animate-pulse' : ''} />
+            <AlertTriangle
+              size={14}
+              className={isIssueAddMode ? 'animate-pulse' : ''}
+              style={{ color: isIssueAddMode ? '#fff' : '#f87171' }}
+            />
             <span className="blueprint-action-label">
               {isIssueAddMode ? (
                 <>
@@ -110,7 +114,11 @@ export default function BlueprintCanvasView({
               borderColor: isAddMode ? 'rgba(52, 211, 153, 0.55)' : 'rgba(255,255,255,0.08)'
             }}
           >
-            <MapPin size={14} className={isAddMode ? 'animate-pulse' : ''} />
+            <MapPin
+              size={14}
+              className={isAddMode ? 'animate-pulse' : ''}
+              style={{ color: isAddMode ? '#000' : '#34d399' }}
+            />
             <span className="blueprint-action-label">
               {isAddMode ? (
                 <>
