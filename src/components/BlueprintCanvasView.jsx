@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import React from 'react';
 import { AlertTriangle, MapPin, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import BlueprintSelectedPinCard from './BlueprintSelectedPinCard';
 import IssueCard from './IssueCard';
@@ -12,28 +12,6 @@ function getIssueMarkerColor(issue) {
 
 function isLocatedIssue(issue) {
   return !issue?.deletedAt && Number.isFinite(Number(issue.floorPlanX)) && Number.isFinite(Number(issue.floorPlanY));
-}
-
-const PIN_FOCUS_ZOOM = 2.25;
-
-function centerScrollOnPoint(container, xPercent, yPercent) {
-  if (!container || !Number.isFinite(xPercent) || !Number.isFinite(yPercent)) return;
-
-  const content = container.firstElementChild;
-  const contentWidth = content?.offsetWidth || container.scrollWidth;
-  const contentHeight = content?.offsetHeight || container.scrollHeight;
-  const contentLeft = content?.offsetLeft || 0;
-  const contentTop = content?.offsetTop || 0;
-  const maxLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
-  const maxTop = Math.max(container.scrollHeight - container.clientHeight, 0);
-  const nextLeft = contentLeft + (contentWidth * xPercent / 100) - (container.clientWidth / 2);
-  const nextTop = contentTop + (contentHeight * yPercent / 100) - (container.clientHeight / 2);
-
-  container.scrollTo({
-    left: Math.min(Math.max(nextLeft, 0), maxLeft),
-    top: Math.min(Math.max(nextTop, 0), maxTop),
-    behavior: 'smooth'
-  });
 }
 
 export default function BlueprintCanvasView({
@@ -63,7 +41,6 @@ export default function BlueprintCanvasView({
   tradeSectionsConfig,
   zoomScale
 }) {
-  const pendingFocusPointRef = useRef(null);
   const locatedIssues = issues.filter(isLocatedIssue);
   const activeDropMode = isIssueAddMode ? 'issue' : (isAddMode ? 'xray' : null);
   const frameBorderColor = activeDropMode === 'issue'
@@ -93,14 +70,6 @@ export default function BlueprintCanvasView({
     lineHeight: 1,
     boxShadow: 'none'
   };
-
-  useLayoutEffect(() => {
-    const point = pendingFocusPointRef.current;
-    if (!point) return;
-
-    pendingFocusPointRef.current = null;
-    centerScrollOnPoint(imageContainerRef.current, point.x, point.y);
-  }, [imageContainerRef, zoomScale]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
@@ -280,11 +249,6 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectIssue(null);
                     onSelectPin(pin);
-                    pendingFocusPointRef.current = { x: Number(pin.x), y: Number(pin.y) };
-                    onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
-                    if (zoomScale >= PIN_FOCUS_ZOOM) {
-                      centerScrollOnPoint(imageContainerRef.current, Number(pin.x), Number(pin.y));
-                    }
                   }}
                   style={{
                     position: 'absolute',
@@ -326,14 +290,6 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectPin(null);
                     onSelectIssue(issue);
-                    pendingFocusPointRef.current = {
-                      x: Number(issue.floorPlanX),
-                      y: Number(issue.floorPlanY)
-                    };
-                    onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
-                    if (zoomScale >= PIN_FOCUS_ZOOM) {
-                      centerScrollOnPoint(imageContainerRef.current, Number(issue.floorPlanX), Number(issue.floorPlanY));
-                    }
                   }}
                   style={{
                     position: 'absolute',
