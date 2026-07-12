@@ -19,15 +19,27 @@ const PIN_FOCUS_ZOOM = 2.25;
 function centerScrollOnPoint(container, xPercent, yPercent) {
   if (!container || !Number.isFinite(xPercent) || !Number.isFinite(yPercent)) return;
 
+  const content = container.firstElementChild;
+  const contentWidth = content?.offsetWidth || container.scrollWidth;
+  const contentHeight = content?.offsetHeight || container.scrollHeight;
+  const contentLeft = content?.offsetLeft || 0;
+  const contentTop = content?.offsetTop || 0;
   const maxLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
   const maxTop = Math.max(container.scrollHeight - container.clientHeight, 0);
-  const nextLeft = (container.scrollWidth * xPercent / 100) - (container.clientWidth / 2);
-  const nextTop = (container.scrollHeight * yPercent / 100) - (container.clientHeight / 2);
+  const nextLeft = contentLeft + (contentWidth * xPercent / 100) - (container.clientWidth / 2);
+  const nextTop = contentTop + (contentHeight * yPercent / 100) - (container.clientHeight / 2);
 
   container.scrollTo({
     left: Math.min(Math.max(nextLeft, 0), maxLeft),
     top: Math.min(Math.max(nextTop, 0), maxTop),
     behavior: 'smooth'
+  });
+}
+
+function scheduleCenterScroll(container, xPercent, yPercent) {
+  requestAnimationFrame(() => {
+    centerScrollOnPoint(container, xPercent, yPercent);
+    setTimeout(() => centerScrollOnPoint(container, xPercent, yPercent), 180);
   });
 }
 
@@ -107,7 +119,7 @@ export default function BlueprintCanvasView({
     });
 
     return () => cancelAnimationFrame(animationId);
-  }, [imageContainerRef, selectedPoint?.x, selectedPoint?.y, selectedPin?.id, selectedIssue?.id, zoomScale]);
+  }, [imageContainerRef, selectedPoint?.x, selectedPoint?.y, selectedPin?.id, selectedIssue?.id]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
@@ -288,9 +300,7 @@ export default function BlueprintCanvasView({
                     onSelectIssue(null);
                     onSelectPin(pin);
                     onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
-                    requestAnimationFrame(() => {
-                      centerScrollOnPoint(imageContainerRef.current, Number(pin.x), Number(pin.y));
-                    });
+                    scheduleCenterScroll(imageContainerRef.current, Number(pin.x), Number(pin.y));
                   }}
                   style={{
                     position: 'absolute',
@@ -333,9 +343,7 @@ export default function BlueprintCanvasView({
                     onSelectPin(null);
                     onSelectIssue(issue);
                     onSetZoomScale((scale) => Math.max(scale, PIN_FOCUS_ZOOM));
-                    requestAnimationFrame(() => {
-                      centerScrollOnPoint(imageContainerRef.current, Number(issue.floorPlanX), Number(issue.floorPlanY));
-                    });
+                    scheduleCenterScroll(imageContainerRef.current, Number(issue.floorPlanX), Number(issue.floorPlanY));
                   }}
                   style={{
                     position: 'absolute',
