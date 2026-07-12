@@ -11,6 +11,18 @@ const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleap
 const GOOGLE_SCRIPT_ID = 'google-gis-script';
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 
+function getFriendlyAuthError(err) {
+  const message = err?.message || err?.error || String(err || '');
+  if (!message) return 'Google sign-in was cancelled or failed.';
+  if (message.includes('origin_mismatch')) {
+    return `Google rejected the sign-in because this origin is not authorized for the OAuth client. Add ${window.location.origin} to the Google Cloud Console Authorized JavaScript origins and redirect URIs, then refresh the page.`;
+  }
+  if (message.includes('popup')) {
+    return 'The sign-in popup was blocked. Please allow popups for this site and try again.';
+  }
+  return `Google Sign In failed: ${message}`;
+}
+
 async function fetchGoogleUserInfo(accessToken) {
   const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -94,32 +106,45 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
 
     setError?.(null);
     try {
-      const client = window.google.accounts.oauth2.initTokenClient({
-        client_id: googleClientId,
-        scope: GOOGLE_SCOPE,
-        callback: async (tokenResponse) => {
-          if (tokenResponse.access_token) {
-            setGoogleToken(tokenResponse.access_token);
-            persistGoogleToken(tokenResponse.access_token);
+      if (window.google?.accounts?.oauth2?.initTokenClient) {
+        const client = window.google.accounts.oauth2.initTokenClient({
+          client_id: googleClientId,
+          scope: GOOGLE_SCOPE,
+          callback: async (tokenResponse) => {
+            if (tokenResponse.access_token) {
+              setGoogleToken(tokenResponse.access_token);
+              persistGoogleToken(tokenResponse.access_token);
 
-            try {
-              const info = await fetchGoogleUserInfo(tokenResponse.access_token);
-              setGoogleUser(info);
-              persistGoogleUser(info);
-              setSuccess?.('Successfully signed in with Google!');
-              setTimeout(() => setSuccess?.(null), 3000);
-            } catch (err) {
-              console.error('Failed to get Google User details:', err);
-              setError?.(err.message);
+              try {
+                const info = await fetchGoogleUserInfo(tokenResponse.access_token);
+                setGoogleUser(info);
+                persistGoogleUser(info);
+                setSuccess?.('Successfully signed in with Google!');
+                setTimeout(() => setSuccess?.(null), 3000);
+              } catch (err) {
+                console.error('Failed to get Google User details:', err);
+                setError?.(getFriendlyAuthError(err));
+              }
+            } else if (tokenResponse.error) {
+              setGoogleToken(null);
+              setGoogleUser(null);
+              clearGoogleIdentity();
+              setError?.(getFriendlyAuthError(tokenResponse));
             }
+          },
+          error_callback: (err) => {
+            setGoogleToken(null);
+            setGoogleUser(null);
+            clearGoogleIdentity();
+            setError?.(getFriendlyAuthError(err));
           }
-        },
-        error_callback: (err) => {
-          setError?.(`Google Sign In failed: ${err.message}`);
-        }
-      });
-      window.googleTokenClient = client;
-      client.requestAccessToken();
+        });
+        window.googleTokenClient = client;
+        client.requestAccessToken();
+        return;
+      }
+
+      setError?.('Google Identity Services did not load. Please refresh the page and try again.');
     } catch (err) {
       console.error(err);
       setError?.('Failed to initialize Google login client. Make sure client ID is valid.');

@@ -8,7 +8,10 @@ export default function BlueprintCanvasView({
   isAddMode,
   onCanvasClick,
   onDeletePin,
+  onEditPin,
+  onOpenPhoto,
   onResetBlueprint,
+  googleToken,
   onSelectPin,
   onSetZoomScale,
   onToggleAddMode,
@@ -119,8 +122,9 @@ export default function BlueprintCanvasView({
             const isSelected = selectedPin?.id === pin.id;
 
             return (
-              <div
+              <button
                 key={pin.id}
+                type="button"
                 onClick={(e) => {
                   e.stopPropagation();
                   onSelectPin(pin);
@@ -130,23 +134,25 @@ export default function BlueprintCanvasView({
                   left: `${pin.x}%`,
                   top: `${pin.y}%`,
                   transform: 'translate(-50%, -50%)',
-                  width: isSelected ? '20px' : '14px',
-                  height: isSelected ? '20px' : '14px',
+                  width: isSelected ? '24px' : '16px',
+                  height: isSelected ? '24px' : '16px',
                   borderRadius: '50%',
                   backgroundColor: config.color,
                   border: '2px solid #fff',
                   cursor: 'pointer',
-                  boxShadow: '0 0 10px rgba(0,0,0,0.5)',
+                  boxShadow: isSelected ? '0 0 0 4px rgba(245, 158, 11, 0.35), 0 0 10px rgba(0,0,0,0.5)' : '0 0 10px rgba(0,0,0,0.5)',
                   zIndex: isSelected ? 100 : 10,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  transition: 'all 0.15s ease'
+                  transition: 'all 0.15s ease',
+                  padding: 0
                 }}
                 className={isSelected ? '' : 'animate-pulse'}
+                title={pin.phase || 'Pin'}
               >
                 <div style={{ width: '4px', height: '4px', borderRadius: '50%', backgroundColor: '#fff' }} />
-              </div>
+              </button>
             );
           })}
         </div>
@@ -173,12 +179,21 @@ export default function BlueprintCanvasView({
         </div>
       </div>
 
-      <BlueprintSelectedPinCard
-        pin={selectedPin}
-        tradeSectionsConfig={tradeSectionsConfig}
-        onClose={() => onSelectPin(null)}
-        onDelete={onDeletePin}
-      />
+      {selectedPin ? (
+        <BlueprintSelectedPinCard
+          pin={selectedPin}
+          tradeSectionsConfig={tradeSectionsConfig}
+          onClose={() => onSelectPin(null)}
+          onDelete={onDeletePin}
+          onEditPin={onEditPin}
+          onOpenPhoto={onOpenPhoto}
+          googleToken={googleToken}
+        />
+      ) : (
+        <div style={{ padding: '12px 14px', border: '1px dashed var(--color-zinc-700)', borderRadius: '10px', color: 'var(--color-zinc-400)', fontSize: '0.78rem', backgroundColor: 'rgba(255,255,255,0.03)' }}>
+          Tap a pin on the floor plan to view its details and attached verification photos.
+        </div>
+      )}
     </div>
   );
 }

@@ -205,10 +205,13 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           isAddMode={pinboard.isAddMode}
           onCanvasClick={pinboard.handleCanvasClick}
           onDeletePin={pinboard.handleDeletePin}
+          onEditPin={pinboard.handleEditPin}
+          onOpenPhoto={pinboard.setFullscreenAlbumPhoto}
           onResetBlueprint={pinboard.handleResetBlueprint}
           onSelectPin={pinboard.handleSelectPin}
           onSetZoomScale={pinboard.setZoomScale}
           onToggleAddMode={pinboard.handleToggleAddMode}
+          googleToken={googleToken}
           pins={pinboard.pins}
           selectedPin={pinboard.selectedPin}
           tradeSectionsConfig={TRADE_SECTIONS_CONFIG}
@@ -221,9 +224,10 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
         isOpen={pinboard.showAddForm}
         formData={pinboard.formData}
         tradeSectionsConfig={TRADE_SECTIONS_CONFIG}
-        photoPreview={pinboard.photoPreview}
+        photoPreviews={pinboard.photoPreviews}
         savingPin={pinboard.savingPin}
         fileInputRef={pinboard.fileInputRef}
+        isEditing={Boolean(pinboard.editingPin)}
         onCategoryChange={pinboard.handleCategoryChange}
         onFormDataChange={pinboard.setFormData}
         onPhotoSelect={pinboard.handlePhotoSelect}

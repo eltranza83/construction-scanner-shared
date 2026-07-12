@@ -40,6 +40,11 @@ export async function fetchDriveFileBlob(accessToken, fileId) {
   return await response.blob();
 }
 
+export async function fetchDriveFileAsObjectUrl(accessToken, fileId) {
+  const blob = await fetchDriveFileBlob(accessToken, fileId);
+  return URL.createObjectURL(blob);
+}
+
 /**
  * Creates a file metadata resource and then uploads the media content.
  * This two-step process is highly reliable client-side and avoids multipart assembly.

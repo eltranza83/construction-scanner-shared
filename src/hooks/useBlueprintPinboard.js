@@ -6,6 +6,7 @@ import {
   listBlueprintPhasePhotos,
   loadBlueprintVault,
   resetBlueprintVault,
+  updateBlueprintPin,
   uploadBlueprintAlbumPhoto,
   uploadBlueprintVaultFile
 } from '../services/blueprintDrive';
@@ -13,8 +14,22 @@ import {
 const DEFAULT_PIN_FORM = {
   tradeCategory: 'Mechanicals_&_Utilities',
   tradePhase: 'Plumbing Rough-In',
+  room: '',
+  wall: '',
+  level: '',
   note: ''
 };
+
+function buildPinFormData(pin) {
+  return {
+    tradeCategory: pin?.category || DEFAULT_PIN_FORM.tradeCategory,
+    tradePhase: pin?.phase || DEFAULT_PIN_FORM.tradePhase,
+    room: pin?.room || '',
+    wall: pin?.wall || '',
+    level: pin?.level || '',
+    note: pin?.note || ''
+  };
+}
 
 export function useBlueprintPinboard({
   activeProject,
@@ -33,11 +48,12 @@ export function useBlueprintPinboard({
   const [zoomScale, setZoomScale] = useState(1);
   const [isAddMode, setIsAddMode] = useState(false);
   const [selectedPin, setSelectedPin] = useState(null);
+  const [editingPin, setEditingPin] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newPinCoords, setNewPinCoords] = useState({ x: 0, y: 0 });
   const [formData, setFormData] = useState(DEFAULT_PIN_FORM);
-  const [selectedPhoto, setSelectedPhoto] = useState(null);
-  const [photoPreview, setPhotoPreview] = useState(null);
+  const [selectedPhotos, setSelectedPhotos] = useState([]);
+  const [photoPreviews, setPhotoPreviews] = useState([]);
   const [savingPin, setSavingPin] = useState(false);
   const [viewMode, setViewMode] = useState('blueprint');
   const [expandedCategory, setExpandedCategory] = useState(null);
@@ -198,8 +214,9 @@ export function useBlueprintPinboard({
 
     setNewPinCoords({ x, y });
     setFormData(DEFAULT_PIN_FORM);
-    setSelectedPhoto(null);
-    setPhotoPreview(null);
+    setSelectedPhotos([]);
+    setPhotoPreviews([]);
+    setEditingPin(null);
     setShowAddForm(true);
     setIsAddMode(false);
   };
@@ -215,20 +232,26 @@ export function useBlueprintPinboard({
   };
 
   const handlePhotoSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (!files.length) return;
 
-    setSelectedPhoto(file);
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setPhotoPreview(reader.result);
-    };
-    reader.readAsDataURL(file);
+    const nextPhotos = [...selectedPhotos, ...files];
+    setSelectedPhotos(nextPhotos);
+
+    const fileReaders = files.map((file) => new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result);
+      reader.readAsDataURL(file);
+    }));
+
+    Promise.all(fileReaders).then((results) => {
+      setPhotoPreviews(prev => [...prev, ...results]);
+    });
   };
 
   const clearSelectedPhoto = () => {
-    setSelectedPhoto(null);
-    setPhotoPreview(null);
+    setSelectedPhotos([]);
+    setPhotoPreviews([]);
   };
 
   const handleSavePin = async (e) => {
@@ -242,26 +265,50 @@ export function useBlueprintPinboard({
     setError(null);
 
     try {
-      const { updatedPins } = await addBlueprintPin({
-        accessToken: googleToken,
-        projectFolderId: selectedFolder.id,
-        blueprintDataFileId,
-        blueprintFileId,
-        blueprintFileName,
-        pins,
-        pinCoords: newPinCoords,
-        formData,
-        selectedPhoto
-      });
+      let updatedPins;
+      let updatedPin = null;
+
+      if (editingPin) {
+        const result = await updateBlueprintPin({
+          accessToken: googleToken,
+          projectFolderId: selectedFolder.id,
+          blueprintDataFileId,
+          blueprintFileId,
+          blueprintFileName,
+          pins,
+          pinId: editingPin.id,
+          formData,
+          selectedPhotos
+        });
+        updatedPins = result.updatedPins;
+        updatedPin = result.updatedPin;
+      } else {
+        const result = await addBlueprintPin({
+          accessToken: googleToken,
+          projectFolderId: selectedFolder.id,
+          blueprintDataFileId,
+          blueprintFileId,
+          blueprintFileName,
+          pins,
+          pinCoords: newPinCoords,
+          formData,
+          selectedPhotos
+        });
+        updatedPins = result.updatedPins;
+        updatedPin = result.newPin;
+      }
+
       setPins(updatedPins);
+      setSelectedPin(updatedPin);
       setShowAddForm(false);
+      setEditingPin(null);
       setFormData(DEFAULT_PIN_FORM);
       clearSelectedPhoto();
-      setSuccess('Pin added to blueprint!');
+      setSuccess(editingPin ? 'Pin updated.' : 'Pin added to blueprint!');
       setTimeout(() => setSuccess(null), 3000);
     } catch (err) {
       console.error(err);
-      setError(getDriveErrorMessage(err, 'save pin details'));
+      setError(getDriveErrorMessage(err, editingPin ? 'update pin details' : 'save pin details'));
     } finally {
       setSavingPin(false);
     }
@@ -311,6 +358,7 @@ export function useBlueprintPinboard({
   const handleToggleAddMode = () => {
     setIsAddMode(!isAddMode);
     setSelectedPin(null);
+    setEditingPin(null);
   };
 
   const handleSelectPin = (pin) => {
@@ -318,6 +366,16 @@ export function useBlueprintPinboard({
     if (pin) {
       setIsAddMode(false);
     }
+  };
+
+  const handleEditPin = (pin) => {
+    setEditingPin(pin);
+    setSelectedPin(pin);
+    setFormData(buildPinFormData(pin));
+    setSelectedPhotos([]);
+    setPhotoPreviews([]);
+    setShowAddForm(true);
+    setIsAddMode(false);
   };
 
   return {
@@ -335,10 +393,11 @@ export function useBlueprintPinboard({
     isAddMode,
     loading,
     loadingAlbumPhotos,
-    photoPreview,
+    photoPreviews,
     pins,
     savingPin,
     selectedPin,
+    editingPin,
     showAddForm,
     success,
     uploadingAlbumPhoto,
@@ -348,6 +407,7 @@ export function useBlueprintPinboard({
     handleCanvasClick,
     handleCategoryChange,
     handleDeletePin,
+    handleEditPin,
     handlePhotoSelect,
     handleResetBlueprint,
     handleSavePin,

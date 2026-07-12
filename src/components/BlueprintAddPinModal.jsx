@@ -5,9 +5,10 @@ export default function BlueprintAddPinModal({
   isOpen,
   formData,
   tradeSectionsConfig,
-  photoPreview,
+  photoPreviews,
   savingPin,
   fileInputRef,
+  isEditing,
   onCategoryChange,
   onFormDataChange,
   onPhotoSelect,
@@ -21,7 +22,7 @@ export default function BlueprintAddPinModal({
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 2000, padding: '20px' }}>
       <div style={{ backgroundColor: 'var(--color-zinc-900)', border: '1px solid var(--color-zinc-800)', borderRadius: '16px', padding: '20px', width: '100%', maxWidth: '400px', display: 'flex', flexDirection: 'column', gap: '16px', margin: 'auto' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>Add Installation Pin</h3>
+          <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{isEditing ? 'Edit Installation Pin' : 'Add Installation Pin'}</h3>
           <button
             type="button"
             onClick={onCancel}
@@ -62,6 +63,41 @@ export default function BlueprintAddPinModal({
             </select>
           </div>
 
+          <div style={{ display: 'grid', gridTemplateColumns: '0.8fr 1.2fr', gap: '10px' }}>
+            <div>
+              <label className="form-label" style={{ fontSize: '0.72rem' }}>Level</label>
+              <input
+                value={formData.level}
+                onChange={(e) => onFormDataChange(prev => ({ ...prev, level: e.target.value }))}
+                placeholder="1st Floor"
+                className="form-input"
+                style={{ width: '100%', height: '36px', borderRadius: '8px', padding: '0 10px', fontSize: '0.82rem', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', color: '#fff' }}
+              />
+            </div>
+
+            <div>
+              <label className="form-label" style={{ fontSize: '0.72rem' }}>Room / Area</label>
+              <input
+                value={formData.room}
+                onChange={(e) => onFormDataChange(prev => ({ ...prev, room: e.target.value }))}
+                placeholder="Kitchen"
+                className="form-input"
+                style={{ width: '100%', height: '36px', borderRadius: '8px', padding: '0 10px', fontSize: '0.82rem', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', color: '#fff' }}
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="form-label" style={{ fontSize: '0.72rem' }}>Wall / Zone</label>
+            <input
+              value={formData.wall}
+              onChange={(e) => onFormDataChange(prev => ({ ...prev, wall: e.target.value }))}
+              placeholder="Island wall, west shower wall, garage north wall..."
+              className="form-input"
+              style={{ width: '100%', height: '36px', borderRadius: '8px', padding: '0 10px', fontSize: '0.82rem', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', color: '#fff' }}
+            />
+          </div>
+
           <div>
             <label className="form-label" style={{ fontSize: '0.72rem' }}>Installation Note</label>
             <textarea
@@ -76,16 +112,28 @@ export default function BlueprintAddPinModal({
 
           <div>
             <label className="form-label" style={{ fontSize: '0.72rem' }}>Verification Photo (Optional)</label>
+            {isEditing && !photoPreviews.length && (
+              <div style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)', marginBottom: '6px' }}>
+                Existing photo stays attached unless you choose a new one.
+              </div>
+            )}
 
-            {photoPreview ? (
-              <div style={{ position: 'relative', width: '100%', height: '140px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-zinc-800)' }}>
-                <img src={photoPreview} alt="Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            {photoPreviews.length > 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px' }}>
+                  {photoPreviews.map((preview, index) => (
+                    <div key={`${preview}-${index}`} style={{ position: 'relative', width: '100%', height: '110px', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-zinc-800)' }}>
+                      <img src={preview} alt={`Preview ${index + 1}`} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    </div>
+                  ))}
+                </div>
                 <button
                   type="button"
-                  onClick={onClearPhoto}
-                  style={{ position: 'absolute', top: '8px', right: '8px', width: '24px', height: '24px', borderRadius: '50%', backgroundColor: 'rgba(0,0,0,0.6)', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="btn"
+                  style={{ backgroundColor: 'var(--color-zinc-800)', border: 'none', color: '#fff', fontSize: '0.74rem', height: '34px' }}
                 >
-                  <X size={12} />
+                  Add More Photos
                 </button>
               </div>
             ) : (
@@ -103,6 +151,7 @@ export default function BlueprintAddPinModal({
               onChange={onPhotoSelect}
               accept="image/*"
               capture="environment"
+              multiple
               style={{ display: 'none' }}
             />
           </div>
@@ -128,7 +177,7 @@ export default function BlueprintAddPinModal({
                   Saving...
                 </>
               ) : (
-                'Save Pin'
+                isEditing ? 'Update Pin' : 'Save Pin'
               )}
             </button>
           </div>
