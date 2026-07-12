@@ -285,6 +285,9 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectIssue(null);
                     onSelectPin(pin);
+                    requestAnimationFrame(() => {
+                      centerScrollOnPoint(imageContainerRef.current, Number(pin.x), Number(pin.y));
+                    });
                   }}
                   style={{
                     position: 'absolute',
@@ -326,6 +329,9 @@ export default function BlueprintCanvasView({
                     e.stopPropagation();
                     onSelectPin(null);
                     onSelectIssue(issue);
+                    requestAnimationFrame(() => {
+                      centerScrollOnPoint(imageContainerRef.current, Number(issue.floorPlanX), Number(issue.floorPlanY));
+                    });
                   }}
                   style={{
                     position: 'absolute',
