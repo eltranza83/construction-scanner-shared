@@ -42,31 +42,44 @@ export default function BlueprintCanvasView({
   zoomScale
 }) {
   const locatedIssues = issues.filter(isLocatedIssue);
+  const actionButtonBaseStyle = {
+    width: 'auto',
+    minWidth: 0,
+    padding: '0 12px',
+    fontSize: '0.76rem',
+    fontWeight: 800,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '6px',
+    color: '#fff',
+    border: '1px solid rgba(255,255,255,0.08)',
+    height: '36px',
+    borderRadius: '10px',
+    lineHeight: 1,
+    whiteSpace: 'nowrap',
+    boxShadow: 'none'
+  };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '10px 14px', borderRadius: '10px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontWeight: 600 }}>X-Ray Floor Plan</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>{pins.length} active installation pins</span>
+      <div className="blueprint-toolbar">
+        <div className="blueprint-toolbar-copy">
+          <span className="blueprint-toolbar-title">X-Ray Floor Plan</span>
+          <span className="blueprint-toolbar-status">
+            X-Ray: {pins.length} • Issues: {locatedIssues.length}
+          </span>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div className="blueprint-toolbar-actions">
           <button
+            type="button"
             onClick={onToggleIssueAddMode}
-            className={`btn ${isIssueAddMode ? 'btn-primary' : ''}`}
+            className={`btn blueprint-action-button ${isIssueAddMode ? 'active issue' : ''}`}
             style={{
-              width: 'auto',
-              padding: '6px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              ...actionButtonBaseStyle,
               backgroundColor: isIssueAddMode ? '#ef4444' : 'var(--color-zinc-800)',
-              color: isIssueAddMode ? '#fff' : '#fff',
-              border: 'none',
-              height: '32px'
+              borderColor: isIssueAddMode ? 'rgba(248, 113, 113, 0.55)' : 'rgba(255,255,255,0.08)'
             }}
           >
             <AlertTriangle size={14} className={isIssueAddMode ? 'animate-pulse' : ''} />
@@ -74,20 +87,14 @@ export default function BlueprintCanvasView({
           </button>
 
           <button
+            type="button"
             onClick={onToggleAddMode}
-            className={`btn ${isAddMode ? 'btn-primary' : ''}`}
+            className={`btn blueprint-action-button ${isAddMode ? 'active xray' : ''}`}
             style={{
-              width: 'auto',
-              padding: '6px 12px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
+              ...actionButtonBaseStyle,
               backgroundColor: isAddMode ? 'var(--color-emerald-500)' : 'var(--color-zinc-800)',
               color: isAddMode ? '#000' : '#fff',
-              border: 'none',
-              height: '32px'
+              borderColor: isAddMode ? 'rgba(52, 211, 153, 0.55)' : 'rgba(255,255,255,0.08)'
             }}
           >
             <MapPin size={14} className={isAddMode ? 'animate-pulse' : ''} />
@@ -95,14 +102,16 @@ export default function BlueprintCanvasView({
           </button>
 
           <button
+            type="button"
             onClick={onResetBlueprint}
+            className="blueprint-reset-button"
             style={{
-              width: '32px',
-              height: '32px',
+              width: '36px',
+              height: '36px',
               backgroundColor: 'var(--color-zinc-800)',
-              border: 'none',
+              border: '1px solid rgba(255,255,255,0.08)',
               color: 'var(--color-rose-500)',
-              borderRadius: '6px',
+              borderRadius: '10px',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -162,7 +171,7 @@ export default function BlueprintCanvasView({
               flex: '0 0 auto',
               transition: 'width 0.15s ease-out',
               display: 'block',
-              cursor: isAddMode ? 'crosshair' : 'default'
+              cursor: isAddMode || isIssueAddMode ? 'crosshair' : 'default'
             }}
           >
             <img

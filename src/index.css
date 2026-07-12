@@ -901,6 +901,89 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   border-color: rgba(245, 158, 11, 0.4) !important;
 }
 
+/* X-Ray floor plan toolbar */
+.blueprint-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background-color: var(--color-zinc-950);
+  border: 1px solid var(--color-zinc-800);
+  padding: 12px;
+  border-radius: 10px;
+}
+
+.blueprint-toolbar-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.blueprint-toolbar-title {
+  font-size: 0.78rem;
+  color: var(--color-zinc-400);
+  font-weight: 700;
+}
+
+.blueprint-toolbar-status {
+  font-size: 0.82rem;
+  font-weight: 800;
+  color: #fff;
+  line-height: 1.25;
+}
+
+.blueprint-toolbar-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.blueprint-action-button {
+  transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
+}
+
+.blueprint-action-button:active,
+.blueprint-reset-button:active {
+  transform: scale(0.97);
+}
+
+@media (max-width: 480px) {
+  .blueprint-toolbar {
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px;
+  }
+
+  .blueprint-toolbar-copy {
+    flex: 1 1 104px;
+  }
+
+  .blueprint-toolbar-status {
+    font-size: 0.78rem;
+    max-width: 118px;
+  }
+
+  .blueprint-toolbar-actions {
+    display: grid;
+    grid-template-columns: minmax(74px, 1fr) minmax(82px, 1fr) 36px;
+    gap: 7px;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  .blueprint-action-button {
+    width: 100% !important;
+    padding: 0 8px !important;
+    font-size: 0.72rem !important;
+    white-space: normal !important;
+    line-height: 1.08 !important;
+    text-align: center;
+  }
+}
+
 /* Badge Bounce & Pop Animation */
 @keyframes badgeBouncePop {
   0% {
