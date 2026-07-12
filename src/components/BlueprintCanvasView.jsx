@@ -255,8 +255,8 @@ export default function BlueprintCanvasView({
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '30px' : '24px',
-                    height: isSelected ? '30px' : '24px',
+                    width: isSelected ? '24px' : '18px',
+                    height: isSelected ? '24px' : '18px',
                     borderRadius: '6px',
                     backgroundColor: 'transparent',
                     border: 'none',
@@ -273,7 +273,7 @@ export default function BlueprintCanvasView({
                   className={isSelected ? '' : 'animate-pulse'}
                   title={pin.phase || 'Pin'}
                 >
-                  <MapPin size={isSelected ? 24 : 20} style={{ color: '#10b981', strokeWidth: 2.8 }} />
+                  <MapPin size={isSelected ? 18 : 14} style={{ color: '#10b981', strokeWidth: 2.6 }} />
                 </button>
               );
             })}
@@ -296,8 +296,8 @@ export default function BlueprintCanvasView({
                     left: `${Number(issue.floorPlanX)}%`,
                     top: `${Number(issue.floorPlanY)}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '30px' : '24px',
-                    height: isSelected ? '30px' : '24px',
+                    width: isSelected ? '24px' : '18px',
+                    height: isSelected ? '24px' : '18px',
                     borderRadius: '6px',
                     backgroundColor: 'transparent',
                     border: 'none',
@@ -313,7 +313,7 @@ export default function BlueprintCanvasView({
                   }}
                   title={issue.title || 'Punch issue'}
                 >
-                  <AlertTriangle size={isSelected ? 24 : 20} style={{ color: markerColor, strokeWidth: 2.8 }} />
+                  <AlertTriangle size={isSelected ? 18 : 14} style={{ color: markerColor, strokeWidth: 2.6 }} />
                 </button>
               );
             })}
