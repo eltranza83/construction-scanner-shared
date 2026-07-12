@@ -343,7 +343,7 @@ export function useBlueprintPinboard({
   };
 
   const handleResetBlueprint = async () => {
-    if (!window.confirm('WARNING: Removing the blueprint will unlink the image and delete all coordinate pins. Do you want to continue?')) return;
+    if (!window.confirm('Remove floor plan image? This will also remove all X-Ray pins saved on this floor plan.')) return;
 
     setLoading(true);
     try {

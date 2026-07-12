@@ -42,6 +42,17 @@ export default function BlueprintCanvasView({
   zoomScale
 }) {
   const locatedIssues = issues.filter(isLocatedIssue);
+  const activeDropMode = isIssueAddMode ? 'issue' : (isAddMode ? 'xray' : null);
+  const frameBorderColor = activeDropMode === 'issue'
+    ? 'rgba(248, 113, 113, 0.82)'
+    : activeDropMode === 'xray'
+      ? 'rgba(52, 211, 153, 0.82)'
+      : 'var(--color-zinc-800)';
+  const frameGlow = activeDropMode === 'issue'
+    ? '0 0 0 2px rgba(239, 68, 68, 0.18), 0 0 24px rgba(239, 68, 68, 0.2)'
+    : activeDropMode === 'xray'
+      ? '0 0 0 2px rgba(16, 185, 129, 0.18), 0 0 24px rgba(16, 185, 129, 0.2)'
+      : 'none';
   const actionButtonBaseStyle = {
     width: 'auto',
     minWidth: 0,
@@ -158,12 +169,14 @@ export default function BlueprintCanvasView({
       <div
         style={{
           position: 'relative',
-          border: '1px solid var(--color-zinc-800)',
+          border: `1px solid ${frameBorderColor}`,
           borderRadius: '12px',
           maxHeight: '450px',
           backgroundColor: '#0c0c0e',
           overflow: 'hidden',
-          minHeight: '260px'
+          minHeight: '260px',
+          boxShadow: frameGlow,
+          transition: 'border-color 0.18s ease, box-shadow 0.18s ease'
         }}
       >
         <button
