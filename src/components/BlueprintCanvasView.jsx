@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AlertTriangle, MapPin, RotateCcw, X, ZoomIn, ZoomOut } from 'lucide-react';
 import BlueprintSelectedPinCard from './BlueprintSelectedPinCard';
 import IssueCard from './IssueCard';
@@ -12,6 +12,21 @@ function getIssueMarkerColor(issue) {
 
 function isLocatedIssue(issue) {
   return !issue?.deletedAt && Number.isFinite(Number(issue.floorPlanX)) && Number.isFinite(Number(issue.floorPlanY));
+}
+
+function centerScrollOnPoint(container, xPercent, yPercent) {
+  if (!container || !Number.isFinite(xPercent) || !Number.isFinite(yPercent)) return;
+
+  const maxLeft = Math.max(container.scrollWidth - container.clientWidth, 0);
+  const maxTop = Math.max(container.scrollHeight - container.clientHeight, 0);
+  const nextLeft = (container.scrollWidth * xPercent / 100) - (container.clientWidth / 2);
+  const nextTop = (container.scrollHeight * yPercent / 100) - (container.clientHeight / 2);
+
+  container.scrollTo({
+    left: Math.min(Math.max(nextLeft, 0), maxLeft),
+    top: Math.min(Math.max(nextTop, 0), maxTop),
+    behavior: 'smooth'
+  });
 }
 
 export default function BlueprintCanvasView({
@@ -42,6 +57,17 @@ export default function BlueprintCanvasView({
   zoomScale
 }) {
   const locatedIssues = issues.filter(isLocatedIssue);
+  const selectedPoint = selectedIssue
+    ? {
+      x: Number(selectedIssue.floorPlanX),
+      y: Number(selectedIssue.floorPlanY)
+    }
+    : selectedPin
+      ? {
+        x: Number(selectedPin.x),
+        y: Number(selectedPin.y)
+      }
+      : null;
   const activeDropMode = isIssueAddMode ? 'issue' : (isAddMode ? 'xray' : null);
   const frameBorderColor = activeDropMode === 'issue'
     ? 'rgba(248, 113, 113, 0.82)'
@@ -70,6 +96,16 @@ export default function BlueprintCanvasView({
     lineHeight: 1,
     boxShadow: 'none'
   };
+
+  useEffect(() => {
+    if (!selectedPoint) return;
+
+    const animationId = requestAnimationFrame(() => {
+      centerScrollOnPoint(imageContainerRef.current, selectedPoint.x, selectedPoint.y);
+    });
+
+    return () => cancelAnimationFrame(animationId);
+  }, [imageContainerRef, selectedPoint?.x, selectedPoint?.y, selectedPin?.id, selectedIssue?.id, zoomScale]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
@@ -255,14 +291,14 @@ export default function BlueprintCanvasView({
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '24px' : '18px',
-                    height: isSelected ? '24px' : '18px',
-                    borderRadius: '6px',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
                     backgroundColor: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
                     filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8)) drop-shadow(0 0 2px rgba(255,255,255,0.9))',
-                    boxShadow: isSelected ? '0 0 0 3px rgba(16, 185, 129, 0.22)' : 'none',
+                    boxShadow: isSelected ? '0 0 0 3px rgba(16, 185, 129, 0.24)' : 'none',
                     zIndex: isSelected ? 100 : 10,
                     display: 'flex',
                     alignItems: 'center',
@@ -273,7 +309,7 @@ export default function BlueprintCanvasView({
                   className={isSelected ? '' : 'animate-pulse'}
                   title={pin.phase || 'Pin'}
                 >
-                  <MapPin size={isSelected ? 18 : 14} style={{ color: '#10b981', strokeWidth: 2.6 }} />
+                  <MapPin size={14} style={{ color: '#10b981', strokeWidth: 2.6 }} />
                 </button>
               );
             })}
@@ -296,14 +332,14 @@ export default function BlueprintCanvasView({
                     left: `${Number(issue.floorPlanX)}%`,
                     top: `${Number(issue.floorPlanY)}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '24px' : '18px',
-                    height: isSelected ? '24px' : '18px',
-                    borderRadius: '6px',
+                    width: '22px',
+                    height: '22px',
+                    borderRadius: '50%',
                     backgroundColor: 'transparent',
                     border: 'none',
                     cursor: 'pointer',
                     filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8)) drop-shadow(0 0 2px rgba(255,255,255,0.9))',
-                    boxShadow: isSelected ? '0 0 0 3px rgba(239, 68, 68, 0.22)' : 'none',
+                    boxShadow: isSelected ? '0 0 0 3px rgba(239, 68, 68, 0.24)' : 'none',
                     zIndex: isSelected ? 110 : 20,
                     display: 'flex',
                     alignItems: 'center',
@@ -313,7 +349,7 @@ export default function BlueprintCanvasView({
                   }}
                   title={issue.title || 'Punch issue'}
                 >
-                  <AlertTriangle size={isSelected ? 18 : 14} style={{ color: markerColor, strokeWidth: 2.6 }} />
+                  <AlertTriangle size={14} style={{ color: markerColor, strokeWidth: 2.6 }} />
                 </button>
               );
             })}
