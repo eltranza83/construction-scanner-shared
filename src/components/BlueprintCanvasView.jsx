@@ -255,13 +255,14 @@ export default function BlueprintCanvasView({
                     left: `${pin.x}%`,
                     top: `${pin.y}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '34px' : '26px',
-                    height: isSelected ? '34px' : '26px',
-                    borderRadius: '50%',
-                    backgroundColor: '#10b981',
-                    border: '2px solid #fff',
+                    width: isSelected ? '30px' : '24px',
+                    height: isSelected ? '30px' : '24px',
+                    borderRadius: '6px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
                     cursor: 'pointer',
-                    boxShadow: isSelected ? '0 0 0 4px rgba(16, 185, 129, 0.35), 0 0 10px rgba(0,0,0,0.5)' : '0 0 10px rgba(0,0,0,0.5)',
+                    filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8)) drop-shadow(0 0 2px rgba(255,255,255,0.9))',
+                    boxShadow: isSelected ? '0 0 0 3px rgba(16, 185, 129, 0.22)' : 'none',
                     zIndex: isSelected ? 100 : 10,
                     display: 'flex',
                     alignItems: 'center',
@@ -272,7 +273,7 @@ export default function BlueprintCanvasView({
                   className={isSelected ? '' : 'animate-pulse'}
                   title={pin.phase || 'Pin'}
                 >
-                  <MapPin size={isSelected ? 18 : 14} style={{ color: '#fff' }} />
+                  <MapPin size={isSelected ? 24 : 20} style={{ color: '#10b981', strokeWidth: 2.8 }} />
                 </button>
               );
             })}
@@ -295,13 +296,14 @@ export default function BlueprintCanvasView({
                     left: `${Number(issue.floorPlanX)}%`,
                     top: `${Number(issue.floorPlanY)}%`,
                     transform: 'translate(-50%, -50%)',
-                    width: isSelected ? '34px' : '26px',
-                    height: isSelected ? '34px' : '26px',
-                    borderRadius: '50%',
-                    backgroundColor: markerColor,
-                    border: '2px solid #fff',
+                    width: isSelected ? '30px' : '24px',
+                    height: isSelected ? '30px' : '24px',
+                    borderRadius: '6px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
                     cursor: 'pointer',
-                    boxShadow: isSelected ? '0 0 0 4px rgba(239, 68, 68, 0.28), 0 0 10px rgba(0,0,0,0.5)' : '0 0 10px rgba(0,0,0,0.5)',
+                    filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.8)) drop-shadow(0 0 2px rgba(255,255,255,0.9))',
+                    boxShadow: isSelected ? '0 0 0 3px rgba(239, 68, 68, 0.22)' : 'none',
                     zIndex: isSelected ? 110 : 20,
                     display: 'flex',
                     alignItems: 'center',
@@ -311,7 +313,7 @@ export default function BlueprintCanvasView({
                   }}
                   title={issue.title || 'Punch issue'}
                 >
-                  <AlertTriangle size={isSelected ? 16 : 13} style={{ color: '#fff' }} />
+                  <AlertTriangle size={isSelected ? 24 : 20} style={{ color: markerColor, strokeWidth: 2.8 }} />
                 </button>
               );
             })}
