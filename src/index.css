@@ -945,6 +945,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   transition: background-color 0.18s ease, border-color 0.18s ease, transform 0.12s ease;
 }
 
+.blueprint-action-button svg {
+  flex: 0 0 auto;
+}
+
+.blueprint-action-label {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 0.98;
+  white-space: nowrap;
+}
+
+.blueprint-action-label span {
+  display: block;
+}
+
 .blueprint-action-button:active,
 .blueprint-reset-button:active {
   transform: scale(0.97);
@@ -968,7 +986,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 
   .blueprint-toolbar-actions {
     display: grid;
-    grid-template-columns: minmax(74px, 1fr) minmax(82px, 1fr) 36px;
+    grid-template-columns: minmax(78px, 1fr) minmax(78px, 1fr) 44px;
     gap: 7px;
     flex: 1 1 0;
     min-width: 0;
@@ -978,9 +996,9 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
     width: 100% !important;
     padding: 0 8px !important;
     font-size: 0.72rem !important;
-    white-space: normal !important;
     line-height: 1.08 !important;
     text-align: center;
+    height: 44px !important;
   }
 }
 

@@ -54,10 +54,9 @@ export default function BlueprintCanvasView({
     gap: '6px',
     color: '#fff',
     border: '1px solid rgba(255,255,255,0.08)',
-    height: '36px',
+    height: '44px',
     borderRadius: '10px',
     lineHeight: 1,
-    whiteSpace: 'nowrap',
     boxShadow: 'none'
   };
 
@@ -67,7 +66,7 @@ export default function BlueprintCanvasView({
         <div className="blueprint-toolbar-copy">
           <span className="blueprint-toolbar-title">X-Ray Floor Plan</span>
           <span className="blueprint-toolbar-status">
-            X-Ray: {pins.length} • Issues: {locatedIssues.length}
+            X-Ray: {pins.length} | Issues: {locatedIssues.length}
           </span>
         </div>
 
@@ -83,7 +82,19 @@ export default function BlueprintCanvasView({
             }}
           >
             <AlertTriangle size={14} className={isIssueAddMode ? 'animate-pulse' : ''} />
-            {isIssueAddMode ? 'Tap Plan...' : 'Add Issue Pin'}
+            <span className="blueprint-action-label">
+              {isIssueAddMode ? (
+                <>
+                  <span>Tap</span>
+                  <span>Plan</span>
+                </>
+              ) : (
+                <>
+                  <span>Issue</span>
+                  <span>Pin</span>
+                </>
+              )}
+            </span>
           </button>
 
           <button
@@ -98,7 +109,19 @@ export default function BlueprintCanvasView({
             }}
           >
             <MapPin size={14} className={isAddMode ? 'animate-pulse' : ''} />
-            {isAddMode ? 'Tap Plan...' : 'Add X-Ray Pin'}
+            <span className="blueprint-action-label">
+              {isAddMode ? (
+                <>
+                  <span>Tap</span>
+                  <span>Plan</span>
+                </>
+              ) : (
+                <>
+                  <span>X-Ray</span>
+                  <span>Pin</span>
+                </>
+              )}
+            </span>
           </button>
 
           <button
@@ -107,7 +130,7 @@ export default function BlueprintCanvasView({
             className="blueprint-reset-button"
             style={{
               width: '36px',
-              height: '36px',
+              height: '44px',
               backgroundColor: 'var(--color-zinc-800)',
               border: '1px solid rgba(255,255,255,0.08)',
               color: 'var(--color-rose-500)',
