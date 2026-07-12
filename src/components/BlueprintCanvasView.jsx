@@ -302,6 +302,7 @@ export default function BlueprintCanvasView({
             right: '12px',
             bottom: '12px',
             display: 'flex',
+            flexDirection: 'column',
             gap: '6px',
             zIndex: 50,
             padding: '6px',
