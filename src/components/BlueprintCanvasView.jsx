@@ -124,26 +124,6 @@ export default function BlueprintCanvasView({
             </span>
           </button>
 
-          <button
-            type="button"
-            onClick={onResetBlueprint}
-            className="blueprint-reset-button"
-            style={{
-              width: '36px',
-              height: '44px',
-              backgroundColor: 'var(--color-zinc-800)',
-              border: '1px solid rgba(255,255,255,0.08)',
-              color: 'var(--color-rose-500)',
-              borderRadius: '10px',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-            title="Reset Blueprint"
-          >
-            <X size={14} />
-          </button>
         </div>
       </div>
 
@@ -176,6 +156,32 @@ export default function BlueprintCanvasView({
           minHeight: '260px'
         }}
       >
+        <button
+          type="button"
+          onClick={onResetBlueprint}
+          className="blueprint-reset-button"
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            width: '36px',
+            height: '36px',
+            backgroundColor: 'rgba(10, 10, 10, 0.82)',
+            border: '1px solid rgba(255,255,255,0.16)',
+            color: 'var(--color-rose-500)',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 60,
+            boxShadow: '0 6px 16px rgba(0,0,0,0.35)'
+          }}
+          title="Remove floor plan"
+        >
+          <X size={15} />
+        </button>
+
         <div
           style={{
             overflow: 'auto',
