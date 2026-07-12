@@ -82,27 +82,74 @@ function titleCase(value) {
 function drawAdepecHeader(pdf, title, subtitle) {
   const pageWidth = 210;
   const margin = 15;
+  const logoX = margin;
+  const logoY = 9;
+  const iconSize = 17;
+  const iconScale = iconSize / 100;
+  const iconOffsetX = logoX;
+  const iconOffsetY = logoY;
+
+  const mapPoint = (x, y) => [
+    iconOffsetX + (x * iconScale),
+    iconOffsetY + (y * iconScale)
+  ];
+
+  const drawPath = (points, close = true) => {
+    const [startX, startY] = mapPoint(points[0][0], points[0][1]);
+    const lines = points.slice(1).map(([x, y]) => {
+      const [nextX, nextY] = mapPoint(x, y);
+      return [nextX - startX, nextY - startY];
+    });
+    pdf.lines(lines, startX, startY, [1, 1], close ? 'F' : 'S');
+  };
 
   pdf.setFillColor(...ADEPEC_DARK);
   pdf.rect(0, 0, pageWidth, 38, 'F');
 
-  pdf.setDrawColor(...ADEPEC_GOLD);
-  pdf.setLineWidth(1.2);
-  pdf.line(margin, 25, margin + 7, 18);
-  pdf.line(margin + 7, 18, margin + 14, 25);
-  pdf.line(margin + 2, 25, margin + 2, 31);
-  pdf.line(margin + 12, 25, margin + 12, 31);
-  pdf.line(margin + 2, 31, margin + 12, 31);
+  pdf.setFillColor(...ADEPEC_GOLD);
+  drawPath([
+    [50, 15],
+    [80, 45],
+    [80, 85],
+    [71, 85],
+    [71, 45],
+    [50, 24],
+    [29, 45],
+    [29, 85],
+    [20, 85],
+    [20, 45]
+  ]);
+  drawPath([
+    [50, 33.5],
+    [66.5, 50],
+    [66.5, 85],
+    [50.5, 85],
+    [50.5, 73],
+    [49.5, 73],
+    [49.5, 85],
+    [33.5, 85],
+    [33.5, 50]
+  ]);
+  drawPath([
+    [50, 42.5],
+    [57.5, 50],
+    [57.5, 63],
+    [42.5, 63],
+    [42.5, 50]
+  ]);
 
   pdf.setTextColor(255, 255, 255);
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(20);
-  pdf.text('ADEPEC', margin + 20, 18);
+  pdf.setFontSize(15);
+  pdf.text('A D E P E C', margin + 25, 16);
 
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(8);
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(7.5);
   pdf.setTextColor(...ADEPEC_GOLD);
-  pdf.text('HOMES', margin + 20, 24);
+  pdf.line(margin + 25, 23, margin + 38, 23);
+  pdf.line(margin + 69, 23, margin + 82, 23);
+  pdf.setTextColor(212, 212, 216);
+  pdf.text('H O M E S', margin + 52, 24.5, { align: 'center' });
 
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(10);
