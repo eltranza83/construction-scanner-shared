@@ -4,6 +4,7 @@ import EditFormAttachments from './EditFormAttachments';
 import EditFormCamera from './EditFormCamera';
 import {
   ALLOCATION_COLORS,
+  ROUTING_TEST_SPLITS,
   TRADE_SECTIONS_CONFIG,
   compressImage,
   hasWholeWord,
@@ -62,7 +63,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         // Normalize legacy database names
         if (cat === 'Structural_Frame') cat = 'Framing_&_Lumber';
         if (phase === 'HVAC Rough-In') phase = 'HVAC / AC Systems';
-        if (phase === 'Framing') phase = 'Framing & Lumber';
+        if (phase === 'Framing' || phase === 'Framing & Lumber') phase = 'Framing Lumber & Truss';
         
         return {
           id: s.id || `split_loaded_${idx}_${Date.now()}`,
@@ -94,8 +95,11 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
   const [manualAllocations, setManualAllocations] = useState({});
   // Track manual split descriptions so auto-generator doesn't override them
   const [manualDescriptions, setManualDescriptions] = useState({});
+  const isRoutingTestLoaded = splits.some(split => String(split.id || '').startsWith('routing_test_'));
 
   useEffect(() => {
+    if (isRoutingTestLoaded) return;
+
     if (stagedItem.metadata.lineItems && splits.length > 0) {
       setItemAllocations(prev => {
         const next = { ...prev };
@@ -118,10 +122,12 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         return next;
       });
     }
-  }, [splits, stagedItem.metadata.lineItems, manualAllocations]);
+  }, [splits, stagedItem.metadata.lineItems, manualAllocations, isRoutingTestLoaded]);
 
   // Run initial allocation calculation if itemAllocations is populated
   useEffect(() => {
+    if (isRoutingTestLoaded) return;
+
     if (stagedItem.metadata.lineItems && splits.length > 0 && Object.keys(itemAllocations).length > 0) {
       // Calculate sums and descriptions based on current allocations
       setSplits(currentSplits => {
@@ -154,7 +160,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         return currentSplits;
       });
     }
-  }, [itemAllocations, stagedItem.metadata.lineItems, manualDescriptions]);
+  }, [itemAllocations, stagedItem.metadata.lineItems, manualDescriptions, isRoutingTestLoaded]);
 
   const handleAllocateItem = (itemIdx, splitId) => {
     setManualAllocations(prev => ({ ...prev, [itemIdx]: true }));
@@ -240,6 +246,39 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
         tradePhase: formData.tradePhase || 'Plumbing Rough-In'
       }
     ]);
+  };
+
+  const handleLoadRoutingTestSplits = () => {
+    const defaultLot = formData.lotNumber || projects[0]?.name || '';
+    const nextSplits = ROUTING_TEST_SPLITS.map((split, index) => {
+      const amount = (index + 1 + 0.01 * (index + 1)).toFixed(2);
+      return {
+        id: `routing_test_${index + 1}`,
+        amount,
+        costCategory: split.costCategory,
+        lotNumber: defaultLot,
+        description: split.description,
+        tradeCategory: split.tradeCategory,
+        tradePhase: split.tradePhase
+      };
+    });
+    const total = nextSplits.reduce((sum, split) => sum + Number(split.amount), 0);
+
+    setIsSplit(true);
+    setSplits(nextSplits);
+    setManualAllocations({});
+    setManualDescriptions({});
+    setFormData(prev => ({
+      ...prev,
+      type: 'invoice',
+      vendor: prev.vendor || 'ADEPEC Routing Test Supply',
+      description: 'Full category routing test',
+      lotNumber: defaultLot,
+      amount: total.toFixed(2),
+      costCategory: 'material',
+      tradeCategory: nextSplits[0]?.tradeCategory || prev.tradeCategory,
+      tradePhase: nextSplits[0]?.tradePhase || prev.tradePhase
+    }));
   };
 
   const handleRemoveSplit = (id) => {
@@ -823,7 +862,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                     }
                     const isFrame = hasWholeWord(desc, ['lumber', 'stud', 'plywood', 'nail', 'bolt', 'truss', 'header', 'joist', 'timber', 'post', 'screw', 'anchor', 'wood', 'hanger', 'plate', 'frame', 'sheathing', 'tie']);
                     if (isFrame && !detectedTrades.some(t => t.tradeCategory === 'Framing_&_Lumber')) {
-                      detectedTrades.push({ tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing & Lumber' });
+                      detectedTrades.push({ tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing Lumber & Truss' });
                     }
                     const isCabinet = hasWholeWord(desc, ['cabinet', 'closet', 'rod', 'shelf', 'bracket', 'drawer', 'handle', 'hinge', 'trim', 'molding', 'door', 'pull', 'vanity']);
                     if (isCabinet && !detectedTrades.some(t => t.tradePhase === 'Cabinets & Trim Carpentry')) {
@@ -834,8 +873,8 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                       detectedTrades.push({ tradeCategory: 'Interior_Finishes', tradePhase: 'Drywall & Sheetrock' });
                     }
                     const isPaint = hasWholeWord(desc, ['paint', 'brush', 'roller', 'primer', 'caulk', 'sealer', 'varnish', 'stain', 'solvent']);
-                    if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint')) {
-                      detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint' });
+                    if (isPaint && !detectedTrades.some(t => t.tradePhase === 'Paint & Finishes')) {
+                      detectedTrades.push({ tradeCategory: 'Paint_Tile', tradePhase: 'Paint & Finishes' });
                     }
                   });
 
@@ -857,7 +896,7 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
                     } else if (mainTradePhase === 'Electrical & Lighting') {
                       split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
                     } else if (mainTradeCategory === 'Interior_Finishes') {
-                      split2Trade = { tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing & Lumber' };
+                      split2Trade = { tradeCategory: 'Framing_&_Lumber', tradePhase: 'Framing Lumber & Truss' };
                     } else {
                       split2Trade = { tradeCategory: 'Mechanicals_&_Utilities', tradePhase: 'Plumbing Rough-In' };
                     }
@@ -907,14 +946,25 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', marginTop: '10px', borderTop: '1px solid var(--color-zinc-800)', paddingTop: '10px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' }}>
                 <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#C5A059' }}>Splits List</span>
-                <button 
-                  type="button"
-                  onClick={handleAddSplit}
-                  className="btn btn-secondary"
-                  style={{ width: 'auto', padding: '3px 8px', fontSize: '0.68rem', borderColor: '#C5A059', color: '#C5A059' }}
-                >
-                  + Add Split Row
-                </button>
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+                  <button
+                    type="button"
+                    onClick={handleLoadRoutingTestSplits}
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '3px 8px', fontSize: '0.68rem', borderColor: 'var(--color-sky-500)', color: 'var(--color-sky-400)' }}
+                    title="Replace this split list with one test row for every configured sheet phase"
+                  >
+                    Load Routing Test
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={handleAddSplit}
+                    className="btn btn-secondary"
+                    style={{ width: 'auto', padding: '3px 8px', fontSize: '0.68rem', borderColor: '#C5A059', color: '#C5A059' }}
+                  >
+                    + Add Split Row
+                  </button>
+                </div>
               </div>
 
               <div style={{ 

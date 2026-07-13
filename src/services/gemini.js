@@ -49,7 +49,7 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
         "date": "YYYY-MM-DD (format the date found on the document, or empty string)",
         "checkNumber": "Check number (only if the document is a check, otherwise null)",
         "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills" | "Paperwork_&_Permits" | "Interior_Hardware",
-        "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile', 'Paint')",
+        "tradePhase": "The specific phase block matching the category (e.g. 'Plumbing Rough-In', 'Roofing', 'Tile & Flooring', 'Paint & Finishes')",
         "lineItems": [
           {
             "description": "Clean description of the item or group of items",
@@ -67,10 +67,10 @@ export async function extractDocumentData(fileOrBlob, apiKey) {
       5. Subcontractor Trade Classification:
          Identify which Trade Category sheet name and Phase block name this transaction belongs to:
          - Category: Site_Prep_&_Structure (Phases: Foundation & Flatwork, Roofing, Windows & Exterior Doors)
-         - Category: Framing_&_Lumber (Phases: Framing & Lumber)
+         - Category: Framing_&_Lumber (Phases: Framing Lumber & Truss)
          - Category: Mechanicals_&_Utilities (Phases: Plumbing Rough-In, Electrical & Lighting, HVAC / AC Systems, Insulation & Alarms)
          - Category: Interior_Finishes (Phases: Drywall & Sheetrock, Cabinets & Trim Carpentry, Quartz & Countertops, Glass Work)
-         - Category: Paint_Tile (Phases: Tile, Paint)
+         - Category: Paint_Tile (Phases: Tile & Flooring, Paint & Finishes)
          - Category: House_Exterior_&_Yard (Phases: Stucco & Masonry, Garage Doors, Driveway & Sidewalks, Cantera Stone Detail, Fencing & Gates, Landscaping & Irrigation)
          - Category: Project_Overhead_&_Bills (Phases: Monthly Utility Bills, Dumpsters & Cleaning, Extra Costs & Misc)
          - Category: Paperwork_&_Permits (Phases: Paperwork & Permits)

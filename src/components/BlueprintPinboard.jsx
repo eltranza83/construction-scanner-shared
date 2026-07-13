@@ -31,7 +31,7 @@ export const TRADE_SECTIONS_CONFIG = {
   'Framing_&_Lumber': {
     label: 'Framing & Lumber',
     color: '#3b82f6',
-    phases: ['Framing & Lumber']
+    phases: ['Framing Lumber & Truss']
   },
   'Site_Prep_&_Structure': {
     label: 'Site Prep & Structure',
@@ -46,7 +46,7 @@ export const TRADE_SECTIONS_CONFIG = {
   'Paint_Tile': {
     label: 'Paint & Tile',
     color: '#a855f7',
-    phases: ['Tile', 'Paint']
+    phases: ['Tile & Flooring', 'Paint & Finishes']
   },
   'House_Exterior_&_Yard': {
     label: 'House Exterior & Yard',

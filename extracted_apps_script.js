@@ -52,6 +52,42 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
 
   const values = sheet.getDataRange().getValues();
   let blockHeaderRowIdx = -1;
+
+  function normalizePhaseLabel(value) {
+    return String(value || '')
+      .toLowerCase()
+      .replace(/^(→|â†’|—|â€”|-|\u2192)\s*/, '')
+      .replace(/[^a-z0-9]/g, '');
+  }
+
+  function getPhaseAliases(value) {
+    const normalized = normalizePhaseLabel(value);
+    const aliases = [normalized];
+    if (normalized === 'framinglumber') {
+      aliases.push('framinglumbertruss');
+    }
+    if (normalized === 'framinglumbertruss') {
+      aliases.push('framinglumber');
+    }
+    if (normalized === 'tile') {
+      aliases.push('tileflooring');
+    }
+    if (normalized === 'tileflooring') {
+      aliases.push('tile');
+    }
+    if (normalized === 'paint') {
+      aliases.push('paintfinishes');
+    }
+    if (normalized === 'paintfinishes') {
+      aliases.push('paint');
+    }
+    return aliases;
+  }
+
+  function isPhaseHeaderLabel(value) {
+    const label = String(value || '').trim();
+    return label.startsWith('\u2192') || label.startsWith('â') || label.startsWith('-');
+  }
   
   // Find phase header row index (e.g. '→ Plumbing Rough-In')
   const cleanTargetPhase = phase.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -68,6 +104,18 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
   }
 
   if (blockHeaderRowIdx === -1) {
+    const targetAliases = getPhaseAliases(phase);
+    for (let r = 0; r < values.length; r++) {
+      if (!isPhaseHeaderLabel(values[r][0])) continue;
+      const cleanPhase = normalizePhaseLabel(values[r][0]);
+      if (targetAliases.includes(cleanPhase)) {
+        blockHeaderRowIdx = r;
+        break;
+      }
+    }
+  }
+
+  if (blockHeaderRowIdx === -1) {
     addLog(`Phase block '${phase}' not found inside '${category}' sheet. Direct log skipped.`);
     return;
   }
@@ -76,6 +124,10 @@ function logTransactionToCategorySheet(ss, category, phase, rowData, categoryTyp
   let nextBlockHeaderRowIdx = values.length;
   for (let r = blockHeaderRowIdx + 1; r < values.length; r++) {
     const colA = String(values[r][0] || '').trim();
+    if (isPhaseHeaderLabel(colA)) {
+      nextBlockHeaderRowIdx = r;
+      break;
+    }
     if (colA.startsWith('→') || colA.startsWith('—') || colA.startsWith('-')) {
       nextBlockHeaderRowIdx = r;
       break;

@@ -6,6 +6,10 @@ import {
   buildInvoiceFileName,
   resolveSplitProjectFolder
 } from '../src/services/invoiceUpload.js';
+import {
+  ROUTING_TEST_SPLITS,
+  TRADE_SECTIONS_CONFIG
+} from '../src/services/editFormHelpers.js';
 
 test('buildInvoiceFileName sanitizes unsafe file characters', () => {
   assert.equal(
@@ -27,7 +31,7 @@ test('buildHistoryLogs creates a single log for regular invoice metadata', () =>
     costCategory: 'material',
     amount: 55,
     tradeCategory: 'Framing_&_Lumber',
-    tradePhase: 'Framing & Lumber'
+    tradePhase: 'Framing Lumber & Truss'
   }, {
     idPrefix: 'file-1',
     link: 'https://drive.example/file-1'
@@ -44,7 +48,7 @@ test('buildHistoryLogs creates a single log for regular invoice metadata', () =>
     amount: 55,
     link: 'https://drive.example/file-1',
     tradeCategory: 'Framing_&_Lumber',
-    tradePhase: 'Framing & Lumber'
+    tradePhase: 'Framing Lumber & Truss'
   });
 });
 
@@ -56,14 +60,14 @@ test('buildHistoryLogs uses split overrides and defaults', () => {
     vendor: 'Lowes',
     costCategory: 'labor',
     tradeCategory: 'Paint_Tile',
-    tradePhase: 'Paint',
+    tradePhase: 'Paint & Finishes',
     splits: [
       {
         lotNumber: 'Lot A',
         description: 'Paint supplies',
         amount: 33,
         costCategory: 'material',
-        tradePhase: 'Paint'
+        tradePhase: 'Paint & Finishes'
       },
       {
         amount: 12
@@ -79,7 +83,7 @@ test('buildHistoryLogs uses split overrides and defaults', () => {
   assert.equal(logs[0].description, '[Lot A] Paint supplies');
   assert.equal(logs[0].costCategory, 'material');
   assert.equal(logs[0].tradeCategory, 'Paint_Tile');
-  assert.equal(logs[0].tradePhase, 'Paint');
+  assert.equal(logs[0].tradePhase, 'Paint & Finishes');
   assert.equal(logs[1].id, 'file-1_split_1');
   assert.equal(logs[1].description, '[Main Lot] Shared receipt');
   assert.equal(logs[1].costCategory, 'material');
@@ -100,4 +104,14 @@ test('resolveSplitProjectFolder matches project names case-insensitively', () =>
     resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: 'Lot 99' }),
     { folderId: 'default-folder', lotName: 'Lot 99' }
   );
+});
+
+test('routing test splits cover every configured trade phase once', () => {
+  const expected = Object.entries(TRADE_SECTIONS_CONFIG).flatMap(([tradeCategory, config]) => (
+    config.phases.map((tradePhase) => `${tradeCategory}::${tradePhase}`)
+  ));
+  const actual = ROUTING_TEST_SPLITS.map((split) => `${split.tradeCategory}::${split.tradePhase}`);
+
+  assert.equal(actual.length, 26);
+  assert.deepEqual(actual, expected);
 });

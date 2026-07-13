@@ -5,7 +5,7 @@ export const TRADE_SECTIONS_CONFIG = {
   },
   'Framing_&_Lumber': {
     label: 'Framing & Lumber',
-    phases: ['Framing & Lumber']
+    phases: ['Framing Lumber & Truss']
   },
   'Mechanicals_&_Utilities': {
     label: 'Mechanicals & Utilities',
@@ -17,7 +17,7 @@ export const TRADE_SECTIONS_CONFIG = {
   },
   'Paint_Tile': {
     label: 'Paint & Tile',
-    phases: ['Tile', 'Paint']
+    phases: ['Tile & Flooring', 'Paint & Finishes']
   },
   'House_Exterior_&_Yard': {
     label: 'House Exterior & Yard',
@@ -36,6 +36,16 @@ export const TRADE_SECTIONS_CONFIG = {
     phases: ['Plumbing Hardware Fixtures', 'Electrical Hardware Fixtures']
   }
 };
+
+export const ROUTING_TEST_SPLITS = Object.entries(TRADE_SECTIONS_CONFIG)
+  .flatMap(([tradeCategory, config]) => (
+    config.phases.map((tradePhase) => ({
+      tradeCategory,
+      tradePhase,
+      costCategory: 'material',
+      description: `Routing test - ${tradePhase}`
+    }))
+  ));
 
 export const ALLOCATION_COLORS = [
   { text: '#C5A059', border: '#C5A059', bg: 'rgba(197, 160, 89, 0.12)', darkBg: 'rgba(197, 160, 89, 0.04)' },

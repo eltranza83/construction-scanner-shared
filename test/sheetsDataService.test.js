@@ -41,8 +41,8 @@ test('summary section matching handles sheet underscores and ampersands', () => 
   const paintSection = {
     name: 'PAINT & TILE',
     phases: [
-      { phase: 'Tile', materialCost: '$35.00', laborCost: '$0.00', combinedSpent: '$35.00' },
-      { phase: 'Paint', materialCost: '$5,600.00', laborCost: '$0.00', combinedSpent: '$5,600.00' }
+      { phase: 'Tile & Flooring', materialCost: '$35.00', laborCost: '$0.00', combinedSpent: '$35.00' },
+      { phase: 'Paint & Finishes', materialCost: '$5,600.00', laborCost: '$0.00', combinedSpent: '$5,600.00' }
     ]
   };
   const framingSection = { name: 'FRAMING LUMBER & TRUSS', phases: [] };
@@ -53,9 +53,9 @@ test('summary section matching handles sheet underscores and ampersands', () => 
 
 test('summary section and phase metadata detection ignores total rows', () => {
   assert.equal(isSummarySectionHeader(['PAINT & TILE', '', '', '', '']), true);
-  assert.equal(isSummarySectionHeader(['Paint', '$5.00', '$0.00', '$5.00', 'In Progress']), false);
-  assert.deepEqual(createSummaryPhaseMeta(['Paint', '$5.00', '$2.00', '$7.00', 'In Progress']), {
-    phase: 'Paint',
+  assert.equal(isSummarySectionHeader(['Paint & Finishes', '$5.00', '$0.00', '$5.00', 'In Progress']), false);
+  assert.deepEqual(createSummaryPhaseMeta(['Paint & Finishes', '$5.00', '$2.00', '$7.00', 'In Progress']), {
+    phase: 'Paint & Finishes',
     status: 'In Progress',
     materialCost: '$5.00',
     laborCost: '$2.00',
@@ -65,7 +65,7 @@ test('summary section and phase metadata detection ignores total rows', () => {
 
 test('category parser uses Summary_Dashboard totals while keeping payee and balance from category sheet', () => {
   const summaryMeta = {
-    phase: 'Paint',
+    phase: 'Paint & Finishes',
     status: 'In Progress',
     materialCost: '$33.00',
     laborCost: '$120.00',
@@ -76,15 +76,15 @@ test('category parser uses Summary_Dashboard totals while keeping payee and bala
     'Paint_Tile',
     [
       ['Description', 'Contractor / Vendor', 'Material Cost', 'Labor Cost', 'Payment Date', 'Check or Trans', 'Contractor Payee', 'Total Paid', 'Original Quote', 'Remaining Balance', 'Notes / Status'],
-      ['- Paint', '', '$0.00', '$0.00', '', '', 'Painter Payee', '$0.00', '$1,000.00', '$847.00', 'Not Started'],
+      ['- Paint & Finishes', '', '$0.00', '$0.00', '', '', 'Painter Payee', '$0.00', '$1,000.00', '$847.00', 'Not Started'],
       ['primer', 'lowes', '$999.00', '', '', '', '', '', '', '', '']
     ],
-    { [normalizeKey('Paint')]: summaryMeta },
+    { [normalizeKey('Paint & Finishes')]: summaryMeta },
     { name: 'PAINT & TILE', phases: [summaryMeta] }
   );
 
   assert.equal(contractors.length, 1);
-  assert.equal(contractors[0].phase, 'Paint');
+  assert.equal(contractors[0].phase, 'Paint & Finishes');
   assert.equal(contractors[0].payee, 'Painter Payee');
   assert.equal(contractors[0].remainingBalance, '$847.00');
   assert.equal(contractors[0].status, 'In Progress');
