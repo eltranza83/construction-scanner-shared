@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
-import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore/lite';
+import { doc, runTransaction, setDoc, getDocs, collection, deleteDoc, getDoc } from 'firebase/firestore/lite';
 import { getFirebaseAuthInstance, getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
-import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';
+import { APP_STORAGE_KEYS, setStoredBoolean } from '../services/appStorage';
 import { buildUserAccessRecord, getUserAccessDocId } from '../services/inviteAccess';
 
 export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, authError, signingIn, onGoogleSignIn, onSignOut }) {
@@ -118,39 +118,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
           }
         }
 
-        const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('claimedByUid', '==', accessDocId));
-        const qSnapshot = await getDocs(q);
-
-        if (!qSnapshot.empty) {
-          // User is already authorized in the database! Unlock immediately.
-          if (accessDocId) {
-            const firstInvite = qSnapshot.docs[0];
-            await setDoc(doc(db, 'user_access', accessDocId), buildUserAccessRecord(googleUser, firstInvite.id));
-          }
-          onUnlocked(googleUser.email);
-        } else {
-          // If not found in database, check if this browser was already verified under the old version
-          const isLegacyInvited = getStoredBoolean(APP_STORAGE_KEYS.invited);
-          if (isLegacyInvited) {
-            const emailClean = googleUser.email.toLowerCase();
-            const legacyDocId = `LEGACY-${emailClean.replace(/[^a-zA-Z0-9]/g, '_')}`;
-            
-            await setDoc(doc(db, 'invites', legacyDocId), {
-              used: true,
-              usedAt: new Date(),
-              claimedByUid: accessDocId || null,
-              claimedByEmail: emailClean,
-              notes: 'Auto-migrated from legacy device-locked login'
-            });
-            if (accessDocId) {
-              await setDoc(doc(db, 'user_access', accessDocId), buildUserAccessRecord(googleUser, legacyDocId));
-            }
-            
-            // Unlock immediately
-            onUnlocked(googleUser.email);
-          }
-        }
       } catch (err) {
         console.error('Failed to verify user authorization:', err);
         if (err?.code === 'permission-denied') {
