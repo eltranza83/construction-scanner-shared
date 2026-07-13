@@ -9,6 +9,8 @@ export default function DashboardPunchList({
   googleToken,
   activeProject,
   subcontractors = [],
+  projectInfo = null,
+  selectedFolderName = '',
   onSendIssuePacket
 }) {
   const {
@@ -280,6 +282,9 @@ export default function DashboardPunchList({
           issues={issues}
           contacts={issuesState.contacts || {}}
           subcontractors={subcontractors}
+          projectInfo={projectInfo}
+          projectName={activeProject?.name}
+          selectedFolderName={selectedFolderName}
           onSave={handleSaveIssue}
           onClose={() => setShowAddModal(false)}
         />
@@ -290,6 +295,9 @@ export default function DashboardPunchList({
           contacts={issuesState.contacts || {}}
           subcontractors={subcontractors}
           editingIssue={editingIssue}
+          projectInfo={projectInfo}
+          projectName={activeProject?.name}
+          selectedFolderName={selectedFolderName}
           onSave={handleSaveIssueEdit}
           onClose={() => setEditingIssue(null)}
         />

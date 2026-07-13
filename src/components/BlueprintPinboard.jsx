@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useBlueprintPinboard } from '../hooks/useBlueprintPinboard';
 import BlueprintAddPinModal from './BlueprintAddPinModal';
@@ -154,6 +154,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   const [pendingIssueLocation, setPendingIssueLocation] = useState(null);
   const [selectedIssueId, setSelectedIssueId] = useState(null);
   const [editingIssue, setEditingIssue] = useState(null);
+  const [packetProjectInfo, setPacketProjectInfo] = useState(null);
 
   const pinboard = useBlueprintPinboard({
     activeProject,
@@ -165,8 +166,12 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
   const issuesState = useIssues({ googleToken, activeProject });
 
   // Read subcontractor payee directory from cached dashboard data
-  const cachedDashboard = loadCachedDashboard(localStorage, activeProject?.id);
+  const cachedDashboard = useMemo(
+    () => loadCachedDashboard(localStorage, activeProject?.id),
+    [activeProject?.id]
+  );
   const subcontractors = cachedDashboard?.subcontractors || [];
+  const formProjectInfo = packetProjectInfo || cachedDashboard?.projectInfo || null;
   const selectedIssue = issuesState.issues.find(issue => issue.id === selectedIssueId && !issue.deletedAt) || null;
 
   const handleToggleIssueAddMode = () => {
@@ -209,6 +214,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
 
   const loadPacketProjectInfo = async () => {
     if (cachedDashboard?.projectInfo) {
+      setPacketProjectInfo(cachedDashboard.projectInfo);
       return cachedDashboard.projectInfo;
     }
 
@@ -227,9 +233,40 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
       persistDashboardSpreadsheetId(localStorage, activeProject.id, spreadsheetId);
     }
     persistDashboardCache(localStorage, activeProject.id, data);
+    setPacketProjectInfo(data?.projectInfo || null);
 
     return data?.projectInfo || null;
   };
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadFormProjectInfo = async () => {
+      if (cachedDashboard?.projectInfo) {
+        setPacketProjectInfo(cachedDashboard.projectInfo);
+        return;
+      }
+
+      if (packetProjectInfo || !googleToken || !activeProject?.folderId) {
+        return;
+      }
+
+      try {
+        const info = await loadPacketProjectInfo();
+        if (!cancelled) {
+          setPacketProjectInfo(info);
+        }
+      } catch (err) {
+        console.warn('Failed to load project info for issue form:', err);
+      }
+    };
+
+    loadFormProjectInfo();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeProject?.id, googleToken, cachedDashboard?.projectInfo, packetProjectInfo]);
 
   const handleSendIssuePacket = async (issue) => {
     const projectInfo = await loadPacketProjectInfo();
@@ -265,6 +302,8 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           googleToken={googleToken}
           activeProject={activeProject}
           subcontractors={subcontractors}
+          projectInfo={formProjectInfo}
+          selectedFolderName={selectedFolder?.name}
           onSendIssuePacket={handleSendIssuePacket}
         />
       ) : pinboard.viewMode === 'albums' ? (
@@ -344,6 +383,9 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           contacts={issuesState.contacts || {}}
           subcontractors={subcontractors}
           initialFloorLocation={pendingIssueLocation}
+          projectInfo={formProjectInfo}
+          projectName={activeProject?.name}
+          selectedFolderName={selectedFolder?.name}
           onSave={handleSaveLocatedIssue}
           onClose={() => setPendingIssueLocation(null)}
         />
@@ -354,6 +396,9 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           contacts={issuesState.contacts || {}}
           subcontractors={subcontractors}
           editingIssue={editingIssue}
+          projectInfo={formProjectInfo}
+          projectName={activeProject?.name}
+          selectedFolderName={selectedFolder?.name}
           onSave={handleSaveIssueEdit}
           onClose={() => setEditingIssue(null)}
         />

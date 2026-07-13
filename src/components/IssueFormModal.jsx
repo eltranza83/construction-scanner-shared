@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Upload, Check } from 'lucide-react';
 import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';
+import { getProjectPacketInfo } from '../services/projectInfoFormatter';
 
 function getDisplayImageUrl(url, base64, size = 'w400') {
   if (base64) return base64;
@@ -15,8 +16,20 @@ function getDisplayImageUrl(url, base64, size = 'w400') {
   return url;
 }
 
-export default function IssueFormModal({ issues, contacts = {}, subcontractors = [], initialFloorLocation = null, editingIssue = null, onSave, onClose }) {
+export default function IssueFormModal({
+  issues,
+  contacts = {},
+  subcontractors = [],
+  initialFloorLocation = null,
+  editingIssue = null,
+  projectInfo = null,
+  projectName = '',
+  selectedFolderName = '',
+  onSave,
+  onClose
+}) {
   const isEditing = Boolean(editingIssue);
+  const packetProject = getProjectPacketInfo(projectInfo, projectName, selectedFolderName);
   const [title, setTitle] = useState(editingIssue?.title || '');
   const [description, setDescription] = useState(editingIssue?.description || '');
   const [category, setCategory] = useState(editingIssue?.category || Object.keys(TRADE_SECTIONS_CONFIG)[0]);
@@ -268,6 +281,32 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          <div style={{
+            border: '1px solid rgba(197, 160, 89, 0.24)',
+            backgroundColor: 'rgba(197, 160, 89, 0.07)',
+            borderRadius: '10px',
+            padding: '10px 12px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+            gap: '8px 12px'
+          }}>
+            <div style={{ gridColumn: '1 / -1', fontSize: '0.72rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+              Project Location
+            </div>
+            <div>
+              <div style={{ fontSize: '0.66rem', color: 'var(--color-zinc-500)', fontWeight: 700, textTransform: 'uppercase' }}>Subdivision</div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--color-zinc-100)', fontWeight: 700 }}>{packetProject.subdivision}</div>
+            </div>
+            <div>
+              <div style={{ fontSize: '0.66rem', color: 'var(--color-zinc-500)', fontWeight: 700, textTransform: 'uppercase' }}>Lot</div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--color-zinc-100)', fontWeight: 700 }}>{packetProject.lotNumber}</div>
+            </div>
+            <div style={{ gridColumn: '1 / -1' }}>
+              <div style={{ fontSize: '0.66rem', color: 'var(--color-zinc-500)', fontWeight: 700, textTransform: 'uppercase' }}>Address</div>
+              <div style={{ fontSize: '0.82rem', color: 'var(--color-zinc-200)', fontWeight: 600, lineHeight: 1.35 }}>{packetProject.fullAddress}</div>
+            </div>
+          </div>
+
           <div>
             <label className="form-label" htmlFor="issue-title">Title *</label>
             <input

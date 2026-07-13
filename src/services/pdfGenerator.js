@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { getProjectPacketInfo } from './projectInfoFormatter';
 
 const ADEPEC_GOLD = [197, 160, 89];
 const ADEPEC_DARK = [10, 10, 10];
@@ -104,44 +105,6 @@ function formatIssueDate(value) {
 
 function titleCase(value) {
   return formatIssueLabel(value).replace(/\b\w/g, letter => letter.toUpperCase());
-}
-
-function splitProjectName(value) {
-  const name = String(value || '').trim();
-  const lotMatch = name.match(/\bLot\s+[A-Za-z0-9-]+\b/i);
-  if (!lotMatch) {
-    return {
-      subdivision: name || 'N/A',
-      lotNumber: name || 'N/A'
-    };
-  }
-
-  const lotNumber = lotMatch[0].trim();
-  const subdivision = name.replace(lotMatch[0], '').trim();
-  return {
-    subdivision: subdivision || name,
-    lotNumber
-  };
-}
-
-function getProjectPacketInfo(projectInfo, projectName, selectedFolderName) {
-  const sheetProjectName = String(projectInfo?.name || '').trim();
-  const fallbackName = String(projectName || selectedFolderName || '').trim();
-  const { subdivision, lotNumber } = splitProjectName(sheetProjectName || fallbackName);
-  const streetAddress = String(projectInfo?.address || '').trim();
-  const cityStateZip = String(projectInfo?.cityStateZip || '').trim();
-  const fullAddress = [streetAddress, cityStateZip]
-    .filter(value => value && value !== 'N/A')
-    .join(', ');
-
-  return {
-    projectDisplayName: sheetProjectName || fallbackName || 'N/A',
-    subdivision,
-    lotNumber,
-    streetAddress: streetAddress && streetAddress !== 'N/A' ? streetAddress : '',
-    cityStateZip: cityStateZip && cityStateZip !== 'N/A' ? cityStateZip : '',
-    fullAddress: fullAddress || 'N/A'
-  };
 }
 
 async function drawAdepecHeader(pdf, title, subtitle) {
