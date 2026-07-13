@@ -1,5 +1,5 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
+import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore/lite';
 import { DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 
@@ -46,15 +46,25 @@ export function getFirebaseAuthInstance() {
   return app ? getAuth(app) : null;
 }
 
-export async function signInToFirebaseWithGoogleToken(accessToken) {
+export async function signInToFirebaseWithGooglePopup(scopes = []) {
   const auth = getFirebaseAuthInstance();
   if (!auth) {
     throw new Error('Firebase is not configured.');
   }
 
-  const credential = GoogleAuthProvider.credential(null, accessToken);
-  const result = await signInWithCredential(auth, credential);
-  return result.user;
+  const provider = new GoogleAuthProvider();
+  scopes.forEach((scope) => provider.addScope(scope));
+  const result = await signInWithPopup(auth, provider);
+  const credential = GoogleAuthProvider.credentialFromResult(result);
+
+  if (!credential?.accessToken) {
+    throw new Error('Google did not return the permissions token required for Drive access.');
+  }
+
+  return {
+    user: result.user,
+    accessToken: credential.accessToken,
+  };
 }
 
 export async function signOutFromFirebase() {

@@ -51,7 +51,6 @@ export default function App() {
   } = useGoogleAuth({
     setError,
     setSuccess,
-    onMissingClientId: () => setActiveTab('settings'),
     onSignedOut: () => {
       resetInvite();
     }

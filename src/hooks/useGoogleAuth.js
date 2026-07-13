@@ -6,9 +6,10 @@ import {
   persistGoogleToken,
   persistGoogleUser,
 } from '../services/appStorage';
-import { signInToFirebaseWithGoogleToken, signOutFromFirebase } from '../services/firebase';
+import { getFirebaseAuthInstance, signInToFirebaseWithGooglePopup, signOutFromFirebase } from '../services/firebase';
 
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile';
+const GOOGLE_SCOPES = GOOGLE_SCOPE.split(' ');
 const GOOGLE_SCRIPT_ID = 'google-gis-script';
 const GOOGLE_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 
@@ -40,16 +41,23 @@ async function fetchGoogleUserInfo(accessToken) {
   return await res.json();
 }
 
-async function buildSignedInUser(accessToken) {
+async function buildSignedInUser(accessToken, firebaseUser = null) {
   const info = await fetchGoogleUserInfo(accessToken);
-  const firebaseUser = await signInToFirebaseWithGoogleToken(accessToken);
+  const auth = getFirebaseAuthInstance();
+  if (!firebaseUser && auth?.authStateReady) {
+    await auth.authStateReady();
+  }
+  const resolvedFirebaseUser = firebaseUser || auth?.currentUser;
+  if (!resolvedFirebaseUser) {
+    throw new Error('Firebase account session is not ready. Please sign in again.');
+  }
   return {
     ...info,
-    firebaseUid: firebaseUser.uid,
+    firebaseUid: resolvedFirebaseUser.uid,
   };
 }
 
-export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSignedOut } = {}) {
+export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
   const [googleClientId, setGoogleClientId] = useState(() => loadStoredAppState().googleClientId);
   const [googleToken, setGoogleToken] = useState(() => loadStoredAppState().googleToken);
   const [googleUser, setGoogleUser] = useState(() => loadStoredAppState().googleUser);
@@ -114,70 +122,26 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
     }
   }, [googleClientId, setError]);
 
-  const signIn = () => {
-    if (!googleClientId) {
-      setError?.('Please set your Google Web Client ID in the Settings tab first.');
-      onMissingClientId?.();
-      return;
-    }
-
+  const signIn = async () => {
     setError?.(null);
     setSigningIn(true);
     try {
-      if (window.google?.accounts?.oauth2?.initTokenClient) {
-        const client = window.google.accounts.oauth2.initTokenClient({
-          client_id: googleClientId,
-          scope: GOOGLE_SCOPE,
-          callback: async (tokenResponse) => {
-            if (tokenResponse.access_token) {
-              setGoogleToken(tokenResponse.access_token);
-              persistGoogleToken(tokenResponse.access_token);
-
-              try {
-                const info = await buildSignedInUser(tokenResponse.access_token);
-                setGoogleUser(info);
-                persistGoogleUser(info);
-                setSuccess?.('Successfully signed in with Google!');
-                setTimeout(() => setSuccess?.(null), 3000);
-              } catch (err) {
-                console.error('Failed to sign in with Google/Firebase:', err);
-                setGoogleToken(null);
-                setGoogleUser(null);
-                clearGoogleIdentity();
-                setError?.(getFriendlyAuthError(err));
-              } finally {
-                setSigningIn(false);
-              }
-            } else if (tokenResponse.error) {
-              setGoogleToken(null);
-              setGoogleUser(null);
-              clearGoogleIdentity();
-              setError?.(getFriendlyAuthError(tokenResponse));
-              setSigningIn(false);
-            } else {
-              setError?.('Google sign-in did not return an account. Please try again.');
-              setSigningIn(false);
-            }
-          },
-          error_callback: (err) => {
-            setGoogleToken(null);
-            setGoogleUser(null);
-            clearGoogleIdentity();
-            setError?.(getFriendlyAuthError(err));
-            setSigningIn(false);
-          }
-        });
-        window.googleTokenClient = client;
-        client.requestAccessToken();
-        return;
-      }
-
-      setSigningIn(false);
-      setError?.('Google Identity Services did not load. Please refresh the page and try again.');
+      const firebaseResult = await signInToFirebaseWithGooglePopup(GOOGLE_SCOPES);
+      const info = await buildSignedInUser(firebaseResult.accessToken, firebaseResult.user);
+      setGoogleToken(firebaseResult.accessToken);
+      persistGoogleToken(firebaseResult.accessToken);
+      setGoogleUser(info);
+      persistGoogleUser(info);
+      setSuccess?.('Successfully signed in with Google!');
+      setTimeout(() => setSuccess?.(null), 3000);
     } catch (err) {
-      console.error(err);
+      console.error('Failed to sign in with Google/Firebase:', err);
+      setGoogleToken(null);
+      setGoogleUser(null);
+      clearGoogleIdentity();
+      setError?.(getFriendlyAuthError(err));
+    } finally {
       setSigningIn(false);
-      setError?.('Failed to initialize Google login client. Make sure client ID is valid.');
     }
   };
 
