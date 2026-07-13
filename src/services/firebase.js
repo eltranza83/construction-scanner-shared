@@ -1,4 +1,5 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
+import { getAuth, GoogleAuthProvider, signInWithCredential, signOut } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore/lite';
 import { DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 
@@ -7,7 +8,7 @@ import { DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../
  * using settings configured by the administrator, falling back to 
  * pre-configured default credentials for zero-setup execution.
  */
-export function getFirebaseDb() {
+function getFirebaseAppInstance() {
   const apiKey = getStoredConfigValue(STORAGE_KEYS.firebaseApiKey, DEFAULT_FIREBASE_CONFIG.apiKey);
   const projectId = getStoredConfigValue(STORAGE_KEYS.firebaseProjectId, DEFAULT_FIREBASE_CONFIG.projectId);
   
@@ -26,13 +27,38 @@ export function getFirebaseDb() {
 
   try {
     if (getApps().length === 0) {
-      const app = initializeApp(firebaseConfig);
-      return getFirestore(app);
-    } else {
-      return getFirestore(getApp());
+      return initializeApp(firebaseConfig);
     }
+    return getApp();
   } catch (err) {
     console.error('Failed to initialize Firebase app:', err);
     return null;
   }
+}
+
+export function getFirebaseDb() {
+  const app = getFirebaseAppInstance();
+  return app ? getFirestore(app) : null;
+}
+
+export function getFirebaseAuthInstance() {
+  const app = getFirebaseAppInstance();
+  return app ? getAuth(app) : null;
+}
+
+export async function signInToFirebaseWithGoogleToken(accessToken) {
+  const auth = getFirebaseAuthInstance();
+  if (!auth) {
+    throw new Error('Firebase is not configured.');
+  }
+
+  const credential = GoogleAuthProvider.credential(null, accessToken);
+  const result = await signInWithCredential(auth, credential);
+  return result.user;
+}
+
+export async function signOutFromFirebase() {
+  const auth = getFirebaseAuthInstance();
+  if (!auth) return;
+  await signOut(auth);
 }

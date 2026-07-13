@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { collection, getDocs, doc, setDoc, deleteDoc, getDoc } from 'firebase/firestore/lite';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 import { APP_STORAGE_KEYS } from '../services/appStorage';
-import { getFirebaseDb } from '../services/firebase';
+import { getFirebaseAuthInstance, getFirebaseDb } from '../services/firebase';
 
 export function useSettingsAdmin({ setGeminiKey, setError, setSuccess }) {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
@@ -83,11 +83,14 @@ export function useSettingsAdmin({ setGeminiKey, setError, setSuccess }) {
         return p;
       };
       const code = `ADPC-${genPart()}-${genPart()}`;
+      const authUser = getFirebaseAuthInstance()?.currentUser;
 
       await setDoc(doc(db, 'invites', code), {
         used: false,
         createdAt: new Date(),
-        usedAt: null
+        usedAt: null,
+        createdByUid: authUser?.uid || null,
+        createdByEmail: authUser?.email || null
       });
 
       setSuccess(`Generated invite code: ${code}`);
@@ -170,9 +173,12 @@ export function useSettingsAdmin({ setGeminiKey, setError, setSuccess }) {
     setSuccess(null);
     setSavingGeminiKey(true);
     try {
+      const authUser = getFirebaseAuthInstance()?.currentUser;
       await setDoc(doc(db, 'invites', 'CONFIG-GEMINI'), {
         apiKey: tempGeminiKey.trim(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        updatedByUid: authUser?.uid || null,
+        updatedByEmail: authUser?.email || null
       });
       setSuccess('Shared Gemini API Key saved to database! Other users will receive it automatically on next load.');
 

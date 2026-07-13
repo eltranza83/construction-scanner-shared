@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
 import { doc, runTransaction, setDoc, getDocs, collection, query, where, deleteDoc, getDoc } from 'firebase/firestore/lite';
-import { getFirebaseDb } from '../services/firebase';
+import { getFirebaseAuthInstance, getFirebaseDb } from '../services/firebase';
 import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
 import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';
+import { buildUserAccessRecord, getUserAccessDocId } from '../services/inviteAccess';
 
 export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
@@ -101,12 +102,25 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       }
       
       try {
+        const accessDocId = getUserAccessDocId(googleUser);
+        if (accessDocId) {
+          const accessSnap = await getDoc(doc(db, 'user_access', accessDocId));
+          if (accessSnap.exists()) {
+            onUnlocked(googleUser.email);
+            return;
+          }
+        }
+
         const invitesRef = collection(db, 'invites');
         const q = query(invitesRef, where('claimedByEmail', '==', googleUser.email.toLowerCase()));
         const qSnapshot = await getDocs(q);
-        
+
         if (!qSnapshot.empty) {
           // User is already authorized in the database! Unlock immediately.
+          if (accessDocId) {
+            const firstInvite = qSnapshot.docs[0];
+            await setDoc(doc(db, 'user_access', accessDocId), buildUserAccessRecord(googleUser, firstInvite.id));
+          }
           onUnlocked(googleUser.email);
         } else {
           // If not found in database, check if this browser was already verified under the old version
@@ -118,9 +132,13 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
             await setDoc(doc(db, 'invites', legacyDocId), {
               used: true,
               usedAt: new Date(),
+              claimedByUid: accessDocId || null,
               claimedByEmail: emailClean,
               notes: 'Auto-migrated from legacy device-locked login'
             });
+            if (accessDocId) {
+              await setDoc(doc(db, 'user_access', accessDocId), buildUserAccessRecord(googleUser, legacyDocId));
+            }
             
             // Unlock immediately
             onUnlocked(googleUser.email);
@@ -154,11 +172,14 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         return p;
       };
       const code = `ADPC-${genPart()}-${genPart()}`;
+      const authUser = getFirebaseAuthInstance()?.currentUser;
       
       await setDoc(doc(db, 'invites', code), {
         used: false,
         createdAt: new Date(),
-        usedAt: null
+        usedAt: null,
+        createdByUid: authUser?.uid || null,
+        createdByEmail: authUser?.email || null
       });
       
       setSuccess(`Generated invite code: ${code}`);
@@ -179,9 +200,12 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
     setSuccess(null);
     setSavingGeminiKey(true);
     try {
+      const authUser = getFirebaseAuthInstance()?.currentUser;
       await setDoc(doc(db, 'invites', 'CONFIG-GEMINI'), {
         apiKey: tempGeminiKey.trim(),
-        updatedAt: new Date()
+        updatedAt: new Date(),
+        updatedByUid: authUser?.uid || null,
+        updatedByEmail: authUser?.email || null
       });
       setSuccess('Shared Gemini API Key saved to database! Other users will receive it automatically on next load.');
       
@@ -260,6 +284,11 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       return;
     }
 
+    if (!googleUser.firebaseUid) {
+      setError('Firebase account session is not ready. Please sign out and sign in again.');
+      return;
+    }
+
     if (!inviteCode.trim()) {
       setError('Please enter a valid Invite Code.');
       return;
@@ -285,8 +314,13 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         transaction.update(docRef, {
           used: true,
           usedAt: new Date(),
+          claimedByUid: googleUser.firebaseUid,
           claimedByEmail: googleUser.email.toLowerCase()
         });
+        transaction.set(
+          doc(db, 'user_access', googleUser.firebaseUid),
+          buildUserAccessRecord(googleUser, codeId)
+        );
       });
 
       const finalKey = defaultGeminiKey || '';

@@ -6,6 +6,7 @@ import {
   persistGoogleToken,
   persistGoogleUser,
 } from '../services/appStorage';
+import { signInToFirebaseWithGoogleToken, signOutFromFirebase } from '../services/firebase';
 
 const GOOGLE_SCOPE = 'https://www.googleapis.com/auth/drive https://www.googleapis.com/auth/spreadsheets email profile';
 const GOOGLE_SCRIPT_ID = 'google-gis-script';
@@ -19,6 +20,9 @@ function getFriendlyAuthError(err) {
   }
   if (message.includes('popup')) {
     return 'The sign-in popup was blocked. Please allow popups for this site and try again.';
+  }
+  if (message.includes('auth/operation-not-allowed') || message.includes('auth/configuration-not-found')) {
+    return 'Firebase Google sign-in is not enabled yet. In Firebase Console, enable Authentication > Sign-in method > Google, then try again.';
   }
   return `Google Sign In failed: ${message}`;
 }
@@ -34,6 +38,15 @@ async function fetchGoogleUserInfo(accessToken) {
   }
 
   return await res.json();
+}
+
+async function buildSignedInUser(accessToken) {
+  const info = await fetchGoogleUserInfo(accessToken);
+  const firebaseUser = await signInToFirebaseWithGoogleToken(accessToken);
+  return {
+    ...info,
+    firebaseUid: firebaseUser.uid,
+  };
 }
 
 export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSignedOut } = {}) {
@@ -56,11 +69,14 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
               setError?.(null);
 
               try {
-                const info = await fetchGoogleUserInfo(tokenResponse.access_token);
+                const info = await buildSignedInUser(tokenResponse.access_token);
                 setGoogleUser(info);
                 persistGoogleUser(info);
               } catch (err) {
-                console.error('Quiet user info update failed:', err);
+                console.error('Quiet Google/Firebase user update failed:', err);
+                setGoogleToken(null);
+                setGoogleUser(null);
+                clearGoogleIdentity();
               }
             } else if (tokenResponse.error) {
               console.warn('Google authentication failed or was cancelled:', tokenResponse);
@@ -116,13 +132,16 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
               persistGoogleToken(tokenResponse.access_token);
 
               try {
-                const info = await fetchGoogleUserInfo(tokenResponse.access_token);
+                const info = await buildSignedInUser(tokenResponse.access_token);
                 setGoogleUser(info);
                 persistGoogleUser(info);
                 setSuccess?.('Successfully signed in with Google!');
                 setTimeout(() => setSuccess?.(null), 3000);
               } catch (err) {
-                console.error('Failed to get Google User details:', err);
+                console.error('Failed to sign in with Google/Firebase:', err);
+                setGoogleToken(null);
+                setGoogleUser(null);
+                clearGoogleIdentity();
                 setError?.(getFriendlyAuthError(err));
               }
             } else if (tokenResponse.error) {
@@ -151,10 +170,15 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
     }
   };
 
-  const signOut = () => {
+  const signOut = async () => {
     setGoogleToken(null);
     setGoogleUser(null);
     clearGoogleSession();
+    try {
+      await signOutFromFirebase();
+    } catch (err) {
+      console.warn('Firebase sign out failed:', err);
+    }
     onSignedOut?.();
     setSuccess?.('Signed out of Google account.');
     setTimeout(() => setSuccess?.(null), 3000);
