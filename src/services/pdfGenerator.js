@@ -258,6 +258,14 @@ export async function generateIssuePacketPDF({
   addMetaRow(pdf, 'Lot Number', packetProject.lotNumber, margin + 70, currentY + 10, 40);
   addMetaRow(pdf, 'Full Address', packetProject.fullAddress, margin + 118, currentY + 10, 56);
 
+  if (packetProject.fullAddress && packetProject.fullAddress !== 'N/A') {
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(packetProject.fullAddress)}`;
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(7);
+    pdf.setTextColor(22, 163, 74);
+    pdf.textWithLink('OPEN IN GOOGLE MAPS', margin + 118, currentY + 24, { url: mapsUrl });
+  }
+
   currentY += projectBoxHeight + 8;
   const metaHeight = 42;
   pdf.setFillColor(...ZINC_100);

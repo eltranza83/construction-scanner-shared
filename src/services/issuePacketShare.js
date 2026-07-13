@@ -81,8 +81,6 @@ export async function createAndShareIssuePacket({
   const filename = getSafePacketFilename(issue, projectName || selectedFolderName);
   const file = new File([pdfBlob], filename, { type: 'application/pdf' });
   const shareData = {
-    title: 'ADEPEC Punch Issue Packet',
-    text: `Punch issue packet: ${issue?.title || 'Punch Issue'}`,
     files: [file]
   };
 

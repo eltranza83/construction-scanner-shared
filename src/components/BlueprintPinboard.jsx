@@ -17,6 +17,7 @@ import {
   persistDashboardSpreadsheetId
 } from '../services/dashboardDrive';
 import { createAndShareIssuePacket } from '../services/issuePacketShare';
+import { isPlaceholderProjectInfo } from '../services/projectInfoFormatter';
 
 
 
@@ -171,7 +172,10 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     [activeProject?.id]
   );
   const subcontractors = cachedDashboard?.subcontractors || [];
-  const formProjectInfo = packetProjectInfo || cachedDashboard?.projectInfo || null;
+  const cachedProjectInfo = isPlaceholderProjectInfo(cachedDashboard?.projectInfo)
+    ? null
+    : cachedDashboard?.projectInfo;
+  const formProjectInfo = packetProjectInfo || cachedProjectInfo || null;
   const selectedIssue = issuesState.issues.find(issue => issue.id === selectedIssueId && !issue.deletedAt) || null;
 
   const handleToggleIssueAddMode = () => {
@@ -212,21 +216,32 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setEditingIssue(null);
   };
 
-  const loadPacketProjectInfo = async () => {
-    if (cachedDashboard?.projectInfo) {
-      setPacketProjectInfo(cachedDashboard.projectInfo);
-      return cachedDashboard.projectInfo;
+  useEffect(() => {
+    setPacketProjectInfo(null);
+  }, [activeProject?.id, selectedFolder?.id]);
+
+  const loadPacketProjectInfo = async ({ forceRefresh = false } = {}) => {
+    if (!forceRefresh && packetProjectInfo && !isPlaceholderProjectInfo(packetProjectInfo)) {
+      return packetProjectInfo;
     }
 
-    if (!googleToken || !activeProject?.folderId) {
+    if (!forceRefresh && cachedProjectInfo) {
+      setPacketProjectInfo(cachedProjectInfo);
+      return cachedProjectInfo;
+    }
+
+    const projectFolderId = selectedFolder?.id || activeProject?.folderId;
+    if (!googleToken || !projectFolderId) {
       return null;
     }
 
     const cachedSpreadsheetId = getCachedDashboardSpreadsheetId(localStorage, activeProject.id);
     const { spreadsheetId, data } = await loadProjectDashboardFromFolder({
       accessToken: googleToken,
-      projectFolderId: activeProject.folderId,
-      cachedSpreadsheetId
+      projectFolderId,
+      cachedSpreadsheetId: forceRefresh || isPlaceholderProjectInfo(cachedDashboard?.projectInfo)
+        ? null
+        : cachedSpreadsheetId
     });
 
     if (spreadsheetId !== cachedSpreadsheetId) {
@@ -242,17 +257,17 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     let cancelled = false;
 
     const loadFormProjectInfo = async () => {
-      if (cachedDashboard?.projectInfo) {
-        setPacketProjectInfo(cachedDashboard.projectInfo);
+      if (cachedProjectInfo) {
+        setPacketProjectInfo(cachedProjectInfo);
         return;
       }
 
-      if (packetProjectInfo || !googleToken || !activeProject?.folderId) {
+      if (packetProjectInfo || !googleToken || !(selectedFolder?.id || activeProject?.folderId)) {
         return;
       }
 
       try {
-        const info = await loadPacketProjectInfo();
+        const info = await loadPacketProjectInfo({ forceRefresh: true });
         if (!cancelled) {
           setPacketProjectInfo(info);
         }
@@ -266,7 +281,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     return () => {
       cancelled = true;
     };
-  }, [activeProject?.id, googleToken, cachedDashboard?.projectInfo, packetProjectInfo]);
+  }, [activeProject?.id, activeProject?.folderId, selectedFolder?.id, googleToken, cachedProjectInfo, packetProjectInfo]);
 
   const handleSendIssuePacket = async (issue) => {
     const projectInfo = await loadPacketProjectInfo();

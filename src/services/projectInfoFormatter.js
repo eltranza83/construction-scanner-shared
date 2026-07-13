@@ -16,6 +16,20 @@ export function splitProjectName(value) {
   };
 }
 
+export function isPlaceholderProjectInfo(projectInfo) {
+  const values = [
+    projectInfo?.name,
+    projectInfo?.address,
+    projectInfo?.cityStateZip
+  ].map(value => String(value || '').trim().toLowerCase());
+
+  return values.some(value =>
+    value.includes('new spec home sub') ||
+    value.includes('house number / street name') ||
+    value.includes('city, state, zip')
+  );
+}
+
 export function getProjectPacketInfo(projectInfo, projectName, selectedFolderName) {
   const sheetProjectName = String(projectInfo?.name || '').trim();
   const fallbackName = String(projectName || selectedFolderName || '').trim();
