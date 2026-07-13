@@ -102,6 +102,13 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
       }
       
       try {
+        const emailClean = googleUser.email.toLowerCase();
+        const adminSnap = await getDoc(doc(db, 'admins', emailClean));
+        if (adminSnap.exists()) {
+          onUnlocked(googleUser.email);
+          return;
+        }
+
         const accessDocId = getUserAccessDocId(googleUser);
         if (accessDocId) {
           const accessSnap = await getDoc(doc(db, 'user_access', accessDocId));
@@ -112,7 +119,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         }
 
         const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('claimedByEmail', '==', googleUser.email.toLowerCase()));
+        const q = query(invitesRef, where('claimedByEmail', '==', emailClean));
         const qSnapshot = await getDocs(q);
 
         if (!qSnapshot.empty) {
@@ -146,7 +153,11 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         }
       } catch (err) {
         console.error('Failed to verify user authorization:', err);
-        setError('Failed to check database authorization. Please try again.');
+        if (err?.code === 'permission-denied') {
+          setError('Database security rules are not active yet, or this account is not listed as an admin.');
+        } else {
+          setError('Failed to check database authorization. Please try again.');
+        }
       } finally {
         setCheckingAuth(false);
       }

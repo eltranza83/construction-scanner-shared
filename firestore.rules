@@ -20,7 +20,8 @@ service cloud.firestore {
     }
 
     match /admins/{email} {
-      allow read: if isAdmin();
+      allow get: if signedIn() && email == request.auth.token.email;
+      allow list: if false;
       allow write: if false;
     }
 
