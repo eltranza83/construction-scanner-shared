@@ -10,8 +10,6 @@ import { useSettingsAdmin } from '../hooks/useSettingsAdmin';
 import { useSettingsProjects } from '../hooks/useSettingsProjects';
 
 export default function Settings({
-  geminiKey: _geminiKey,
-  setGeminiKey,
   googleClientId: _googleClientId,
   setGoogleClientId: _setGoogleClientId,
   googleToken,
@@ -30,11 +28,7 @@ export default function Settings({
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  const admin = useSettingsAdmin({
-    setGeminiKey,
-    setError,
-    setSuccess
-  });
+  const admin = useSettingsAdmin({ setError, setSuccess });
 
   const projectSettings = useSettingsProjects({
     activeProject,
@@ -77,28 +71,15 @@ export default function Settings({
       <SettingsHelpCard />
 
       <SettingsAdminPanel
-        adminPassInput={admin.adminPassInput}
-        firebaseApiKey={admin.firebaseApiKey}
-        firebaseAppId={admin.firebaseAppId}
-        firebaseProjectId={admin.firebaseProjectId}
+        checkingAdmin={admin.checkingAdmin}
         invites={admin.invites}
         isAdminUnlocked={admin.isAdminUnlocked}
         loadingInvites={admin.loadingInvites}
-        savingGeminiKey={admin.savingGeminiKey}
         showAdminPanel={admin.showAdminPanel}
-        tempGeminiKey={admin.tempGeminiKey}
-        onAdminPassInputChange={admin.setAdminPassInput}
         onDeleteInvite={admin.handleDeleteInvite}
-        onFirebaseApiKeyChange={admin.setFirebaseApiKey}
-        onFirebaseAppIdChange={admin.setFirebaseAppId}
-        onFirebaseProjectIdChange={admin.setFirebaseProjectId}
         onGenerateInvite={admin.handleGenerateInvite}
-        onSaveFirebaseConfig={admin.handleSaveFirebaseConfig}
-        onSaveSharedGeminiKey={admin.handleSaveSharedGeminiKey}
         onShareInvite={admin.handleShareInvite}
-        onTempGeminiKeyChange={admin.setTempGeminiKey}
         onToggleAdminPanel={() => admin.setShowAdminPanel(!admin.showAdminPanel)}
-        onVerifyAdmin={admin.handleVerifyAdmin}
       />
 
       <SettingsDeleteProjectModal
@@ -111,12 +92,8 @@ export default function Settings({
         isOpen={projectSettings.showCreateModal}
         editingProject={projectSettings.editingProject}
         projectName={projectSettings.projectNameInput}
-        appsScriptUrl={projectSettings.appsScriptUrlInput}
-        appsScriptSecret={projectSettings.appsScriptSecretInput}
         selectedFolder={projectSettings.tempSelectedFolder}
         onProjectNameChange={projectSettings.setProjectNameInput}
-        onAppsScriptUrlChange={projectSettings.setAppsScriptUrlInput}
-        onAppsScriptSecretChange={projectSettings.setAppsScriptSecretInput}
         onOpenFolderPicker={() => projectSettings.setShowFolderPickerModal(true)}
         onCancel={projectSettings.handleCancelCreateProject}
         onSave={projectSettings.handleSaveProject}

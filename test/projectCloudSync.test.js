@@ -19,7 +19,12 @@ test('resolveActiveProject falls back to first project when no active id matches
 });
 
 test('createProjectsConfigBlob serializes project config as formatted JSON', async () => {
-  const blob = createProjectsConfigBlob([{ id: 'project-1', name: 'Lot 1' }]);
+  const blob = createProjectsConfigBlob([{
+    id: 'project-1',
+    name: 'Lot 1',
+    appsScriptUrl: 'https://script.example',
+    appsScriptSecret: 'secret'
+  }]);
 
   assert.equal(blob.type, 'application/json');
   assert.equal(

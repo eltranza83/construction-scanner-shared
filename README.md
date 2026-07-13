@@ -1,16 +1,29 @@
-# React + Vite
+# Adepec Homes Construction Scanner
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Private, invite-only scanner for extracting construction invoices and receipts, splitting allocations, uploading PDFs to Google Drive, and routing costs into project spreadsheets.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```powershell
+npm.cmd install
+npm.cmd run dev
+```
 
-## React Compiler
+## Verification
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+```powershell
+npm.cmd test
+npm.cmd run lint
+npm.cmd run build
+```
 
-## Expanding the Oxlint configuration
+## Production secrets
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+Document extraction and spreadsheet sync use authenticated Vercel functions in `api/`. Configure these server-only environment variables in Vercel for Production (and Preview when needed):
+
+- `GEMINI_API_KEY`
+- `APPS_SCRIPT_URL`
+- `APPS_SCRIPT_SECRET`
+- `GEMINI_MODEL` (optional; defaults to `gemini-3.1-flash-lite`)
+
+Do not prefix these variables with `VITE_`; that would expose them in the browser bundle. The legacy Firestore document `invites/CONFIG-GEMINI` is no longer read and should be deleted after the Vercel variable is configured.

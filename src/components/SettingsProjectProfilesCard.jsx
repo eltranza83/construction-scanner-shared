@@ -92,7 +92,7 @@ export default function SettingsProjectProfilesCard({
                         overflow: 'hidden',
                         textOverflow: 'ellipsis'
                       }}>
-                        Folder: {project.folderName} {project.appsScriptUrl ? ' - Script Linked' : ''}
+                        Folder: {project.folderName}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 'none' }} onClick={(e) => e.stopPropagation()}>

@@ -18,8 +18,6 @@ export function useSettingsProjects({
   const [currentParentId, setCurrentParentId] = useState('root');
   const [breadcrumbs, setBreadcrumbs] = useState([{ id: 'root', name: 'My Drive' }]);
   const [projectNameInput, setProjectNameInput] = useState('');
-  const [appsScriptUrlInput, setAppsScriptUrlInput] = useState('');
-  const [appsScriptSecretInput, setAppsScriptSecretInput] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showFolderPickerModal, setShowFolderPickerModal] = useState(false);
   const [showProjectsAccordion, setShowProjectsAccordion] = useState(false);
@@ -56,8 +54,6 @@ export function useSettingsProjects({
   const openEditProjectModal = (project) => {
     setEditingProject(project);
     setProjectNameInput(project.name);
-    setAppsScriptUrlInput(project.appsScriptUrl || '');
-    setAppsScriptSecretInput(project.appsScriptSecret || '');
     setTempSelectedFolder({ id: project.folderId, name: project.folderName });
     setShowCreateModal(true);
   };
@@ -76,13 +72,12 @@ export function useSettingsProjects({
     if (editingProject) {
       const updatedProjects = projects.map(p => {
         if (p.id === editingProject.id) {
+          const { appsScriptUrl: _url, appsScriptSecret: _secret, ...safeProject } = p;
           return {
-            ...p,
+            ...safeProject,
             name: projectNameInput.trim(),
             folderId: tempSelectedFolder.id,
-            folderName: tempSelectedFolder.name,
-            appsScriptUrl: appsScriptUrlInput.trim() || '',
-            appsScriptSecret: appsScriptSecretInput.trim() || ''
+            folderName: tempSelectedFolder.name
           };
         }
         return p;
@@ -102,8 +97,6 @@ export function useSettingsProjects({
       }
 
       setProjectNameInput('');
-      setAppsScriptUrlInput('');
-      setAppsScriptSecretInput('');
       setTempSelectedFolder(null);
       setEditingProject(null);
       setShowCreateModal(false);
@@ -121,9 +114,7 @@ export function useSettingsProjects({
       id: `proj_${Date.now()}`,
       name: projectNameInput.trim(),
       folderId: tempSelectedFolder.id,
-      folderName: tempSelectedFolder.name,
-      appsScriptUrl: appsScriptUrlInput.trim() || '',
-      appsScriptSecret: appsScriptSecretInput.trim() || ''
+      folderName: tempSelectedFolder.name
     };
 
     const updatedProjects = [...projects, newProj];
@@ -138,8 +129,6 @@ export function useSettingsProjects({
     localStorage.setItem('jobscan_folder_name', newProj.folderName);
 
     setProjectNameInput('');
-    setAppsScriptUrlInput('');
-    setAppsScriptSecretInput('');
     setTempSelectedFolder(null);
     setShowCreateModal(false);
     setSuccess(`Project "${newProj.name}" saved and set as active!`);
@@ -148,8 +137,6 @@ export function useSettingsProjects({
 
   const handleCancelCreateProject = () => {
     setProjectNameInput('');
-    setAppsScriptUrlInput('');
-    setAppsScriptSecretInput('');
     setTempSelectedFolder(null);
     setEditingProject(null);
     setShowCreateModal(false);
@@ -223,8 +210,6 @@ export function useSettingsProjects({
   };
 
   return {
-    appsScriptUrlInput,
-    appsScriptSecretInput,
     breadcrumbs,
     currentParentId,
     editingProject,
@@ -247,8 +232,6 @@ export function useSettingsProjects({
     handleUseCurrentFolder,
     openCreateProjectModal,
     openEditProjectModal,
-    setAppsScriptUrlInput,
-    setAppsScriptSecretInput,
     setNewFolderName,
     setProjectNameInput,
     setProjectToDelete,

@@ -31,11 +31,8 @@ export default function App() {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const {
-    geminiKey,
-    setGeminiKey,
     isInvited,
     unlockInvite,
-    updateGeminiKey,
     resetInvite
   } = useInviteGate();
   const {
@@ -139,8 +136,6 @@ export default function App() {
       <Suspense fallback={<LazyScreenFallback />}>
         <InviteScreen
           onUnlocked={unlockInvite}
-          onKeyUpdated={updateGeminiKey}
-          defaultGeminiKey={geminiKey}
           googleUser={googleUser}
           authError={error}
           signingIn={signingIn}
@@ -294,7 +289,7 @@ export default function App() {
         {success && <div className="alert-box alert-success">{success}</div>}
         {error && <div className="alert-box alert-error">{error}</div>}
 
-        {activeProject?.appsScriptUrl && hasUnprocessedUploads && (
+        {activeProject?.folderId && hasUnprocessedUploads && (
           <div className="settings-card" style={{ 
             display: 'flex', 
             alignItems: 'center', 
@@ -357,7 +352,6 @@ export default function App() {
         ) : activeTab === 'scanner' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <Scanner 
-              geminiKey={geminiKey}
               onDataExtracted={handleDataExtracted}
               onError={setError}
             />
@@ -557,8 +551,6 @@ export default function App() {
           />
         ) : (
           <Settings 
-            geminiKey={geminiKey}
-            setGeminiKey={setGeminiKey}
             googleClientId={googleClientId}
             setGoogleClientId={setGoogleClientId}
             googleToken={googleToken}

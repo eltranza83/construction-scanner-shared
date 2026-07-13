@@ -20,6 +20,7 @@ function createLocalStorageMock() {
 }
 
 globalThis.localStorage = createLocalStorageMock();
+globalThis.sessionStorage = createLocalStorageMock();
 
 const {
   APP_STORAGE_KEYS,
@@ -38,6 +39,7 @@ const {
 
 test.beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
 });
 
 test('JSON helpers return fallbacks for missing or invalid values', () => {
@@ -81,6 +83,22 @@ test('loadStoredAppState builds selected folder and arrays from local storage', 
   assert.equal(state.hasUnprocessedUploads, true);
 });
 
+test('loadStoredAppState purges legacy browser secrets and sanitizes projects', () => {
+  localStorage.setItem(APP_STORAGE_KEYS.legacyGeminiKey, 'old-gemini-key');
+  localStorage.setItem(APP_STORAGE_KEYS.googleToken, 'old-drive-token');
+  setStoredJson(APP_STORAGE_KEYS.projects, [{
+    id: 'p1',
+    appsScriptUrl: 'https://script.example',
+    appsScriptSecret: 'old-secret'
+  }]);
+
+  const state = loadStoredAppState();
+
+  assert.deepEqual(state.projects, [{ id: 'p1' }]);
+  assert.equal(localStorage.getItem(APP_STORAGE_KEYS.legacyGeminiKey), null);
+  assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
+});
+
 test('persistActiveProject stores and clears project folder state', () => {
   persistActiveProject({
     id: 'project-1',
@@ -122,6 +140,7 @@ test('Google session clearing removes identity and linked project session values
   localStorage.setItem(APP_STORAGE_KEYS.invited, 'true');
 
   clearGoogleIdentity();
+  assert.equal(sessionStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleUser), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.folderId), 'folder-1');
@@ -130,6 +149,7 @@ test('Google session clearing removes identity and linked project session values
   persistGoogleUser({ email: 'builder@example.com' });
   clearGoogleSession();
 
+  assert.equal(sessionStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleUser), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.folderId), null);

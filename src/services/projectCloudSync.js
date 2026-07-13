@@ -4,11 +4,12 @@ import {
   updateFileContent,
   uploadFileToDrive
 } from './googleDrive.js';
+import { sanitizeProjects } from './appStorage.js';
 
 const PROJECTS_CONFIG_FILE = 'jobscan_config.json';
 
 export function createProjectsConfigBlob(projects) {
-  return new Blob([JSON.stringify(projects, null, 2)], { type: 'application/json' });
+  return new Blob([JSON.stringify(sanitizeProjects(projects), null, 2)], { type: 'application/json' });
 }
 
 export function resolveActiveProject(projects, activeProjectId) {
@@ -37,8 +38,12 @@ export async function loadProjectsConfigFromDrive(accessToken, localProjects = [
   const cloudProjects = await getFileContent(accessToken, configFile.id);
   if (!Array.isArray(cloudProjects)) return null;
 
-  console.log('Projects loaded from Google Drive:', cloudProjects);
-  return cloudProjects;
+  const safeProjects = sanitizeProjects(cloudProjects);
+  if (JSON.stringify(safeProjects) !== JSON.stringify(cloudProjects)) {
+    await updateFileContent(accessToken, configFile.id, createProjectsConfigBlob(safeProjects), 'application/json');
+  }
+  console.log('Projects loaded from Google Drive:', safeProjects);
+  return safeProjects;
 }
 
 export async function saveProjectsConfigToDrive(accessToken, projects) {

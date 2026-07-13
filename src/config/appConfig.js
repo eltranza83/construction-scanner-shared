@@ -17,7 +17,6 @@ export const DEFAULT_GOOGLE_CLIENT_ID =
   ENV.VITE_GOOGLE_CLIENT_ID ||
   '523814311929-lku3c1m2rq4qpmbf1earpgnm1beuvq8m.apps.googleusercontent.com';
 
-export const ADMIN_PASSCODE = ENV.VITE_ADMIN_PASSCODE || 'adepec#83';
 
 export function getStoredConfigValue(storageKey, fallback) {
   return localStorage.getItem(storageKey) || fallback;

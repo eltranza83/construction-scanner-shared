@@ -1,82 +1,19 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle, ShieldAlert, LogIn, Database, Share2, Trash2 } from 'lucide-react';
-import { doc, runTransaction, setDoc, getDocs, collection, deleteDoc, getDoc } from 'firebase/firestore/lite';
-import { getFirebaseAuthInstance, getFirebaseDb } from '../services/firebase';
-import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig';
+import { CheckCircle, ShieldAlert, LogIn } from 'lucide-react';
+import { doc, runTransaction, getDoc } from 'firebase/firestore/lite';
+import { getFirebaseDb } from '../services/firebase';
 import { APP_STORAGE_KEYS, setStoredBoolean } from '../services/appStorage';
 import { buildUserAccessRecord, getUserAccessDocId } from '../services/inviteAccess';
 
-export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, authError, signingIn, onGoogleSignIn, onSignOut }) {
+export default function InviteScreen({ onUnlocked, googleUser, authError, signingIn, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
 
-  // Admin Config Panel States
-  const [showAdminConfig, setShowAdminConfig] = useState(false);
-  const [adminPasscode, setAdminPasscode] = useState('');
-  const [adminPassUnlocked, setAdminPassUnlocked] = useState(false);
-  const [apiKey, setApiKey] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseApiKey, DEFAULT_FIREBASE_CONFIG.apiKey));
-  const [projectId, setProjectId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseProjectId, DEFAULT_FIREBASE_CONFIG.projectId));
-  const [appId, setAppId] = useState(getStoredConfigValue(STORAGE_KEYS.firebaseAppId, DEFAULT_FIREBASE_CONFIG.appId));
-
-  // Invites Management States
-  const [invites, setInvites] = useState([]);
-  const [loadingInvites, setLoadingInvites] = useState(false);
   const [checkingAuth, setCheckingAuth] = useState(false);
 
-  // Gemini API Key states
-  const [tempGeminiKey, setTempGeminiKey] = useState('');
-  const [savingGeminiKey, setSavingGeminiKey] = useState(false);
-
   const db = getFirebaseDb();
-
-  const fetchInvitesList = async () => {
-    if (!db) return;
-    setLoadingInvites(true);
-    try {
-      const qSnapshot = await getDocs(collection(db, 'invites'));
-      const list = [];
-      qSnapshot.forEach((d) => {
-        if (d.id !== 'CONFIG-GEMINI') {
-          list.push({ id: d.id, ...d.data() });
-        }
-      });
-      list.sort((a, b) => {
-        const timeA = a.createdAt?.toDate ? a.createdAt.toDate() : 0;
-        const timeB = b.createdAt?.toDate ? b.createdAt.toDate() : 0;
-        return timeB - timeA;
-      });
-      setInvites(list);
-    } catch (err) {
-      console.error('Failed to fetch invites:', err);
-    } finally {
-      setLoadingInvites(false);
-    }
-  };
-
-  const fetchSharedGeminiKey = async () => {
-    if (!db) return;
-    try {
-      const docRef = doc(db, 'invites', 'CONFIG-GEMINI');
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data && data.apiKey) {
-          setTempGeminiKey(data.apiKey);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to fetch shared Gemini key:', err);
-    }
-  };
-
-  useEffect(() => {
-    if (adminPassUnlocked) {
-      fetchInvitesList();
-      fetchSharedGeminiKey();
-    }
-  }, [adminPassUnlocked]);
 
   // Read URL query parameter for invite code on mount
   useEffect(() => {
@@ -133,120 +70,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
     checkAuth();
   }, [googleUser]);
 
-  const handleGenerateInvite = async () => {
-    if (!db) {
-      setError('Database not configured. Save credentials first.');
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    try {
-      const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ012345689';
-      const genPart = () => {
-        let p = '';
-        for (let i = 0; i < 4; i++) {
-          p += chars.charAt(Math.floor(Math.random() * chars.length));
-        }
-        return p;
-      };
-      const code = `ADPC-${genPart()}-${genPart()}`;
-      const authUser = getFirebaseAuthInstance()?.currentUser;
-      
-      await setDoc(doc(db, 'invites', code), {
-        used: false,
-        createdAt: new Date(),
-        usedAt: null,
-        createdByUid: authUser?.uid || null,
-        createdByEmail: authUser?.email || null
-      });
-      
-      setSuccess(`Generated invite code: ${code}`);
-      fetchInvitesList();
-      setTimeout(() => setSuccess(null), 5000);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to generate invite code.');
-    }
-  };
-
-  const handleSaveSharedGeminiKey = async () => {
-    if (!db) {
-      setError('Database not configured. Save credentials first.');
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    setSavingGeminiKey(true);
-    try {
-      const authUser = getFirebaseAuthInstance()?.currentUser;
-      await setDoc(doc(db, 'invites', 'CONFIG-GEMINI'), {
-        apiKey: tempGeminiKey.trim(),
-        updatedAt: new Date(),
-        updatedByUid: authUser?.uid || null,
-        updatedByEmail: authUser?.email || null
-      });
-      setSuccess('Shared Gemini API Key saved to database! Other users will receive it automatically on next load.');
-      
-      // Update local storage and call parent callback if passed
-      localStorage.setItem(APP_STORAGE_KEYS.geminiKey, tempGeminiKey.trim());
-      if (onKeyUpdated) {
-        onKeyUpdated(tempGeminiKey.trim());
-      }
-      
-      setTimeout(() => setSuccess(null), 4000);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to save Gemini API Key to database.');
-    } finally {
-      setSavingGeminiKey(false);
-    }
-  };
-
-  const handleDeleteInvite = async (code) => {
-    if (!db) return;
-    if (!window.confirm(`Deactivate/delete invite code: ${code}?`)) {
-      return;
-    }
-    setError(null);
-    setSuccess(null);
-    try {
-      await deleteDoc(doc(db, 'invites', code));
-      setSuccess(`Deactivated invite code: ${code}`);
-      fetchInvitesList();
-      setTimeout(() => setSuccess(null), 3000);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to deactivate invite code.');
-    }
-  };
-
-  const handleShareInvite = async (code) => {
-    const inviteLink = `${window.location.origin}?code=${code}`;
-    const message = `Hey! Here is your private invite link for the Adepec Homes Construction Scanner:\n\n👉 ${inviteLink}\n\nJust open the link and tap "Activate Access"!`;
-    
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: 'Adepec Homes Scanner Invite',
-          text: message,
-          url: inviteLink
-        });
-      } catch (err) {
-        console.log('Share cancelled or failed:', err);
-      }
-    } else {
-      // Fallback: Copy to clipboard
-      try {
-        await navigator.clipboard.writeText(message);
-        setSuccess('Invite details copied to clipboard! You can now paste and send it.');
-        setTimeout(() => setSuccess(null), 4000);
-      } catch (err) {
-        console.error('Failed to copy:', err);
-        setError('Failed to copy to clipboard.');
-      }
-    }
-  };
-
   const handleVerify = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     setError(null);
@@ -301,13 +124,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         );
       });
 
-      const finalKey = defaultGeminiKey || '';
-
-      // Save local credentials
       setStoredBoolean(APP_STORAGE_KEYS.invited, true);
-      localStorage.setItem(APP_STORAGE_KEYS.geminiKey, finalKey);
-      
-      onKeyUpdated(finalKey);
       setSuccess('Access activated successfully! Launching scanner...');
       
       setTimeout(() => {
@@ -324,31 +141,6 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleUnlockAdmin = () => {
-    if (adminPasscode === ADMIN_PASSCODE) {
-      setAdminPassUnlocked(true);
-      setError(null);
-    } else {
-      setError('Incorrect Admin Passcode.');
-    }
-  };
-
-  const handleSaveConfig = () => {
-    if (!apiKey.trim() || !projectId.trim()) {
-      setError('API Key and Project ID are required.');
-      return;
-    }
-
-    localStorage.setItem(STORAGE_KEYS.firebaseApiKey, apiKey.trim());
-    localStorage.setItem(STORAGE_KEYS.firebaseProjectId, projectId.trim());
-    localStorage.setItem(STORAGE_KEYS.firebaseAppId, appId.trim());
-    setSuccess('Database configuration saved! Reloading application...');
-    setError(null);
-    setTimeout(() => {
-      window.location.reload();
-    }, 1500);
   };
 
   return (
@@ -415,8 +207,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
           </div>
         )}
 
-        {!showAdminConfig ? (
-          checkingAuth ? (
+        {checkingAuth ? (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', padding: '20px 0' }}>
               <div className="spinner" style={{ width: '28px', height: '28px', borderWidth: '3px', margin: '0 auto' }}></div>
               <span style={{ fontSize: '0.85rem', color: 'var(--color-zinc-400)' }}>Checking account authorization...</span>
@@ -485,228 +276,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
                 Sign Out / Use Different Account
               </button>
             </form>
-          )
-        ) : (
-          /* Admin configuration UI */
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', borderTop: '1px solid #1a1a1a', paddingTop: '16px' }}>
-            <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#C5A059', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Database size={16} /> Database Configuration
-            </h4>
-
-            {!adminPassUnlocked ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                <div className="form-group">
-                  <label className="form-label">Admin Passcode</label>
-                  <input 
-                    type="password" 
-                    className="form-input" 
-                    value={adminPasscode} 
-                    onChange={(e) => setAdminPasscode(e.target.value)} 
-                    placeholder="Enter admin passcode" 
-                  />
-                </div>
-                <button type="button" className="btn btn-secondary" onClick={handleUnlockAdmin}>
-                  Unlock Settings
-                </button>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                {/* 1. Config Database */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', borderBottom: '1px solid #1a1a1a', paddingBottom: '16px' }}>
-                  <div className="form-group">
-                    <label className="form-label">Firebase API Key</label>
-                    <input 
-                      type="password" 
-                      className="form-input" 
-                      value={apiKey} 
-                      onChange={(e) => setApiKey(e.target.value)} 
-                      placeholder="AIzaSy..." 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Firebase Project ID</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={projectId} 
-                      onChange={(e) => setProjectId(e.target.value)} 
-                      placeholder="e.g. project-12345" 
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Firebase App ID (Optional)</label>
-                    <input 
-                      type="text" 
-                      className="form-input" 
-                      value={appId} 
-                      onChange={(e) => setAppId(e.target.value)} 
-                      placeholder="e.g. 1:123:web:abc" 
-                    />
-                  </div>
-                  <div style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                    <button type="button" className="btn btn-secondary" style={{ flex: 1 }} onClick={() => { setAdminPassUnlocked(false); setShowAdminConfig(false); }}>
-                      Back
-                    </button>
-                    <button type="button" className="btn btn-primary" style={{ flex: 1.2 }} onClick={handleSaveConfig}>
-                      Save Config
-                    </button>
-                  </div>
-                </div>
-
-                {/* 1.5. Config Gemini API Key */}
-                <div style={{ borderBottom: '1px solid #1a1a1a', paddingBottom: '16px' }}>
-                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-amber-400)', marginBottom: '10px' }}>
-                    Shared Gemini API Key
-                  </h4>
-                  <p style={{ fontSize: '0.78rem', color: 'var(--color-zinc-400)', marginBottom: '8px', lineHeight: '1.4' }}>
-                    Set the Gemini API Key that all invited users will share. This key will be securely fetched from Firestore and is not stored in the GitHub repository.
-                  </p>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                    <div className="form-group">
-                      <label className="form-label" style={{ fontSize: '0.75rem' }}>Gemini API Key</label>
-                      <input 
-                        type="password"
-                        className="form-input"
-                        value={tempGeminiKey}
-                        onChange={(e) => setTempGeminiKey(e.target.value)}
-                        placeholder="Paste new Gemini Key (AIzaSy... or AQ...)"
-                      />
-                    </div>
-                    <button 
-                      type="button" 
-                      className="btn btn-secondary"
-                      onClick={handleSaveSharedGeminiKey}
-                      disabled={savingGeminiKey}
-                    >
-                      {savingGeminiKey ? 'Saving Key...' : 'Save Gemini Key to Database'}
-                    </button>
-                  </div>
-                </div>
-
-                {/* 2. Invite Code Management */}
-                <div>
-                  <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: '#C5A059', marginBottom: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span>Invite Code Management</span>
-                    <button 
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={handleGenerateInvite}
-                      style={{ width: 'auto', padding: '6px 12px', fontSize: '0.78rem' }}
-                    >
-                      Generate Code
-                    </button>
-                  </h4>
-
-                  {/* Invites list */}
-                  <div style={{ 
-                    maxHeight: '150px', 
-                    overflowY: 'auto', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
-                    gap: '6px',
-                    backgroundColor: '#0a0a0a',
-                    padding: '8px',
-                    borderRadius: '8px',
-                    border: '1px solid #1a1a1a'
-                  }}>
-                    {loadingInvites ? (
-                      <div style={{ textAlign: 'center', padding: '12px', fontSize: '0.8rem', color: '#555' }}>
-                        Loading invites...
-                      </div>
-                    ) : invites.length === 0 ? (
-                      <div style={{ textAlign: 'center', padding: '12px', fontSize: '0.8rem', color: '#444' }}>
-                        No invite codes generated yet.
-                      </div>
-                    ) : (
-                      invites.map(inv => (
-                        <div 
-                          key={inv.id} 
-                          style={{ 
-                            display: 'flex', 
-                            justifyContent: 'space-between', 
-                            alignItems: 'center',
-                            padding: '6px 10px',
-                            backgroundColor: '#121212',
-                            borderRadius: '6px',
-                            border: '1px solid #1a1a1a',
-                            fontSize: '0.8rem'
-                          }}
-                        >
-                          <span style={{ fontWeight: 700, letterSpacing: '1px', fontFamily: 'monospace', color: inv.used ? '#555' : '#fff' }}>
-                            {inv.id}
-                          </span>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{ 
-                              fontSize: '0.72rem', 
-                              fontWeight: 'bold',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              backgroundColor: inv.used ? 'rgba(255,255,255,0.05)' : 'rgba(16,185,129,0.15)',
-                              color: inv.used ? '#555' : '#10b981'
-                            }}>
-                              {inv.used ? 'CLAIMED' : 'ACTIVE'}
-                            </span>
-                            {!inv.used && (
-                              <button
-                                type="button"
-                                onClick={() => handleShareInvite(inv.id)}
-                                style={{
-                                  background: 'none',
-                                  border: 'none',
-                                  color: '#C5A059',
-                                  cursor: 'pointer',
-                                  padding: '4px',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center'
-                                }}
-                                title="Share Invite Link"
-                              >
-                                <Share2 size={14} />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteInvite(inv.id)}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#ef4444',
-                                cursor: 'pointer',
-                                padding: '4px',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                opacity: 0.8
-                              }}
-                              title="Delete/Deactivate Invite Code"
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Footer hidden link to unlock admin */}
-        <div style={{ display: 'flex', justifyContent: 'center', marginTop: '10px' }}>
-          <button 
-            type="button" 
-            onClick={() => {
-              setShowAdminConfig(!showAdminConfig);
-              setError(null);
-            }} 
-            style={{ background: 'none', border: 'none', color: '#2a2a2a', fontSize: '0.72rem', cursor: 'pointer' }}
-          >
-            {showAdminConfig ? 'Hide Config' : 'Database Setup (Admin)'}
-          </button>
-        </div>
+          )}
       </div>
     </div>
   );

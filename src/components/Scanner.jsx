@@ -157,7 +157,7 @@ function warpPerspective(srcImgData, srcWidth, srcHeight, corners) {
   return canvas;
 }
 
-export default function Scanner({ geminiKey, onDataExtracted, onError }) {
+export default function Scanner({ onDataExtracted, onError }) {
   const [loading, setLoading] = useState(false);
   const [statusMessage, setStatusMessage] = useState('');
 
@@ -310,7 +310,7 @@ export default function Scanner({ geminiKey, onDataExtracted, onError }) {
 
   const analyzeCroppedFile = async (file) => {
     try {
-      const extractedData = await extractDocumentData(file, geminiKey);
+      const extractedData = await extractDocumentData(file);
       onDataExtracted({
         metadata: extractedData,
         mainImage: file,

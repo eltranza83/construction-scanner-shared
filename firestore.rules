@@ -38,9 +38,7 @@ service cloud.firestore {
     }
 
     match /invites/CONFIG-GEMINI {
-      allow get: if hasAccess();
-      allow list: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read, write: if false;
     }
 
     match /invites/{code} {

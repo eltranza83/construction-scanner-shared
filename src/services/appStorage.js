@@ -2,7 +2,7 @@ import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from '../config/appConfig.js';
 
 export const APP_STORAGE_KEYS = {
   ...STORAGE_KEYS,
-  geminiKey: 'jobscan_gemini_key',
+  legacyGeminiKey: 'jobscan_gemini_key',
   googleToken: 'jobscan_google_token',
   googleUser: 'jobscan_google_user',
   folderId: 'jobscan_folder_id',
@@ -55,19 +55,24 @@ export function loadInitialInviteState() {
 }
 
 export function loadStoredAppState() {
-  const geminiKey = ensureStoredString(APP_STORAGE_KEYS.geminiKey, '');
+  localStorage.removeItem(APP_STORAGE_KEYS.legacyGeminiKey);
+  localStorage.removeItem(APP_STORAGE_KEYS.googleToken);
   const googleClientId = ensureStoredString(APP_STORAGE_KEYS.googleClientId, DEFAULT_GOOGLE_CLIENT_ID);
   const folderId = localStorage.getItem(APP_STORAGE_KEYS.folderId);
   const folderName = localStorage.getItem(APP_STORAGE_KEYS.folderName);
 
+  const projects = sanitizeProjects(getStoredJson(APP_STORAGE_KEYS.projects, []));
+  const activeProject = sanitizeProject(getStoredJson(APP_STORAGE_KEYS.activeProject, null));
+  persistProjects(projects);
+  if (activeProject) persistActiveProject(activeProject);
+
   return {
-    geminiKey,
     googleClientId,
-    googleToken: localStorage.getItem(APP_STORAGE_KEYS.googleToken) || null,
+    googleToken: getSessionStorage()?.getItem(APP_STORAGE_KEYS.googleToken) || null,
     googleUser: getStoredJson(APP_STORAGE_KEYS.googleUser, null),
     selectedFolder: folderId && folderName ? { id: folderId, name: folderName } : null,
-    projects: getStoredJson(APP_STORAGE_KEYS.projects, []),
-    activeProject: getStoredJson(APP_STORAGE_KEYS.activeProject, null),
+    projects,
+    activeProject,
     history: getStoredJson(APP_STORAGE_KEYS.history, []),
     stagedItems: getStoredJson(APP_STORAGE_KEYS.stagedItems, []),
     hasUnprocessedUploads: getStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads),
@@ -75,7 +80,10 @@ export function loadStoredAppState() {
 }
 
 export function persistGoogleToken(token) {
-  localStorage.setItem(APP_STORAGE_KEYS.googleToken, token);
+  const storage = getSessionStorage();
+  if (!storage) return;
+  if (token) storage.setItem(APP_STORAGE_KEYS.googleToken, token);
+  else storage.removeItem(APP_STORAGE_KEYS.googleToken);
 }
 
 export function persistGoogleUser(user) {
@@ -83,6 +91,7 @@ export function persistGoogleUser(user) {
 }
 
 export function clearGoogleSession() {
+  getSessionStorage()?.removeItem(APP_STORAGE_KEYS.googleToken);
   [
     APP_STORAGE_KEYS.googleToken,
     APP_STORAGE_KEYS.googleUser,
@@ -96,6 +105,7 @@ export function clearGoogleSession() {
 }
 
 export function clearGoogleIdentity() {
+  getSessionStorage()?.removeItem(APP_STORAGE_KEYS.googleToken);
   [
     APP_STORAGE_KEYS.googleToken,
     APP_STORAGE_KEYS.googleUser,
@@ -109,14 +119,29 @@ export function persistActiveProject(project) {
     return;
   }
 
-  setStoredJson(APP_STORAGE_KEYS.activeProject, project);
-  localStorage.setItem(APP_STORAGE_KEYS.activeProjectId, project.id);
-  localStorage.setItem(APP_STORAGE_KEYS.folderId, project.folderId);
-  localStorage.setItem(APP_STORAGE_KEYS.folderName, project.folderName);
+  const safeProject = sanitizeProject(project);
+  setStoredJson(APP_STORAGE_KEYS.activeProject, safeProject);
+  localStorage.setItem(APP_STORAGE_KEYS.activeProjectId, safeProject.id);
+  localStorage.setItem(APP_STORAGE_KEYS.folderId, safeProject.folderId);
+  localStorage.setItem(APP_STORAGE_KEYS.folderName, safeProject.folderName);
 }
 
 export function persistProjects(projects) {
-  setStoredJson(APP_STORAGE_KEYS.projects, projects);
+  setStoredJson(APP_STORAGE_KEYS.projects, sanitizeProjects(projects));
+}
+
+export function sanitizeProject(project) {
+  if (!project || typeof project !== 'object') return null;
+  const { appsScriptUrl: _appsScriptUrl, appsScriptSecret: _appsScriptSecret, ...safeProject } = project;
+  return safeProject;
+}
+
+export function sanitizeProjects(projects) {
+  return Array.isArray(projects) ? projects.map(sanitizeProject).filter(Boolean) : [];
+}
+
+function getSessionStorage() {
+  return typeof sessionStorage === 'undefined' ? null : sessionStorage;
 }
 
 export function persistHistory(history) {

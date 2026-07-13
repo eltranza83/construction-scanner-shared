@@ -9,10 +9,10 @@ import { STATUS_MESSAGES, getDriveErrorMessage, isAuthError } from '../services/
 import { fetchDriveFileBlob } from '../services/googleDrive';
 import { syncInvoiceDocument } from '../services/invoiceUpload';
 import {
-  buildAppsScriptSyncUrl,
   getHistoryFileId,
   shouldFlagUnprocessedUpload
 } from '../services/invoiceSyncState';
+import { triggerAppsScriptSync } from '../services/secureApi';
 
 function writePdfLoadingState(newWindow) {
   if (!newWindow) return;
@@ -70,26 +70,19 @@ export function useInvoiceSync({
   };
 
   const handleTriggerAppsScriptSync = async () => {
-    const syncUrl = buildAppsScriptSyncUrl(activeProject);
-    if (!syncUrl) return;
+    if (!activeProject?.folderId) return;
     setTriggeringSync(true);
     setError(null);
     try {
-      await fetch(syncUrl, {
-        method: 'POST',
-        mode: 'no-cors'
-      });
-
-      setTimeout(() => {
-        setHasUnprocessedUploads(false);
-        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
-        setTriggeringSync(false);
-        setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
-        setTimeout(() => setSuccess(null), 4000);
-      }, 2000);
+      await triggerAppsScriptSync(activeProject.folderId);
+      setHasUnprocessedUploads(false);
+      setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
+      setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
+      setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
       console.error(err);
-      setError(getDriveErrorMessage(err, 'trigger spreadsheet sync'));
+      setError(err.message || getDriveErrorMessage(err, 'trigger spreadsheet sync'));
+    } finally {
       setTriggeringSync(false);
     }
   };
@@ -111,7 +104,7 @@ export function useInvoiceSync({
 
       saveHistory([...result.logs, ...history]);
 
-      if (shouldFlagUnprocessedUpload(result, activeProject)) {
+      if (shouldFlagUnprocessedUpload(result)) {
         setHasUnprocessedUploads(true);
         setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
       }
