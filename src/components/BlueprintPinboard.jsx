@@ -9,7 +9,13 @@ import BlueprintSetupPrompt from './BlueprintSetupPrompt';
 import { useIssues } from '../hooks/useIssues';
 import DashboardPunchList from './DashboardPunchList';
 import IssueFormModal from './IssueFormModal';
-import { loadCachedDashboard } from '../services/dashboardDrive';
+import {
+  getCachedDashboardSpreadsheetId,
+  loadCachedDashboard,
+  loadProjectDashboardFromFolder,
+  persistDashboardCache,
+  persistDashboardSpreadsheetId
+} from '../services/dashboardDrive';
 import { createAndShareIssuePacket } from '../services/issuePacketShare';
 
 
@@ -201,13 +207,40 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
     setEditingIssue(null);
   };
 
+  const loadPacketProjectInfo = async () => {
+    if (cachedDashboard?.projectInfo) {
+      return cachedDashboard.projectInfo;
+    }
+
+    if (!googleToken || !activeProject?.folderId) {
+      return null;
+    }
+
+    const cachedSpreadsheetId = getCachedDashboardSpreadsheetId(localStorage, activeProject.id);
+    const { spreadsheetId, data } = await loadProjectDashboardFromFolder({
+      accessToken: googleToken,
+      projectFolderId: activeProject.folderId,
+      cachedSpreadsheetId
+    });
+
+    if (spreadsheetId !== cachedSpreadsheetId) {
+      persistDashboardSpreadsheetId(localStorage, activeProject.id, spreadsheetId);
+    }
+    persistDashboardCache(localStorage, activeProject.id, data);
+
+    return data?.projectInfo || null;
+  };
+
   const handleSendIssuePacket = async (issue) => {
+    const projectInfo = await loadPacketProjectInfo();
+
     await createAndShareIssuePacket({
       issue,
       googleToken,
       floorPlanImageSrc: pinboard.imageSrc,
       projectName: activeProject?.name,
-      selectedFolderName: selectedFolder?.name
+      selectedFolderName: selectedFolder?.name,
+      projectInfo
     });
   };
 

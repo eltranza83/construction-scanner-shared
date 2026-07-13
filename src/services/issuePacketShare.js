@@ -61,7 +61,8 @@ export async function createAndShareIssuePacket({
   googleToken,
   floorPlanImageSrc,
   projectName,
-  selectedFolderName
+  selectedFolderName,
+  projectInfo = null
 }) {
   const [issuePhotoBlob, floorPlanSnapshotBlob] = await Promise.all([
     getIssuePhotoBlob(issue, googleToken),
@@ -72,6 +73,7 @@ export async function createAndShareIssuePacket({
     issue,
     projectName,
     selectedFolderName,
+    projectInfo,
     issuePhotoBlob,
     floorPlanSnapshotBlob
   });

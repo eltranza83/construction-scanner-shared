@@ -106,6 +106,44 @@ function titleCase(value) {
   return formatIssueLabel(value).replace(/\b\w/g, letter => letter.toUpperCase());
 }
 
+function splitProjectName(value) {
+  const name = String(value || '').trim();
+  const lotMatch = name.match(/\bLot\s+[A-Za-z0-9-]+\b/i);
+  if (!lotMatch) {
+    return {
+      subdivision: name || 'N/A',
+      lotNumber: name || 'N/A'
+    };
+  }
+
+  const lotNumber = lotMatch[0].trim();
+  const subdivision = name.replace(lotMatch[0], '').trim();
+  return {
+    subdivision: subdivision || name,
+    lotNumber
+  };
+}
+
+function getProjectPacketInfo(projectInfo, projectName, selectedFolderName) {
+  const sheetProjectName = String(projectInfo?.name || '').trim();
+  const fallbackName = String(projectName || selectedFolderName || '').trim();
+  const { subdivision, lotNumber } = splitProjectName(sheetProjectName || fallbackName);
+  const streetAddress = String(projectInfo?.address || '').trim();
+  const cityStateZip = String(projectInfo?.cityStateZip || '').trim();
+  const fullAddress = [streetAddress, cityStateZip]
+    .filter(value => value && value !== 'N/A')
+    .join(', ');
+
+  return {
+    projectDisplayName: sheetProjectName || fallbackName || 'N/A',
+    subdivision,
+    lotNumber,
+    streetAddress: streetAddress && streetAddress !== 'N/A' ? streetAddress : '',
+    cityStateZip: cityStateZip && cityStateZip !== 'N/A' ? cityStateZip : '',
+    fullAddress: fullAddress || 'N/A'
+  };
+}
+
 async function drawAdepecHeader(pdf, title, subtitle) {
   const pageWidth = 210;
   const margin = 15;
@@ -204,6 +242,7 @@ export async function generateIssuePacketPDF({
   issue,
   projectName = '',
   selectedFolderName = '',
+  projectInfo = null,
   issuePhotoBlob = null,
   floorPlanSnapshotBlob = null
 }) {
@@ -226,6 +265,7 @@ export async function generateIssuePacketPDF({
   });
 
   await drawAdepecHeader(pdf, 'PUNCH ISSUE PACKET', `Generated ${created}`);
+  const packetProject = getProjectPacketInfo(projectInfo, projectName, selectedFolderName);
 
   let currentY = 48;
   pdf.setFont('helvetica', 'bold');
@@ -242,10 +282,20 @@ export async function generateIssuePacketPDF({
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(...ZINC_600);
-  pdf.text(`Project: ${projectName || selectedFolderName || 'N/A'}`, margin, currentY);
+  pdf.text(`Project: ${packetProject.projectDisplayName}`, margin, currentY);
   pdf.text(`Status: ${status}`, pageWidth - margin, currentY, { align: 'right' });
 
   currentY += 10;
+  const projectBoxHeight = 27;
+  pdf.setFillColor(255, 255, 255);
+  pdf.setDrawColor(...ZINC_200);
+  pdf.roundedRect(margin, currentY, contentWidth, projectBoxHeight, 3, 3, 'S');
+
+  addMetaRow(pdf, 'Subdivision', packetProject.subdivision, margin + 6, currentY + 10, 58);
+  addMetaRow(pdf, 'Lot Number', packetProject.lotNumber, margin + 70, currentY + 10, 40);
+  addMetaRow(pdf, 'Full Address', packetProject.fullAddress, margin + 118, currentY + 10, 56);
+
+  currentY += projectBoxHeight + 8;
   const metaHeight = 42;
   pdf.setFillColor(...ZINC_100);
   pdf.setDrawColor(...ZINC_200);
@@ -328,7 +378,7 @@ export async function generateIssuePacketPDF({
   pdf.setTextColor(...ADEPEC_GOLD);
   pdf.text('ADEPEC HOMES', margin, pageHeight - 5);
   pdf.setTextColor(212, 212, 216);
-  pdf.text(`${projectName || selectedFolderName || 'Project'} - ${issue?.id || 'issue'}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
+  pdf.text(`${packetProject.lotNumber || packetProject.projectDisplayName || 'Project'} - ${issue?.id || 'issue'}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
 
   return pdf.output('blob');
 }
