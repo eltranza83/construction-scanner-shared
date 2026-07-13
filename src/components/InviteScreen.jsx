@@ -119,7 +119,7 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
         }
 
         const invitesRef = collection(db, 'invites');
-        const q = query(invitesRef, where('claimedByEmail', '==', emailClean));
+        const q = query(invitesRef, where('claimedByUid', '==', accessDocId));
         const qSnapshot = await getDocs(q);
 
         if (!qSnapshot.empty) {
