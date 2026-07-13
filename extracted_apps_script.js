@@ -692,6 +692,7 @@ function doGet(e) {
   let statusClass = "status-tag";
   const action = e && e.parameter ? e.parameter.action : null;
   const mainFolderId = e && e.parameter ? e.parameter.folderId : null;
+  const serviceUrl = ScriptApp.getService().getUrl();
   if (action === "sync") {
     try {
       parseNewInvoices(mainFolderId);
@@ -711,8 +712,6 @@ function doGet(e) {
       statusMessage = `Renew failed: ${err && err.message ? err.message : err}`;
     }
   }
-  const syncUrl = getServiceUrlWithParams({ action: "sync" });
-  const renewUrl = getServiceUrlWithParams({ action: "renew" });
   return HtmlService.createHtmlOutput(`
     <html>
       <head>
@@ -797,10 +796,19 @@ function doGet(e) {
           <h1>Adepec Invoice Processor</h1>
           <p>Google Drive Folder Webhook is listening to uploads folder <strong>${INVOICE_FOLDER_ID}</strong>.</p>
           ${statusMessage ? `<div class="${statusClass}">${statusMessage}</div>` : ""}
+          ${action ? `<span class="subtext">Last action: ${action} at ${new Date().toLocaleString()}</span>` : ""}
           
-          <a href="${syncUrl}" class="btn" style="margin-bottom: 12px;">Force Run Sync Now</a>
+          <form action="${serviceUrl}" method="get" target="_top" style="margin-bottom: 12px;">
+            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
+            <input type="hidden" name="action" value="sync" />
+            <button type="submit" class="btn">Force Run Sync Now</button>
+          </form>
           
-          <a href="${renewUrl}" class="btn" style="background-color: #2a2a2a; color: #fff; border: 1px solid #3a3a3a;">Renew Folder Watch Channel</a>
+          <form action="${serviceUrl}" method="get" target="_top">
+            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
+            <input type="hidden" name="action" value="renew" />
+            <button type="submit" class="btn" style="background-color: #2a2a2a; color: #fff; border: 1px solid #3a3a3a;">Renew Folder Watch Channel</button>
+          </form>
           
           <span class="subtext">Daily cron auto-renewal runs at 1:00 AM</span>
         </div>
