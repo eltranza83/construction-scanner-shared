@@ -1,7 +1,5 @@
-const CACHE_NAME = 'jobscan-cache-v3'; // Bumped cache version to bust previous dev errors
+const CACHE_NAME = 'jobscan-cache-v4';
 const ASSETS = [
-  '/',
-  '/index.html',
   '/logo.svg',
   '/manifest.json'
 ];
@@ -29,7 +27,15 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // During local development, network first is safer to avoid caching bugs
+  if (e.request.method !== 'GET') return;
+
+  // Never serve a cached HTML shell. Old HTML can reference chunks from a
+  // previous deployment and leave the app blank after a release.
+  if (e.request.mode === 'navigate') {
+    e.respondWith(fetch(e.request));
+    return;
+  }
+
   e.respondWith(
     fetch(e.request).catch(() => caches.match(e.request))
   );
