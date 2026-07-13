@@ -316,7 +316,11 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
 
     } catch (err) {
       console.error(err);
-      setError(err.message || 'Verification failed. Please try again.');
+      if (err?.code === 'permission-denied') {
+        setError('This invite code is unavailable or has already been used.');
+      } else {
+        setError(err.message || 'Verification failed. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
