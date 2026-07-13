@@ -1,7 +1,14 @@
 export function buildAppsScriptSyncUrl(activeProject) {
   if (!activeProject?.appsScriptUrl) return null;
-  const folderId = encodeURIComponent(activeProject.folderId || '');
-  return `${activeProject.appsScriptUrl}?action=sync&folderId=${folderId}`;
+  const params = new URLSearchParams({
+    action: 'sync',
+    folderId: activeProject.folderId || ''
+  });
+  if (activeProject.appsScriptSecret) {
+    params.set('secret', activeProject.appsScriptSecret);
+  }
+  const separator = activeProject.appsScriptUrl.includes('?') ? '&' : '?';
+  return `${activeProject.appsScriptUrl}${separator}${params.toString()}`;
 }
 
 export function shouldFlagUnprocessedUpload(syncResult, activeProject) {

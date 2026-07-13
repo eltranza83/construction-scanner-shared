@@ -14,7 +14,15 @@ test('buildAppsScriptSyncUrl builds sync endpoint with encoded folder id', () =>
       appsScriptUrl: 'https://script.google.com/macros/s/abc/exec',
       folderId: 'folder 1/2'
     }),
-    'https://script.google.com/macros/s/abc/exec?action=sync&folderId=folder%201%2F2'
+    'https://script.google.com/macros/s/abc/exec?action=sync&folderId=folder+1%2F2'
+  );
+  assert.equal(
+    buildAppsScriptSyncUrl({
+      appsScriptUrl: 'https://script.google.com/macros/s/abc/exec',
+      appsScriptSecret: 'secret 1/2',
+      folderId: 'folder 1/2'
+    }),
+    'https://script.google.com/macros/s/abc/exec?action=sync&folderId=folder+1%2F2&secret=secret+1%2F2'
   );
 });
 

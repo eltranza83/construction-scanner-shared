@@ -6,9 +6,11 @@ export default function SettingsProjectModal({
   editingProject,
   projectName,
   appsScriptUrl,
+  appsScriptSecret,
   selectedFolder,
   onProjectNameChange,
   onAppsScriptUrlChange,
+  onAppsScriptSecretChange,
   onOpenFolderPicker,
   onCancel,
   onSave
@@ -133,6 +135,22 @@ export default function SettingsProjectModal({
             />
             <span style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', marginTop: '2px', display: 'block', lineHeight: '1.3' }}>
               If provided, this enables a "Sync Now" button inside the app to trigger spreadsheet logging immediately on upload.
+            </span>
+          </div>
+
+          <div className="form-group">
+            <label className="form-label" htmlFor="new-project-script-secret">Apps Script Secret</label>
+            <input
+              type="password"
+              id="new-project-script-secret"
+              className="form-input"
+              value={appsScriptSecret}
+              onChange={(e) => onAppsScriptSecretChange(e.target.value)}
+              placeholder="Same value as WEBHOOK_SECRET"
+              autoComplete="off"
+            />
+            <span style={{ fontSize: '0.7rem', color: 'var(--color-zinc-500)', marginTop: '2px', display: 'block', lineHeight: '1.3' }}>
+              Required after protecting the Apps Script webhook. Keep this value private.
             </span>
           </div>
         </div>

@@ -112,9 +112,11 @@ export default function Settings({
         editingProject={projectSettings.editingProject}
         projectName={projectSettings.projectNameInput}
         appsScriptUrl={projectSettings.appsScriptUrlInput}
+        appsScriptSecret={projectSettings.appsScriptSecretInput}
         selectedFolder={projectSettings.tempSelectedFolder}
         onProjectNameChange={projectSettings.setProjectNameInput}
         onAppsScriptUrlChange={projectSettings.setAppsScriptUrlInput}
+        onAppsScriptSecretChange={projectSettings.setAppsScriptSecretInput}
         onOpenFolderPicker={() => projectSettings.setShowFolderPickerModal(true)}
         onCancel={projectSettings.handleCancelCreateProject}
         onSave={projectSettings.handleSaveProject}

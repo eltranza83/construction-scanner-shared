@@ -1,6 +1,7 @@
 // --- CONFIGURATION ---
 // Securely retrieve Gemini API Key from project properties to prevent public code leak blocks
 const GEMINI_API_KEY = PropertiesService.getScriptProperties().getProperty('GEMINI_API_KEY') || '';
+const WEBHOOK_SECRET = PropertiesService.getScriptProperties().getProperty('WEBHOOK_SECRET') || '';
 const INVOICE_FOLDER_ID = '16yDqZ5lhfoSCY-J8wRuZl0_9uM30wIHD'; // 'Invoice Uploads'
 const ARCHIVE_FOLDER_ID = '1jdgw6v438N3RQksN_JpvhTwyJNwuSJhf'; // 'Processed Invoices'
 const SPREADSHEET_ID = '1kaVNSq0hC4A97EtYNE_lapznWillaKigF_Nn9icSUYs'; // 'test project spreadsheet'
@@ -9,6 +10,22 @@ const SHEET_NAME = 'New_Invoices';
 
 // Global logging buffer
 let currentLogBuffer = "";
+
+function isAuthorizedRequest(e) {
+  if (!WEBHOOK_SECRET) {
+    console.log("Missing WEBHOOK_SECRET script property.");
+    return false;
+  }
+  const receivedSecret = e && e.parameter ? String(e.parameter.secret || '') : '';
+  return receivedSecret && receivedSecret === WEBHOOK_SECRET;
+}
+
+function getServiceUrlWithSecret() {
+  const serviceUrl = ScriptApp.getService().getUrl();
+  if (!WEBHOOK_SECRET) return serviceUrl;
+  const separator = serviceUrl.indexOf('?') === -1 ? '?' : '&';
+  return `${serviceUrl}${separator}secret=${encodeURIComponent(WEBHOOK_SECRET)}`;
+}
 
 /**
  * Custom logger helper to output to both console and Google Drive log.
@@ -619,6 +636,9 @@ function extractDataWithGemini(file, mimeType) {
  */
 function doPost(e) {
   console.log("doPost triggered.");
+  if (!isAuthorizedRequest(e)) {
+    return ContentService.createTextOutput("Unauthorized");
+  }
   
   let action = null;
   let mainFolderId = null;
@@ -629,7 +649,7 @@ function doPost(e) {
   
   if (action === "sync") {
     parseNewInvoices(mainFolderId);
-    const serviceUrl = ScriptApp.getService().getUrl();
+    const serviceUrl = getServiceUrlWithSecret();
     return HtmlService.createHtmlOutput(`
       <script>
         alert("Sync processed!");
@@ -638,7 +658,7 @@ function doPost(e) {
     `);
   } else if (action === "renew") {
     registerFolderWatch();
-    const serviceUrl = ScriptApp.getService().getUrl();
+    const serviceUrl = getServiceUrlWithSecret();
     return HtmlService.createHtmlOutput(`
       <script>
         alert("Folder watch channel renewed!");
@@ -656,7 +676,10 @@ function doPost(e) {
  * Status and administration dashboard endpoint.
  */
 function doGet(e) {
-  const serviceUrl = ScriptApp.getService().getUrl();
+  if (!isAuthorizedRequest(e)) {
+    return HtmlService.createHtmlOutput("Unauthorized");
+  }
+  const serviceUrl = getServiceUrlWithSecret();
   return HtmlService.createHtmlOutput(`
     <html>
       <head>
@@ -738,11 +761,13 @@ function doGet(e) {
           
           <form action="${serviceUrl}" method="post" style="margin-bottom: 12px;">
             <input type="hidden" name="action" value="sync" />
+            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
             <button type="submit" class="btn">Force Run Sync Now</button>
           </form>
           
           <form action="${serviceUrl}" method="post">
             <input type="hidden" name="action" value="renew" />
+            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
             <button type="submit" class="btn" style="background-color: #2a2a2a; color: #fff; border: 1px solid #3a3a3a;">Renew Folder Watch Channel</button>
           </form>
           
@@ -760,7 +785,7 @@ function registerFolderWatch() {
   const token = ScriptApp.getOAuthToken();
   const url = `https://www.googleapis.com/drive/v3/files/${INVOICE_FOLDER_ID}/watch`;
   
-  const webAppUrl = ScriptApp.getService().getUrl();
+  const webAppUrl = getServiceUrlWithSecret();
   if (!webAppUrl || webAppUrl === "") {
     console.log("Error: Web App is not deployed. Please deploy the script as a Web App first.");
     return;
