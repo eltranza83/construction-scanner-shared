@@ -53,6 +53,7 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
   const [googleClientId, setGoogleClientId] = useState(() => loadStoredAppState().googleClientId);
   const [googleToken, setGoogleToken] = useState(() => loadStoredAppState().googleToken);
   const [googleUser, setGoogleUser] = useState(() => loadStoredAppState().googleUser);
+  const [signingIn, setSigningIn] = useState(false);
 
   useEffect(() => {
     const initClient = () => {
@@ -121,6 +122,7 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
     }
 
     setError?.(null);
+    setSigningIn(true);
     try {
       if (window.google?.accounts?.oauth2?.initTokenClient) {
         const client = window.google.accounts.oauth2.initTokenClient({
@@ -143,12 +145,18 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
                 setGoogleUser(null);
                 clearGoogleIdentity();
                 setError?.(getFriendlyAuthError(err));
+              } finally {
+                setSigningIn(false);
               }
             } else if (tokenResponse.error) {
               setGoogleToken(null);
               setGoogleUser(null);
               clearGoogleIdentity();
               setError?.(getFriendlyAuthError(tokenResponse));
+              setSigningIn(false);
+            } else {
+              setError?.('Google sign-in did not return an account. Please try again.');
+              setSigningIn(false);
             }
           },
           error_callback: (err) => {
@@ -156,6 +164,7 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
             setGoogleUser(null);
             clearGoogleIdentity();
             setError?.(getFriendlyAuthError(err));
+            setSigningIn(false);
           }
         });
         window.googleTokenClient = client;
@@ -163,9 +172,11 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
         return;
       }
 
+      setSigningIn(false);
       setError?.('Google Identity Services did not load. Please refresh the page and try again.');
     } catch (err) {
       console.error(err);
+      setSigningIn(false);
       setError?.('Failed to initialize Google login client. Make sure client ID is valid.');
     }
   };
@@ -208,6 +219,7 @@ export function useGoogleAuth({ setError, setSuccess, onMissingClientId, onSigne
     googleToken,
     setGoogleToken,
     googleUser,
+    signingIn,
     signIn,
     signOut,
     handleSessionExpired,

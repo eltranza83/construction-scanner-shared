@@ -6,7 +6,7 @@ import { ADMIN_PASSCODE, DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigV
 import { APP_STORAGE_KEYS, getStoredBoolean, setStoredBoolean } from '../services/appStorage';
 import { buildUserAccessRecord, getUserAccessDocId } from '../services/inviteAccess';
 
-export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, onGoogleSignIn, onSignOut }) {
+export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKey, googleUser, authError, signingIn, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -419,10 +419,10 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
           </span>
         </div>
 
-        {error && (
+        {(error || authError) && (
           <div className="alert-box alert-error" style={{ fontSize: '0.82rem', padding: '10px 12px', borderRadius: '8px', display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
             <ShieldAlert size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
-            <span>{error}</span>
+            <span>{error || authError}</span>
           </div>
         )}
 
@@ -449,8 +449,9 @@ export default function InviteScreen({ onUnlocked, onKeyUpdated, defaultGeminiKe
                 onClick={onGoogleSignIn} 
                 className="btn btn-primary" 
                 style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px', width: '100%' }}
+                disabled={signingIn}
               >
-                <LogIn size={18} /> Sign In with Google
+                <LogIn size={18} /> {signingIn ? 'Signing in...' : 'Sign In with Google'}
               </button>
             </div>
           ) : (

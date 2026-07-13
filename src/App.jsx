@@ -44,6 +44,7 @@ export default function App() {
     googleToken,
     setGoogleToken,
     googleUser,
+    signingIn,
     signIn: handleGoogleSignIn,
     signOut: googleSignOut,
     handleSessionExpired
@@ -142,6 +143,8 @@ export default function App() {
           onKeyUpdated={updateGeminiKey}
           defaultGeminiKey={geminiKey}
           googleUser={googleUser}
+          authError={error}
+          signingIn={signingIn}
           onGoogleSignIn={handleGoogleSignIn}
           onSignOut={handleSignOut}
         />
