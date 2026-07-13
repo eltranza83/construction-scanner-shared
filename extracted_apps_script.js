@@ -27,6 +27,15 @@ function getServiceUrlWithSecret() {
   return `${serviceUrl}${separator}secret=${encodeURIComponent(WEBHOOK_SECRET)}`;
 }
 
+function getServiceUrlWithParams(params) {
+  const baseUrl = getServiceUrlWithSecret();
+  const separator = baseUrl.indexOf('?') === -1 ? '?' : '&';
+  const query = Object.keys(params)
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(params[key])}`)
+    .join('&');
+  return `${baseUrl}${separator}${query}`;
+}
+
 /**
  * Custom logger helper to output to both console and Google Drive log.
  */
@@ -679,7 +688,31 @@ function doGet(e) {
   if (!isAuthorizedRequest(e)) {
     return HtmlService.createHtmlOutput("Unauthorized");
   }
-  const serviceUrl = getServiceUrlWithSecret();
+  let statusMessage = "";
+  let statusClass = "status-tag";
+  const action = e && e.parameter ? e.parameter.action : null;
+  const mainFolderId = e && e.parameter ? e.parameter.folderId : null;
+  if (action === "sync") {
+    try {
+      parseNewInvoices(mainFolderId);
+      statusMessage = "Sync completed. Check the spreadsheet for new rows.";
+    } catch (err) {
+      console.error(err);
+      statusClass = "status-tag error";
+      statusMessage = `Sync failed: ${err && err.message ? err.message : err}`;
+    }
+  } else if (action === "renew") {
+    try {
+      registerFolderWatch();
+      statusMessage = "Folder watch channel renewed.";
+    } catch (err) {
+      console.error(err);
+      statusClass = "status-tag error";
+      statusMessage = `Renew failed: ${err && err.message ? err.message : err}`;
+    }
+  }
+  const syncUrl = getServiceUrlWithParams({ action: "sync" });
+  const renewUrl = getServiceUrlWithParams({ action: "renew" });
   return HtmlService.createHtmlOutput(`
     <html>
       <head>
@@ -734,7 +767,7 @@ function doGet(e) {
             background-color: #B28741; 
             transform: translateY(-1px); 
           }
-          .status-tag { 
+          .status-tag {
             display: inline-block; 
             background: rgba(16, 185, 129, 0.15); 
             color: #10b981; 
@@ -744,6 +777,11 @@ function doGet(e) {
             font-weight: bold; 
             margin-bottom: 15px; 
             border: 1px solid rgba(16, 185, 129, 0.3);
+          }
+          .status-tag.error {
+            background: rgba(239, 68, 68, 0.15);
+            color: #f87171;
+            border-color: rgba(239, 68, 68, 0.35);
           }
           .subtext {
             display: block;
@@ -758,18 +796,11 @@ function doGet(e) {
           <div class="status-tag">ACTIVE & LISTENING</div>
           <h1>Adepec Invoice Processor</h1>
           <p>Google Drive Folder Webhook is listening to uploads folder <strong>${INVOICE_FOLDER_ID}</strong>.</p>
+          ${statusMessage ? `<div class="${statusClass}">${statusMessage}</div>` : ""}
           
-          <form action="${serviceUrl}" method="post" style="margin-bottom: 12px;">
-            <input type="hidden" name="action" value="sync" />
-            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
-            <button type="submit" class="btn">Force Run Sync Now</button>
-          </form>
+          <a href="${syncUrl}" class="btn" style="margin-bottom: 12px;">Force Run Sync Now</a>
           
-          <form action="${serviceUrl}" method="post">
-            <input type="hidden" name="action" value="renew" />
-            <input type="hidden" name="secret" value="${WEBHOOK_SECRET}" />
-            <button type="submit" class="btn" style="background-color: #2a2a2a; color: #fff; border: 1px solid #3a3a3a;">Renew Folder Watch Channel</button>
-          </form>
+          <a href="${renewUrl}" class="btn" style="background-color: #2a2a2a; color: #fff; border: 1px solid #3a3a3a;">Renew Folder Watch Channel</a>
           
           <span class="subtext">Daily cron auto-renewal runs at 1:00 AM</span>
         </div>
