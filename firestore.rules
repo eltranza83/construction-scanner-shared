@@ -11,14 +11,6 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/admins/$(request.auth.token.email));
     }
 
-    function hasAccess() {
-      return signedIn()
-        && (
-          isAdmin()
-          || exists(/databases/$(database)/documents/user_access/$(request.auth.uid))
-        );
-    }
-
     match /admins/{email} {
       allow get: if signedIn();
       allow list: if false;
