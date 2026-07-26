@@ -3,6 +3,8 @@ export const STORAGE_KEYS = {
   firebaseProjectId: 'jobscan_firebase_project_id',
   firebaseAppId: 'jobscan_firebase_app_id',
   googleClientId: 'jobscan_google_client_id',
+  geminiApiKey: 'jobscan_gemini_api_key',
+  appsScriptUrl: 'jobscan_apps_script_url',
 };
 
 const ENV = import.meta.env || {};
@@ -20,4 +22,14 @@ export const DEFAULT_GOOGLE_CLIENT_ID =
 
 export function getStoredConfigValue(storageKey, fallback) {
   return localStorage.getItem(storageKey) || fallback;
+}
+
+export function getAccountAppsScriptUrlKey(email) {
+  if (!email) return STORAGE_KEYS.appsScriptUrl;
+  return `${STORAGE_KEYS.appsScriptUrl}_${String(email).trim().toLowerCase()}`;
+}
+
+export function getAccountAppsScriptSecretKey(email) {
+  if (!email) return 'jobscan_apps_script_secret';
+  return `jobscan_apps_script_secret_${String(email).trim().toLowerCase()}`;
 }

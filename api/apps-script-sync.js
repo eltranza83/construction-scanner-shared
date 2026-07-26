@@ -5,13 +5,13 @@ import {
   requireScannerAccess
 } from './_lib/firebase-auth.js';
 
-function getConfiguredScriptUrl() {
-  const value = process.env.APPS_SCRIPT_URL || '';
+function getConfiguredScriptUrl(customUrl = '') {
+  const value = customUrl || process.env.APPS_SCRIPT_URL || '';
   let url;
   try {
     url = new URL(value);
   } catch {
-    throw new HttpError(503, 'Spreadsheet sync is not configured on the server.');
+    throw new HttpError(503, 'Spreadsheet sync is not configured on the server. Please add APPS_SCRIPT_URL to .env or Vercel settings.');
   }
 
   if (url.protocol !== 'https:' || url.hostname !== 'script.google.com' || !url.pathname.includes('/macros/s/')) {
@@ -23,9 +23,11 @@ function getConfiguredScriptUrl() {
 export async function POST(request) {
   try {
     await requireScannerAccess(request);
-    const secret = process.env.APPS_SCRIPT_SECRET;
-    if (!secret) {
-      throw new HttpError(503, 'Spreadsheet sync is not configured on the server.');
+    const clientScriptUrl = request.headers.get('x-apps-script-url') || '';
+    const secret = request.headers.get('x-apps-script-secret') || process.env.APPS_SCRIPT_SECRET || '';
+
+    if (!clientScriptUrl && !process.env.APPS_SCRIPT_URL) {
+      throw new HttpError(503, 'Spreadsheet sync is not configured on the server. Please add APPS_SCRIPT_URL to .env or Vercel settings.');
     }
 
     let body;
@@ -40,10 +42,12 @@ export async function POST(request) {
       throw new HttpError(400, 'A valid project folder is required.');
     }
 
-    const scriptUrl = getConfiguredScriptUrl();
+    const scriptUrl = getConfiguredScriptUrl(clientScriptUrl);
     scriptUrl.searchParams.set('action', 'sync');
     scriptUrl.searchParams.set('folderId', folderId);
-    scriptUrl.searchParams.set('secret', secret);
+    if (secret) {
+      scriptUrl.searchParams.set('secret', secret);
+    }
 
     const response = await fetch(scriptUrl, { method: 'POST', redirect: 'follow' });
     if (!response.ok) {

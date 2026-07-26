@@ -53,6 +53,7 @@ export async function signInToFirebaseWithGooglePopup(scopes = []) {
   }
 
   const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
   scopes.forEach((scope) => provider.addScope(scope));
   const result = await signInWithPopup(auth, provider);
   const credential = GoogleAuthProvider.credentialFromResult(result);

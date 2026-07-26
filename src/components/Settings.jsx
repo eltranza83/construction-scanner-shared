@@ -4,6 +4,7 @@ import SettingsFolderPickerModal from './SettingsFolderPickerModal';
 import SettingsProjectModal from './SettingsProjectModal';
 import SettingsAdminPanel from './SettingsAdminPanel';
 import SettingsGoogleConnectionCard from './SettingsGoogleConnectionCard';
+import SettingsApiKeysCard from './SettingsApiKeysCard';
 import SettingsHelpCard from './SettingsHelpCard';
 import SettingsProjectProfilesCard from './SettingsProjectProfilesCard';
 import { useSettingsAdmin } from '../hooks/useSettingsAdmin';
@@ -53,6 +54,11 @@ export default function Settings({
         googleUser={googleUser}
         onSignIn={onSignIn}
         onSignOut={onSignOut}
+      />
+
+      <SettingsApiKeysCard
+        onSetSuccess={setSuccess}
+        onSetError={setError}
       />
 
       {googleToken && (

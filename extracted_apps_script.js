@@ -12,12 +12,9 @@ const SHEET_NAME = 'New_Invoices';
 let currentLogBuffer = "";
 
 function isAuthorizedRequest(e) {
-  if (!WEBHOOK_SECRET) {
-    console.log("Missing WEBHOOK_SECRET script property.");
-    return false;
-  }
+  if (!WEBHOOK_SECRET) return true;
   const receivedSecret = e && e.parameter ? String(e.parameter.secret || '') : '';
-  return receivedSecret && receivedSecret === WEBHOOK_SECRET;
+  return receivedSecret === WEBHOOK_SECRET;
 }
 
 function getServiceUrlWithSecret() {
@@ -227,16 +224,30 @@ function parseNewInvoices(mainFolderId) {
       try {
         const mainFolder = DriveApp.getFolderById(mainFolderId);
         
-        // Find "Invoice Uploads" and "Processed Invoices" subfolders
+        // Find or create "Invoice Uploads" and "Processed Invoices" subfolders dynamically
+        let foundUploads = false;
+        let foundArchive = false;
         const subfolders = mainFolder.getFolders();
         while (subfolders.hasNext()) {
           const sub = subfolders.next();
           const name = sub.getName().toLowerCase();
           if (name.includes("uploads") || name.includes("invoice uploads")) {
             folderId = sub.getId();
+            foundUploads = true;
           } else if (name.includes("processed") || name.includes("processed invoices") || name.includes("archive")) {
             archiveFolderId = sub.getId();
+            foundArchive = true;
           }
+        }
+        
+        if (!foundUploads) {
+          const newUploads = mainFolder.createFolder("Invoice Uploads");
+          folderId = newUploads.getId();
+        }
+        
+        if (!foundArchive) {
+          const newArchive = mainFolder.createFolder("Processed Invoices");
+          archiveFolderId = newArchive.getId();
         }
         
         // Find the Google Spreadsheet inside the main project folder
@@ -249,22 +260,9 @@ function parseNewInvoices(mainFolderId) {
           }
         }
         
-        // Fallback: search within the uploads folder if not found in main folder
-        if (spreadsheetId === SPREADSHEET_ID && folderId !== INVOICE_FOLDER_ID) {
-          const uploadsFolder = DriveApp.getFolderById(folderId);
-          const filesInUploads = uploadsFolder.getFiles();
-          while (filesInUploads.hasNext()) {
-            const f = filesInUploads.next();
-            if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
-              spreadsheetId = f.getId();
-              break;
-            }
-          }
-        }
-        
         addLog(`Resolved project IDs dynamically: Uploads folder = ${folderId}, Archive = ${archiveFolderId}, Spreadsheet = ${spreadsheetId}`);
       } catch (e) {
-        addLog(`Error resolving dynamic folders for mainFolderId ${mainFolderId}: ${e.message}. Falling back to default constants.`);
+        addLog(`Error resolving dynamic folders for mainFolderId ${mainFolderId}: ${e.message}.`);
       }
     }
     
@@ -640,6 +638,22 @@ function extractDataWithGemini(file, mimeType) {
 // NEW WEBHOOK & FILE-ARRIVAL TRIGGER LOGIC
 // ==========================================
 
+function doGet(e) {
+  if (!isAuthorizedRequest(e)) {
+    return ContentService.createTextOutput("Unauthorized");
+  }
+  
+  let action = e && e.parameter ? e.parameter.action : null;
+  let mainFolderId = e && e.parameter ? e.parameter.folderId : null;
+  
+  if (action === "sync") {
+    parseNewInvoices(mainFolderId);
+    return ContentService.createTextOutput("Sync Completed");
+  }
+  
+  return ContentService.createTextOutput("Invoice Sync Service is Active.");
+}
+
 /**
  * Endpoint for Google Drive folder change webhook notification POST requests.
  */
@@ -658,22 +672,10 @@ function doPost(e) {
   
   if (action === "sync") {
     parseNewInvoices(mainFolderId);
-    const serviceUrl = getServiceUrlWithSecret();
-    return HtmlService.createHtmlOutput(`
-      <script>
-        alert("Sync processed!");
-        window.location.href = "${serviceUrl}";
-      </script>
-    `);
+    return ContentService.createTextOutput("Sync Completed");
   } else if (action === "renew") {
     registerFolderWatch();
-    const serviceUrl = getServiceUrlWithSecret();
-    return HtmlService.createHtmlOutput(`
-      <script>
-        alert("Folder watch channel renewed!");
-        window.location.href = "${serviceUrl}";
-      </script>
-    `);
+    return ContentService.createTextOutput("Folder watch renewed");
   } else {
     // Normal drive notification (something changed in the folder)
     parseNewInvoices(mainFolderId);
