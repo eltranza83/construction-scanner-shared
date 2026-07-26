@@ -128,6 +128,25 @@ export function parseSummaryDashboard(rows) {
   };
 }
 
+export function findPhaseMeta(phaseName, phaseStatuses) {
+  if (!phaseName || !phaseStatuses) return null;
+  const cleanKey = normalizeKey(phaseName);
+  if (phaseStatuses[cleanKey]) return phaseStatuses[cleanKey];
+
+  let bestMeta = null;
+  let bestScore = 0;
+  Object.keys(phaseStatuses).forEach(key => {
+    const meta = phaseStatuses[key];
+    const score = scoreWordOverlap(phaseName, meta?.phase || key);
+    if (score > bestScore) {
+      bestScore = score;
+      bestMeta = meta;
+    }
+  });
+
+  return bestScore > 0 ? bestMeta : null;
+}
+
 /**
  * Analyzes all rows in a phase block to extract the contractor payee, quote, paid, balance, status, and payments.
  */
@@ -185,11 +204,11 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
       status = colK;
     }
 
-    // 6. Payments: Rows below the header row containing transaction detail in Columns B-F
+    // 6. Payments: Rows below the phase header row containing transaction detail in Columns B-F
     const hasPaymentData = colB !== '' || colC !== '' || colD !== '' || colE !== '' || colF !== '';
     if (idx > 0 && hasPaymentData) {
       payments.push({
-        vendor: colB || 'N/A',
+        vendor: colB || payee || 'Unknown Vendor',
         materialCost: colC || '$0.00',
         laborCost: colD || '$0.00',
         date: colE || 'N/A',
@@ -198,9 +217,8 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     }
   });
 
-  // Overwrite status using the Summary_Dashboard master dropdown if mapped
-  const cleanPhaseKey = normalizeKey(block.phase);
-  const meta = (phaseStatuses && phaseStatuses[cleanPhaseKey]) ? phaseStatuses[cleanPhaseKey] : fallbackSummaryMeta;
+  // Match phase metadata from Summary_Dashboard using fuzzy name matching or fallbackSummaryMeta
+  const meta = findPhaseMeta(block.phase, phaseStatuses) || fallbackSummaryMeta;
   if (meta) {
     if (typeof meta === 'object') {
       status = meta.status || status;
@@ -368,7 +386,7 @@ export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
 
     if (!rangeName.includes('Summary_Dashboard')) {
       const sheetName = rangeName.split('!')[0].replace(/'/g, '');
-      const summarySection = findSummarySectionForSheet(sheetName, summarySections) || summarySections[categorySheetIndex] || null;
+      const summarySection = findSummarySectionForSheet(sheetName, summarySections);
       const parsedSubs = parseCategorySheet(sheetName, rows, phaseStatuses, summarySection);
       categorySheetIndex += 1;
       
