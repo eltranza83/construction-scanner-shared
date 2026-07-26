@@ -30,7 +30,7 @@ export default function DashboardContractorDetail({
       marginTop: '4px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-zinc-900)', paddingBottom: '8px', position: 'relative' }}>
-        <div style={{ flex: 1, minWidth: 0, paddingRight: '140px' }}>
+        <div style={{ flex: 1, minWidth: 0, paddingRight: '40px' }}>
           <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{selectedSub.payee}</h4>
           <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
             Phase: <strong>{selectedSub.phase}</strong> ({selectedSub.category})
@@ -58,20 +58,6 @@ export default function DashboardContractorDetail({
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'absolute', right: '0', top: '0', height: '100%', maxHeight: '32px' }}>
-          <span style={{
-            fontSize: '0.68rem',
-            fontWeight: 'bold',
-            padding: '4px 8px',
-            borderRadius: '4px',
-            backgroundColor: statusStyle.bg,
-            color: statusStyle.text,
-            border: `1px solid ${statusStyle.border}`,
-            textTransform: 'uppercase',
-            whiteSpace: 'nowrap'
-          }}>
-            {selectedSub.status || 'Not Started'}
-          </span>
-
           <button
             type="button"
             onClick={onClearSelection}
