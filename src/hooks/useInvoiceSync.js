@@ -13,6 +13,7 @@ import {
   shouldFlagUnprocessedUpload
 } from '../services/invoiceSyncState';
 import { triggerAppsScriptSync } from '../services/secureApi';
+import { syncUploadedInvoicesDirectly } from '../services/directSyncService';
 
 function writePdfLoadingState(newWindow) {
   if (!newWindow) return;
@@ -78,14 +79,32 @@ export function useInvoiceSync({
     setTriggeringSync(true);
     setError(null);
     try {
-      await triggerAppsScriptSync(targetFolderId);
-      setHasUnprocessedUploads(false);
-      setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
-      setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
+      if (googleToken) {
+        const result = await syncUploadedInvoicesDirectly(googleToken, targetFolderId);
+        setHasUnprocessedUploads(false);
+        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
+        setSuccess(
+          result.processedCount > 0
+            ? `Synced ${result.processedCount} invoice(s) directly to your spreadsheet!`
+            : 'Spreadsheet is up to date!'
+        );
+      } else {
+        await triggerAppsScriptSync(targetFolderId);
+        setHasUnprocessedUploads(false);
+        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
+        setSuccess('Spreadsheet sync triggered successfully!');
+      }
       setTimeout(() => setSuccess(null), 4000);
     } catch (err) {
-      console.error(err);
-      setError(err.message || getDriveErrorMessage(err, 'trigger spreadsheet sync'));
+      console.error('Direct sync failed, trying fallback:', err);
+      try {
+        await triggerAppsScriptSync(targetFolderId);
+        setHasUnprocessedUploads(false);
+        setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
+        setSuccess('Spreadsheet sync triggered!');
+      } catch (fallbackErr) {
+        setError(getDriveErrorMessage(fallbackErr, 'trigger spreadsheet sync'));
+      }
     } finally {
       setTriggeringSync(false);
     }

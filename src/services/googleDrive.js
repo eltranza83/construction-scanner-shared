@@ -497,4 +497,37 @@ export async function makeFilePubliclyReadable(accessToken, fileId) {
   return true;
 }
 
+/**
+ * Moves a file from one parent folder to another in Google Drive.
+ */
+export async function moveFileInDrive(accessToken, fileId, removeParentId, addParentId) {
+  const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?addParents=${addParentId}&removeParents=${removeParentId}&fields=id,parents`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to move file in Drive: ${errText}`);
+  }
+  return await response.json();
+}
+
+/**
+ * Lists all non-trashed files in a Google Drive folder including their description and webViewLink.
+ */
+export async function listFilesWithDescriptionInFolder(accessToken, folderId) {
+  const query = `'${folderId}' in parents and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name,mimeType,description,webViewLink)`;
+  const response = await fetch(url, {
+    headers: { Authorization: `Bearer ${accessToken}` }
+  });
+  if (!response.ok) {
+    const errText = await response.text();
+    throw new Error(`Failed to list files in folder: ${errText}`);
+  }
+  const result = await response.json();
+  return result.files || [];
+}
+
 
