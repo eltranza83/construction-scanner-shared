@@ -113,6 +113,57 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
 
     const sheetTitle = matchedSheetProp.title;
 
+    // Check for master log tab ("New_Invoices")
+    let newInvoicesSheetTitle = null;
+    for (const sheetObj of sheetsList) {
+      const title = sheetObj.properties?.title || '';
+      const cleanTitle = normalizeKey(title);
+      if (cleanTitle === 'newinvoices' || cleanTitle === 'masterlog' || cleanTitle === 'invoicelog') {
+        newInvoicesSheetTitle = title;
+        break;
+      }
+    }
+
+    const fileUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+    const costCat = String(metadata.costCategory || 'material').toLowerCase();
+    const rawCost = typeof metadata.amount === 'number' 
+      ? metadata.amount 
+      : (typeof metadata.totalCost === 'number' 
+        ? metadata.totalCost 
+        : parseFloat(metadata.amount || metadata.totalCost || metadata.cost || metadata.price || metadata.total) || 0);
+
+    const vendor = metadata.vendor || metadata.contractorVendor || metadata.payee || metadata.contractor || '';
+    const paymentDate = metadata.date || metadata.paymentDate || metadata.transactionDate || '';
+    const checkNumber = metadata.checkNumber || metadata.checkNo || metadata.checkOrTrans || metadata.check || '';
+    const taskDesc = metadata.description || metadata.desc || metadata.item || 'Scanned Invoice';
+
+    if (newInvoicesSheetTitle) {
+      try {
+        const masterRow = [
+          paymentDate,
+          vendor,
+          tradeCat,
+          tradePh,
+          taskDesc,
+          rawCost > 0 ? rawCost : '',
+          costCat,
+          checkNumber,
+          `=HYPERLINK("${fileUrl}", "View PDF")`
+        ];
+        const masterAppendUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(newInvoicesSheetTitle)}'!A1:I100:append?valueInputOption=USER_ENTERED`;
+        await fetch(masterAppendUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ values: [masterRow] })
+        });
+      } catch (err) {
+        console.warn('Failed to append to New_Invoices tab:', err);
+      }
+    }
+
     // Fetch tab values to find target phase row
     const rangeUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:Z100`;
     const rangeRes = await fetch(rangeUrl, {
