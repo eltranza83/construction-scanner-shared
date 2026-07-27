@@ -296,36 +296,54 @@ export async function appendRowToSheet(accessToken, sheetId, rowData) {
   return await response.json();
 }
 
+const inFlightFolderPromises = new Map();
+
 /**
  * Find or create a subfolder inside a parent folder in Google Drive.
+ * Deduplicates concurrent requests for the same folder to prevent duplicate folder creation.
  */
 export async function findOrCreateFolder(accessToken, folderName, parentId) {
   assertDriveFolderParent(parentId, `find or create folder ${folderName}`);
 
-  const safeFolderName = escapeDriveQueryString(folderName);
-  const safeParentId = escapeDriveQueryString(parentId);
-  const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${safeParentId}' in parents and trashed=false`;
-  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  const lockKey = `${parentId}_${String(folderName).trim().toLowerCase()}`;
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to search for folder ${folderName}: ${errText}`);
+  if (inFlightFolderPromises.has(lockKey)) {
+    return await inFlightFolderPromises.get(lockKey);
   }
 
-  const data = await response.json();
-  if (data.files && data.files.length > 0) {
-    return data.files[0].id;
-  }
+  const folderPromise = (async () => {
+    try {
+      const safeFolderName = escapeDriveQueryString(folderName);
+      const safeParentId = escapeDriveQueryString(parentId);
+      const query = `name='${safeFolderName}' and mimeType='application/vnd.google-apps.folder' and '${safeParentId}' in parents and trashed=false`;
+      const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
 
-  // Create it
-  const created = await createFolder(accessToken, folderName, parentId);
-  return created.id;
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`Failed to search for folder ${folderName}: ${errText}`);
+      }
+
+      const data = await response.json();
+      if (data.files && data.files.length > 0) {
+        return data.files[0].id;
+      }
+
+      // Create it
+      const created = await createFolder(accessToken, folderName, parentId);
+      return created.id;
+    } finally {
+      inFlightFolderPromises.delete(lockKey);
+    }
+  })();
+
+  inFlightFolderPromises.set(lockKey, folderPromise);
+  return await folderPromise;
 }
 
 /**
