@@ -4,7 +4,6 @@ import SettingsFolderPickerModal from './SettingsFolderPickerModal';
 import SettingsProjectModal from './SettingsProjectModal';
 import SettingsAdminPanel from './SettingsAdminPanel';
 import SettingsGoogleConnectionCard from './SettingsGoogleConnectionCard';
-import SettingsHelpCard from './SettingsHelpCard';
 import SettingsProjectProfilesCard from './SettingsProjectProfilesCard';
 import { useSettingsAdmin } from '../hooks/useSettingsAdmin';
 import { useSettingsProjects } from '../hooks/useSettingsProjects';
@@ -69,19 +68,19 @@ export default function Settings({
         />
       )}
 
-      <SettingsHelpCard />
-
-      <SettingsAdminPanel
-        checkingAdmin={admin.checkingAdmin}
-        invites={admin.invites}
-        isAdminUnlocked={admin.isAdminUnlocked}
-        loadingInvites={admin.loadingInvites}
-        showAdminPanel={admin.showAdminPanel}
-        onDeleteInvite={admin.handleDeleteInvite}
-        onGenerateInvite={admin.handleGenerateInvite}
-        onShareInvite={admin.handleShareInvite}
-        onToggleAdminPanel={() => admin.setShowAdminPanel(!admin.showAdminPanel)}
-      />
+      {admin.isAdminUnlocked && (
+        <SettingsAdminPanel
+          checkingAdmin={admin.checkingAdmin}
+          invites={admin.invites}
+          isAdminUnlocked={admin.isAdminUnlocked}
+          loadingInvites={admin.loadingInvites}
+          showAdminPanel={admin.showAdminPanel}
+          onDeleteInvite={admin.handleDeleteInvite}
+          onGenerateInvite={admin.handleGenerateInvite}
+          onShareInvite={admin.handleShareInvite}
+          onToggleAdminPanel={() => admin.setShowAdminPanel(!admin.showAdminPanel)}
+        />
+      )}
 
       <SettingsDeleteProjectModal
         project={projectSettings.projectToDelete}
