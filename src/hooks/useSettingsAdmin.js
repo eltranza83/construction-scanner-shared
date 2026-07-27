@@ -34,38 +34,45 @@ export function useSettingsAdmin({ setError, setSuccess }) {
   };
 
   useEffect(() => {
-    if (!showAdminPanel) return;
+    const db = getFirebaseDb();
+    const auth = getFirebaseAuthInstance();
 
-    const verifyAdmin = async () => {
-      const db = getFirebaseDb();
-      const user = getFirebaseAuthInstance()?.currentUser;
+    const verifyAdmin = async (user) => {
       if (!db || !user?.email) {
         setIsAdminUnlocked(false);
-        setError('Sign in with an administrator account to manage invites.');
         return;
       }
 
       setCheckingAdmin(true);
       try {
-        const admin = await getDoc(doc(db, 'admins', user.email.toLowerCase()));
-        setIsAdminUnlocked(admin.exists());
-        if (admin.exists()) {
+        const adminSnap = await getDoc(doc(db, 'admins', user.email.toLowerCase()));
+        const isUnlocked = adminSnap.exists();
+        setIsAdminUnlocked(isUnlocked);
+        if (isUnlocked) {
           setError(null);
           await fetchInvitesList();
-        } else {
-          setError('This Google account is not authorized as an administrator.');
         }
       } catch (err) {
         console.error('Failed to verify administrator:', err);
         setIsAdminUnlocked(false);
-        setError('Unable to verify administrator access.');
       } finally {
         setCheckingAdmin(false);
       }
     };
 
-    verifyAdmin();
-  }, [showAdminPanel]);
+    const initialUser = auth?.currentUser;
+    if (initialUser) {
+      verifyAdmin(initialUser);
+    }
+
+    const unsubscribe = auth?.onAuthStateChanged ? auth.onAuthStateChanged((user) => {
+      verifyAdmin(user);
+    }) : null;
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, []);
 
   const handleGenerateInvite = async () => {
     const db = getFirebaseDb();
