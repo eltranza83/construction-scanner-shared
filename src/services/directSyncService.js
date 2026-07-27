@@ -220,19 +220,6 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
       }
     }
 
-    const fileUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
-    const costCat = String(metadata.costCategory || 'material').toLowerCase();
-    const rawCost = typeof metadata.amount === 'number' 
-      ? metadata.amount 
-      : (typeof metadata.totalCost === 'number' 
-        ? metadata.totalCost 
-        : parseFloat(metadata.amount || metadata.totalCost || metadata.cost || metadata.price || metadata.total) || 0);
-
-    const vendor = metadata.vendor || metadata.contractorVendor || metadata.payee || metadata.contractor || '';
-    const paymentDate = metadata.date || metadata.paymentDate || metadata.transactionDate || '';
-    const checkNumber = metadata.checkNumber || metadata.checkNo || metadata.checkOrTrans || metadata.check || '';
-    const taskDesc = metadata.description || metadata.desc || metadata.item || 'Scanned Invoice';
-
     const isLabor = costCat.includes('labor');
     const displayVal = rawCost > 0 ? rawCost : `"PDF"`;
     const materialValue = !isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
