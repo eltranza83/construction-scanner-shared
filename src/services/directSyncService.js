@@ -139,18 +139,20 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
 
     if (newInvoicesSheetTitle) {
       try {
+        const isLabor = costCat.includes('labor');
+        const displayVal = rawCost > 0 ? rawCost : `"PDF"`;
+        const masterMatVal = !isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
+        const masterLabVal = isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
+
         const masterRow = [
-          paymentDate,
-          vendor,
-          tradeCat,
-          tradePh,
           taskDesc,
-          rawCost > 0 ? rawCost : '',
-          costCat,
-          checkNumber,
-          `=HYPERLINK("${fileUrl}", "View PDF")`
+          vendor,
+          masterMatVal,
+          masterLabVal,
+          paymentDate,
+          checkNumber
         ];
-        const masterAppendUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(newInvoicesSheetTitle)}'!A1:I100:append?valueInputOption=USER_ENTERED`;
+        const masterAppendUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(newInvoicesSheetTitle)}'!A1:F100:append?valueInputOption=USER_ENTERED`;
         await fetch(masterAppendUrl, {
           method: 'POST',
           headers: {
