@@ -175,18 +175,20 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
       ? metadata.amount 
       : (typeof metadata.totalCost === 'number' 
         ? metadata.totalCost 
-        : parseFloat(metadata.amount || metadata.totalCost || metadata.cost) || 0);
+        : parseFloat(metadata.amount || metadata.totalCost || metadata.cost || metadata.price || metadata.total) || 0);
 
-    const vendor = metadata.vendor || metadata.contractorVendor || metadata.payee || '';
-    const paymentDate = metadata.date || metadata.paymentDate || '';
-    const checkNumber = metadata.checkNumber || metadata.checkNo || metadata.checkOrTrans || '';
+    const vendor = metadata.vendor || metadata.contractorVendor || metadata.payee || metadata.contractor || '';
+    const paymentDate = metadata.date || metadata.paymentDate || metadata.transactionDate || '';
+    const checkNumber = metadata.checkNumber || metadata.checkNo || metadata.checkOrTrans || metadata.check || '';
+    const taskDesc = metadata.description || metadata.desc || metadata.item || 'Scanned Invoice';
 
     const isLabor = costCat.includes('labor');
-    const materialValue = !isLabor && rawCost > 0 ? `=HYPERLINK("${fileUrl}", ${rawCost})` : (!isLabor ? `=HYPERLINK("${fileUrl}", "PDF")` : '');
-    const laborValue = isLabor && rawCost > 0 ? `=HYPERLINK("${fileUrl}", ${rawCost})` : (isLabor ? `=HYPERLINK("${fileUrl}", "PDF")` : '');
+    const displayVal = rawCost > 0 ? rawCost : `"PDF"`;
+    const materialValue = !isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
+    const laborValue = isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
 
     const rowValues = [
-      metadata.description || 'Scanned Invoice',
+      taskDesc,
       vendor,
       materialValue,
       laborValue,
