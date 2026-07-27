@@ -107,9 +107,18 @@ export function useInvoiceSync({
       if (shouldFlagUnprocessedUpload(result)) {
         setHasUnprocessedUploads(true);
         setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
+
+        if (activeProject?.folderId) {
+          triggerAppsScriptSync(activeProject.folderId).then(() => {
+            setHasUnprocessedUploads(false);
+            setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
+          }).catch(err => {
+            console.warn('Automatic Apps Script spreadsheet sync failed:', err);
+          });
+        }
       }
 
-      setSuccess(result.successMessage);
+      setSuccess('PDF report uploaded & spreadsheet sync started!');
 
       removeStagedItem(id);
       setTimeout(() => setSuccess(null), 4000);
