@@ -5,13 +5,16 @@ import {
   requireScannerAccess
 } from './_lib/firebase-auth.js';
 
+const DEFAULT_APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyBtgcVfCJndLKLpOWst8QDhn_i-bZbuxhvF9Uz62Mx0-KPeWAtHJIl27Gieuvc60kdag/exec';
+const DEFAULT_APPS_SCRIPT_SECRET = 'adepec_scanner_secret_2026';
+
 function getConfiguredScriptUrl(customUrl = '') {
-  const value = customUrl || process.env.APPS_SCRIPT_URL || '';
+  const value = customUrl || process.env.APPS_SCRIPT_URL || DEFAULT_APPS_SCRIPT_URL;
   let url;
   try {
     url = new URL(value);
   } catch {
-    throw new HttpError(503, 'Spreadsheet sync is not configured on the server. Please add APPS_SCRIPT_URL to .env or Vercel settings.');
+    throw new HttpError(503, 'Spreadsheet sync is not configured on the server.');
   }
 
   if (url.protocol !== 'https:' || url.hostname !== 'script.google.com' || !url.pathname.includes('/macros/s/')) {
@@ -24,11 +27,7 @@ export async function POST(request) {
   try {
     await requireScannerAccess(request);
     const clientScriptUrl = request.headers.get('x-apps-script-url') || '';
-    const secret = request.headers.get('x-apps-script-secret') || process.env.APPS_SCRIPT_SECRET || '';
-
-    if (!clientScriptUrl && !process.env.APPS_SCRIPT_URL) {
-      throw new HttpError(503, 'Spreadsheet sync is not configured on the server. Please add APPS_SCRIPT_URL to .env or Vercel settings.');
-    }
+    const secret = request.headers.get('x-apps-script-secret') || process.env.APPS_SCRIPT_SECRET || DEFAULT_APPS_SCRIPT_SECRET;
 
     let body;
     try {
