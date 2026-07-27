@@ -70,11 +70,15 @@ export function useInvoiceSync({
   };
 
   const handleTriggerAppsScriptSync = async () => {
-    if (!activeProject?.folderId) return;
+    const targetFolderId = activeProject?.folderId || selectedFolder?.id;
+    if (!targetFolderId) {
+      setError('Please select an active project folder before syncing.');
+      return;
+    }
     setTriggeringSync(true);
     setError(null);
     try {
-      await triggerAppsScriptSync(activeProject.folderId);
+      await triggerAppsScriptSync(targetFolderId);
       setHasUnprocessedUploads(false);
       setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
       setSuccess('Spreadsheet sync triggered successfully! Check your spreadsheet in a few seconds.');
@@ -107,18 +111,9 @@ export function useInvoiceSync({
       if (shouldFlagUnprocessedUpload(result)) {
         setHasUnprocessedUploads(true);
         setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, true);
-
-        if (activeProject?.folderId) {
-          triggerAppsScriptSync(activeProject.folderId).then(() => {
-            setHasUnprocessedUploads(false);
-            setStoredBoolean(APP_STORAGE_KEYS.hasUnprocessedUploads, false);
-          }).catch(err => {
-            console.warn('Automatic Apps Script spreadsheet sync failed:', err);
-          });
-        }
       }
 
-      setSuccess('PDF report uploaded & spreadsheet sync started!');
+      setSuccess(result.successMessage);
 
       removeStagedItem(id);
       setTimeout(() => setSuccess(null), 4000);
