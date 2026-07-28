@@ -619,6 +619,13 @@ export default function App() {
             <span>X-Ray</span>
           </button>
           <button 
+            className={`nav-item ${activeTab === 'inspections' ? 'active' : ''}`}
+            onClick={() => setActiveTab('inspections')}
+          >
+            <ClipboardCheck size={20} />
+            <span>Inspections</span>
+          </button>
+          <button 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
             onClick={() => setActiveTab('settings')}
           >
