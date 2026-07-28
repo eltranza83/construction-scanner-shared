@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
@@ -14,6 +14,7 @@ const Settings = lazy(() => import('./components/Settings'));
 const InviteScreen = lazy(() => import('./components/InviteScreen'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const BlueprintPinboard = lazy(() => import('./components/BlueprintPinboard'));
+const Inspections = lazy(() => import('./components/Inspections'));
 
 function LazyScreenFallback() {
   return (
@@ -546,6 +547,11 @@ export default function App() {
         ) : activeTab === 'xray' ? (
           <BlueprintPinboard
             googleToken={googleToken}
+            activeProject={activeProject}
+            selectedFolder={selectedFolder}
+          />
+        ) : activeTab === 'inspections' ? (
+          <Inspections
             activeProject={activeProject}
             selectedFolder={selectedFolder}
           />

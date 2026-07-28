@@ -70,21 +70,35 @@ export const TRADE_SECTIONS_CONFIG = {
   }
 };
 
+import Inspections from './Inspections';
+
 function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount }) {
   return (
-    <div style={{ display: 'flex', gap: '8px', padding: '2px', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', borderRadius: '8px', width: 'fit-content' }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
+        backgroundColor: 'var(--color-zinc-900)',
+        padding: '4px',
+        borderRadius: '8px',
+        border: '1px solid var(--color-zinc-800)',
+        overflowX: 'auto'
+      }}
+    >
       <button
         onClick={() => onSetViewMode('blueprint')}
         style={{
-          padding: '6px 12px',
-          fontSize: '0.74rem',
+          padding: '6px 10px',
+          fontSize: '0.72rem',
           fontWeight: 700,
           borderRadius: '6px',
           border: 'none',
           backgroundColor: viewMode === 'blueprint' ? 'var(--color-amber-500)' : 'transparent',
           color: viewMode === 'blueprint' ? '#000' : 'var(--color-zinc-400)',
           cursor: 'pointer',
-          transition: 'all 0.15s'
+          transition: 'all 0.15s',
+          whiteSpace: 'nowrap'
         }}
       >
         Floor Plan View
@@ -92,15 +106,16 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
       <button
         onClick={() => onSetViewMode('albums')}
         style={{
-          padding: '6px 12px',
-          fontSize: '0.74rem',
+          padding: '6px 10px',
+          fontSize: '0.72rem',
           fontWeight: 700,
           borderRadius: '6px',
           border: 'none',
           backgroundColor: viewMode === 'albums' ? 'var(--color-amber-500)' : 'transparent',
           color: viewMode === 'albums' ? '#000' : 'var(--color-zinc-400)',
           cursor: 'pointer',
-          transition: 'all 0.15s'
+          transition: 'all 0.15s',
+          whiteSpace: 'nowrap'
         }}
       >
         Phase Albums
@@ -108,8 +123,8 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
       <button
         onClick={() => onSetViewMode('punch_list')}
         style={{
-          padding: '6px 12px',
-          fontSize: '0.74rem',
+          padding: '6px 10px',
+          fontSize: '0.72rem',
           fontWeight: 700,
           borderRadius: '6px',
           border: 'none',
@@ -119,7 +134,8 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
           transition: 'all 0.15s',
           display: 'flex',
           alignItems: 'center',
-          gap: '6px'
+          gap: '4px',
+          whiteSpace: 'nowrap'
         }}
       >
         <span>Punch List</span>
@@ -136,6 +152,23 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
             {activeIssuesCount}
           </span>
         )}
+      </button>
+      <button
+        onClick={() => onSetViewMode('pre_check')}
+        style={{
+          padding: '6px 10px',
+          fontSize: '0.72rem',
+          fontWeight: 700,
+          borderRadius: '6px',
+          border: 'none',
+          backgroundColor: viewMode === 'pre_check' ? 'var(--color-amber-500)' : 'transparent',
+          color: viewMode === 'pre_check' ? '#000' : 'var(--color-zinc-400)',
+          cursor: 'pointer',
+          transition: 'all 0.15s',
+          whiteSpace: 'nowrap'
+        }}
+      >
+        City Pre-Check
       </button>
     </div>
   );
@@ -320,6 +353,11 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           projectInfo={formProjectInfo}
           selectedFolderName={selectedFolder?.name}
           onSendIssuePacket={handleSendIssuePacket}
+        />
+      ) : pinboard.viewMode === 'pre_check' ? (
+        <Inspections
+          activeProject={activeProject}
+          selectedFolder={selectedFolder}
         />
       ) : pinboard.viewMode === 'albums' ? (
         <BlueprintPhaseAlbums
