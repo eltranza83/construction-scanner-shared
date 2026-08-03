@@ -90,7 +90,7 @@ export default function DashboardContractorDetail({
         <div style={{ padding: '8px', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
           <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Summary Spent</span>
           <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-zinc-200)', marginTop: '2px' }}>
-            {formatCurrency(selectedSub.totalSpent)}
+            {formatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
         <div style={{ padding: '8px', backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
