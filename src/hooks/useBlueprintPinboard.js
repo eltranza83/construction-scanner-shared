@@ -347,7 +347,9 @@ export function useBlueprintPinboard({
 
     setLoading(true);
     try {
-      await resetBlueprintVault(googleToken, blueprintDataFileId);
+      if (blueprintDataFileId) {
+        await resetBlueprintVault(googleToken, blueprintDataFileId);
+      }
       await loadBlueprintData();
     } catch (err) {
       setError(getDriveErrorMessage(err, 'clear blueprint'));

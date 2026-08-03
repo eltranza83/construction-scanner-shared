@@ -124,16 +124,27 @@ export async function loadBlueprintVault(accessToken, projectFolderId) {
     };
   }
 
-  const data = await getFileContent(accessToken, configJsonFile.id);
-  const blueprintFileId = data.blueprintFileId || null;
+  try {
+    const data = await getFileContent(accessToken, configJsonFile.id);
+    const blueprintFileId = data?.blueprintFileId || null;
 
-  return {
-    blueprintDataFileId: configJsonFile.id,
-    blueprintFileId,
-    blueprintFileName: data.blueprintFileName || null,
-    pins: data.pins || [],
-    blueprintBlob: blueprintFileId ? await fetchDriveFileBlob(accessToken, blueprintFileId) : null
-  };
+    return {
+      blueprintDataFileId: configJsonFile.id,
+      blueprintFileId,
+      blueprintFileName: data?.blueprintFileName || null,
+      pins: data?.pins || [],
+      blueprintBlob: blueprintFileId ? await fetchDriveFileBlob(accessToken, blueprintFileId) : null
+    };
+  } catch (err) {
+    console.error('Failed to parse blueprint_data.json content:', err);
+    return {
+      blueprintDataFileId: configJsonFile.id,
+      blueprintFileId: null,
+      blueprintFileName: null,
+      pins: [],
+      blueprintBlob: null
+    };
+  }
 }
 
 export async function uploadBlueprintVaultFile({
@@ -320,5 +331,8 @@ export async function deleteBlueprintPin({
 }
 
 export async function resetBlueprintVault(accessToken, blueprintDataFileId) {
+  if (!blueprintDataFileId) {
+    return;
+  }
   await saveBlueprintConfig(accessToken, blueprintDataFileId, buildBlueprintConfig());
 }

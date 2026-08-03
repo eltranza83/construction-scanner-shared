@@ -452,7 +452,11 @@ export async function findFileInFolder(accessToken, folderId, fileName) {
  */
 export async function getFileContent(accessToken, fileId) {
   const blob = await fetchDriveFileBlob(accessToken, fileId);
-  return await blob.text().then(JSON.parse);
+  const text = await blob.text();
+  if (!text || !text.trim()) {
+    return {};
+  }
+  return JSON.parse(text);
 }
 
 /**
