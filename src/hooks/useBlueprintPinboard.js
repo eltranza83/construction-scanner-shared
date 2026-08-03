@@ -87,13 +87,14 @@ export function useBlueprintPinboard({
 
     try {
       const data = await loadBlueprintVault(googleToken, selectedFolder.id);
-      setBlueprintDataFileId(data.blueprintDataFileId);
-      setBlueprintFileId(data.blueprintFileId);
-      setBlueprintFileName(data.blueprintFileName || (data.blueprintFileId ? 'Blueprint.png' : null));
-      setPins(data.pins || []);
+      const safeData = data || {};
+      setBlueprintDataFileId(safeData.blueprintDataFileId || null);
+      setBlueprintFileId(safeData.blueprintFileId || null);
+      setBlueprintFileName(safeData.blueprintFileName || (safeData.blueprintFileId ? 'Blueprint.png' : null));
+      setPins(safeData.pins || []);
 
-      if (data.blueprintBlob) {
-        const localUrl = URL.createObjectURL(data.blueprintBlob);
+      if (safeData.blueprintBlob) {
+        const localUrl = URL.createObjectURL(safeData.blueprintBlob);
         setImageSrc(localUrl);
       }
     } catch (err) {
@@ -346,12 +347,21 @@ export function useBlueprintPinboard({
     if (!window.confirm('Remove floor plan image? This will also remove all X-Ray pins saved on this floor plan.')) return;
 
     setLoading(true);
+    setError(null);
     try {
-      if (blueprintDataFileId) {
-        await resetBlueprintVault(googleToken, blueprintDataFileId);
+      if (selectedFolder?.id) {
+        await resetBlueprintVault(googleToken, selectedFolder.id, blueprintDataFileId);
       }
-      await loadBlueprintData();
+      clearBlueprintImage();
+      setBlueprintDataFileId(null);
+      setBlueprintFileId(null);
+      setBlueprintFileName(null);
+      setPins([]);
+      setSelectedPin(null);
+      setSuccess('Floor plan removed.');
+      setTimeout(() => setSuccess(null), 2500);
     } catch (err) {
+      console.error('Error resetting blueprint:', err);
       setError(getDriveErrorMessage(err, 'clear blueprint'));
     } finally {
       setLoading(false);

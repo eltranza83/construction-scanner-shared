@@ -330,9 +330,18 @@ export async function deleteBlueprintPin({
   return updatedPins;
 }
 
-export async function resetBlueprintVault(accessToken, blueprintDataFileId) {
-  if (!blueprintDataFileId) {
-    return;
+export async function resetBlueprintVault(accessToken, projectFolderId, blueprintDataFileId) {
+  try {
+    let fileId = blueprintDataFileId;
+    if (!fileId && projectFolderId) {
+      const xRayFolderId = await ensureXRayFolder(accessToken, projectFolderId);
+      const configJsonFile = await findFileInFolder(accessToken, xRayFolderId, BLUEPRINT_CONFIG_FILE);
+      fileId = configJsonFile?.id || null;
+    }
+    if (fileId) {
+      await saveBlueprintConfig(accessToken, fileId, buildBlueprintConfig());
+    }
+  } catch (err) {
+    console.error('Error resetting blueprint vault:', err);
   }
-  await saveBlueprintConfig(accessToken, blueprintDataFileId, buildBlueprintConfig());
 }
