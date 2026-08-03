@@ -18,6 +18,11 @@ export default function DashboardContractorDetail({
 
   const statusStyle = getStatusStyle(selectedSub.status);
 
+  const laborPayments = (selectedSub.payments || []).filter((p) => {
+    const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
+    return lab > 0;
+  });
+
   return (
     <div style={{
       backgroundColor: 'var(--color-zinc-950)',
@@ -103,18 +108,17 @@ export default function DashboardContractorDetail({
 
       <div>
         <span style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '6px' }}>
-          Payment History Logs ({selectedSub.payments.length})
+          Payment History Logs ({laborPayments.length})
         </span>
 
-        {selectedSub.payments.length === 0 ? (
+        {laborPayments.length === 0 ? (
           <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', padding: '6px 0' }}>
-            No payments recorded yet for this trade.
+            No labor payments recorded yet for this contractor.
           </p>
         ) : (
           <div style={{ maxHeight: '120px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '5px' }}>
-            {selectedSub.payments.map((p, idx) => {
-              const mat = parseFloat(p.materialCost.replace(/[^0-9.-]/g, '')) || 0;
-              const lab = parseFloat(p.laborCost.replace(/[^0-9.-]/g, '')) || 0;
+            {laborPayments.map((p, idx) => {
+              const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
               return (
                 <div key={idx} style={{
                   display: 'flex',
@@ -133,8 +137,8 @@ export default function DashboardContractorDetail({
                     </span>
                   </div>
 
-                  <div style={{ textAlign: 'right', fontWeight: 700 }}>
-                    {formatCurrency(mat + lab)}
+                  <div style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-blue-400)' }}>
+                    {formatCurrency(lab)}
                   </div>
                 </div>
               );
