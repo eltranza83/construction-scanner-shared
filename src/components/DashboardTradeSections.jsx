@@ -2,6 +2,11 @@ import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 function PhaseMetricGroup({ sub, formatCurrency }) {
+  const phaseTotal = sub.totalSpent || (
+    (parseFloat(String(sub.totalMaterial || 0).replace(/[^0-9.-]/g, '')) || 0) +
+    (parseFloat(String(sub.totalLabor || 0).replace(/[^0-9.-]/g, '')) || 0)
+  );
+
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
@@ -18,9 +23,9 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
         alignItems: 'center',
         gap: '10px',
         padding: '4px 7px',
-        border: '1px solid rgba(96, 165, 250, 0.18)',
+        border: '1px solid rgba(52, 211, 153, 0.22)',
         borderRadius: '6px',
-        backgroundColor: 'rgba(59, 130, 246, 0.04)'
+        backgroundColor: 'rgba(52, 211, 153, 0.04)'
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
@@ -34,11 +39,11 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
         <div style={{ width: '1px', alignSelf: 'stretch', backgroundColor: 'rgba(148, 163, 184, 0.16)' }} />
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-zinc-300)', lineHeight: '1.2' }}>
-            {formatCurrency(sub.remainingBalance)}
+          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-emerald-400)', lineHeight: '1.2' }}>
+            {formatCurrency(phaseTotal)}
           </span>
           <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-            Bal
+            Total
           </span>
         </div>
       </div>
