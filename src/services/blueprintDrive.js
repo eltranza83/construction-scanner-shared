@@ -22,7 +22,7 @@ function buildJsonBlob(data) {
   return new Blob([JSON.stringify(data, null, 2)], { type: BLUEPRINT_CONFIG_MIME_TYPE });
 }
 
-function buildBlueprintConfig({ blueprintFileId = null, blueprintFileName = null, pins = [] }) {
+function buildBlueprintConfig({ blueprintFileId = null, blueprintFileName = null, pins = [] } = {}) {
   return {
     blueprintFileId,
     blueprintFileName,
