@@ -1,5 +1,5 @@
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck, Trash2, X } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
@@ -93,7 +93,9 @@ export default function App() {
     triggeringSync,
     handleTriggerAppsScriptSync,
     handleSyncToDrive,
-    handleViewPDF
+    handleViewPDF,
+    handleClearHistory,
+    handleDeleteHistoryItem
   } = useInvoiceSync({
     activeProject,
     googleToken,
@@ -484,7 +486,30 @@ export default function App() {
               </div>
             ) : (
               <div key="history-subtab" className="slide-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Sync Log & History ({history.length})</h2>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Sync Log & History ({history.length})</h2>
+                  {history.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearHistory}
+                      className="btn btn-secondary"
+                      style={{
+                        width: 'auto',
+                        padding: '4px 10px',
+                        fontSize: '0.74rem',
+                        color: '#f87171',
+                        borderColor: 'rgba(239, 68, 68, 0.3)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '4px'
+                      }}
+                    >
+                      <Trash2 size={13} />
+                      <span>Clear All</span>
+                    </button>
+                  )}
+                </div>
                 
                 {history.length === 0 ? (
                   <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.9rem', border: '1px dashed var(--color-zinc-800)', borderRadius: '12px' }}>
@@ -515,20 +540,40 @@ export default function App() {
 
                         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', flexShrink: 0 }}>
                           <div className="history-price">${Number(item.amount).toFixed(2)}</div>
-                          {item.link ? (
-                            <button 
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            {item.link ? (
+                              <button 
+                                type="button"
+                                onClick={() => handleViewPDF(item)}
+                                className="btn btn-secondary" 
+                                style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', borderRadius: '6px', whiteSpace: 'nowrap' }}
+                              >
+                                View PDF
+                              </button>
+                            ) : (
+                              <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
+                                Downloaded
+                              </span>
+                            )}
+                            <button
                               type="button"
-                              onClick={() => handleViewPDF(item)}
-                              className="btn btn-secondary" 
-                              style={{ padding: '4px 8px', fontSize: '0.75rem', width: 'auto', borderRadius: '6px', whiteSpace: 'nowrap' }}
+                              onClick={() => handleDeleteHistoryItem(item.id)}
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--color-zinc-500)',
+                                cursor: 'pointer',
+                                padding: '4px',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                borderRadius: '4px'
+                              }}
+                              title="Delete log entry"
                             >
-                              View PDF
+                              <X size={14} />
                             </button>
-                          ) : (
-                            <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-600)', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
-                              Downloaded
-                            </span>
-                          )}
+                          </div>
                         </div>
                       </div>
                     ))}

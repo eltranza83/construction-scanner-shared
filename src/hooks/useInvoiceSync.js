@@ -180,6 +180,16 @@ export function useInvoiceSync({
     }
   };
 
+  const handleClearHistory = () => {
+    if (!window.confirm('Are you sure you want to clear all upload history? This will remove all history log entries from this device.')) return;
+    saveHistory([]);
+  };
+
+  const handleDeleteHistoryItem = (id) => {
+    const nextHistory = (history || []).filter(item => item.id !== id);
+    saveHistory(nextHistory);
+  };
+
   return {
     uploading,
     history,
@@ -187,6 +197,8 @@ export function useInvoiceSync({
     triggeringSync,
     handleTriggerAppsScriptSync,
     handleSyncToDrive,
-    handleViewPDF
+    handleViewPDF,
+    handleClearHistory,
+    handleDeleteHistoryItem
   };
 }
