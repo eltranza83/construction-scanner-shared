@@ -1,13 +1,16 @@
-import React from 'react';
-import { Camera, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { Camera, X, Copy, Check } from 'lucide-react';
 
 export default function DashboardContractorDetail({
   selectedSub,
   formatCurrency,
   getStatusStyle,
   onViewPhasePhotos,
-  onClearSelection
+  onClearSelection,
+  onShowToast
 }) {
+  const [copied, setCopied] = useState(false);
+
   if (!selectedSub) {
     return (
       <div style={{ padding: '16px 0', textAlign: 'center', fontSize: '0.78rem', color: 'var(--color-zinc-500)', fontStyle: 'italic' }}>
@@ -15,6 +18,16 @@ export default function DashboardContractorDetail({
       </div>
     );
   }
+
+  const handleCopySummary = () => {
+    const summaryText = `${selectedSub.payee} - ${selectedSub.phase} (${selectedSub.category})\nQuote: ${formatCurrency(selectedSub.originalQuote)}\nSpent: ${formatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}\nRemaining: ${formatCurrency(selectedSub.remainingBalance)}`;
+    navigator.clipboard.writeText(summaryText);
+    setCopied(true);
+    if (onShowToast) {
+      onShowToast(`Copied payment summary for ${selectedSub.payee}!`, 'success');
+    }
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   const statusStyle = getStatusStyle(selectedSub.status);
 
@@ -43,26 +56,48 @@ export default function DashboardContractorDetail({
           <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px' }}>
             Phase: <strong style={{ color: 'var(--color-amber-400)' }}>{selectedSub.phase}</strong> ({selectedSub.category})
           </p>
-          <button
-            type="button"
-            onClick={() => onViewPhasePhotos({ category: selectedSub.category, phase: selectedSub.phase })}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--color-amber-400)',
-              fontSize: '0.72rem',
-              fontWeight: 700,
-              padding: 0,
-              marginTop: '6px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px',
-              cursor: 'pointer',
-              textDecoration: 'underline'
-            }}
-          >
-            <Camera size={13} /> View Phase Photos
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => onViewPhasePhotos({ category: selectedSub.category, phase: selectedSub.phase })}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--color-amber-400)',
+                fontSize: '0.72rem',
+                fontWeight: 700,
+                padding: 0,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                textDecoration: 'underline'
+              }}
+            >
+              <Camera size={13} /> View Phase Photos
+            </button>
+            <button
+              type="button"
+              onClick={handleCopySummary}
+              style={{
+                background: 'rgba(197, 160, 89, 0.12)',
+                border: '1px solid rgba(197, 160, 89, 0.3)',
+                color: 'var(--color-amber-400)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '3px 8px',
+                borderRadius: '5px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease'
+              }}
+            >
+              {copied ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={12} />}
+              {copied ? 'Copied Summary!' : 'Copy Payment Summary'}
+            </button>
+          </div>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', position: 'absolute', right: '0', top: '0', height: '100%', maxHeight: '32px' }}>

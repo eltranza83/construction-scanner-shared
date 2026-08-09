@@ -7,6 +7,7 @@ import { useInviteGate } from './hooks/useInviteGate';
 import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
 import { STATUS_MESSAGES } from './services/appErrors';
+import ToastNotification from './components/ToastNotification';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -151,6 +152,11 @@ export default function App() {
 
   return (
     <div className="app-container">
+      <ToastNotification
+        message={success || error}
+        type={success ? 'success' : 'error'}
+        onClose={() => { setSuccess(null); setError(null); }}
+      />
       {/* 1. Header */}
       <header className="app-header">
         <div className="logo-section">

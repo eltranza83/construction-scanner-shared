@@ -1170,3 +1170,14 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   to { transform: translateY(0); opacity: 1; }
 }
 
+@keyframes toastSlideDown {
+  from { transform: translate(-50%, -100%); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* Tactile Spring Button Press Feedback */
+button:active, .btn:active {
+  transform: scale(0.97) !important;
+  transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+

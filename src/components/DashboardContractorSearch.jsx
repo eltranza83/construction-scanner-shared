@@ -77,6 +77,7 @@ export default function DashboardContractorSearch({
         getStatusStyle={getStatusStyle}
         onViewPhasePhotos={onViewPhasePhotos}
         onClearSelection={onClearSelection}
+        onShowToast={onShowToast}
       />
     </div>
   );
