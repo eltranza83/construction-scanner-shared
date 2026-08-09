@@ -15,11 +15,13 @@ import DashboardKpiCards from './DashboardKpiCards';
 import DashboardPhotoReminders from './DashboardPhotoReminders';
 import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
+import { auditSpreadsheetHealth } from '../services/spreadsheetHealth';
 
 export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired, onShowToast }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [sheetWarnings, setSheetWarnings] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSub, setSelectedSub] = useState(null);
   const [expandedCategories, setExpandedCategories] = useState({});
@@ -197,6 +199,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         persistDashboardSpreadsheetId(localStorage, activeProject.id, spreadsheetId);
       }
       setData(parsedData);
+      const healthAudit = auditSpreadsheetHealth(parsedData);
+      setSheetWarnings(healthAudit.warnings);
 
       // Cache values for offline usage
       persistDashboardCache(localStorage, activeProject.id, parsedData);
@@ -351,6 +355,28 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         <div className="alert-box alert-error" style={{ fontSize: '0.78rem', margin: 0, padding: '10px 12px' }}>
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
           {error}
+        </div>
+      )}
+
+      {sheetWarnings.length > 0 && (
+        <div style={{
+          backgroundColor: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.3)',
+          borderRadius: '10px',
+          padding: '12px 14px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '6px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--color-amber-400)', fontWeight: 700, fontSize: '0.82rem' }}>
+            <AlertCircle size={16} />
+            <span>Google Sheet Structure Audit Notice</span>
+          </div>
+          {sheetWarnings.map((warn, i) => (
+            <p key={i} style={{ fontSize: '0.74rem', color: 'var(--color-zinc-300)', margin: 0, lineHeight: '1.4' }}>
+              • {warn}
+            </p>
+          ))}
         </div>
       )}
 
