@@ -11,7 +11,8 @@ export default function DashboardContractorSearch({
   onSearchTermChange,
   onSelectSubcontractor,
   onClearSelection,
-  onViewPhasePhotos
+  onViewPhasePhotos,
+  onShowToast
 }) {
   return (
     <div id="contractor-lookup-container" className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', padding: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
