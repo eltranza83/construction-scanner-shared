@@ -67,7 +67,45 @@ async function extractDocumentDataDirectly(fileOrBlob, apiKey, fetchImpl = fetch
   }
   const base64Data = btoa(binary);
   const mimeType = fileOrBlob.type || 'image/jpeg';
-  const model = import.meta.env?.VITE_GEMINI_MODEL || 'gemini-3.1-flash-lite';
+  const GEMINI_RESPONSE_SCHEMA = {
+    type: 'OBJECT',
+    properties: {
+      type: { type: 'STRING', enum: ['check', 'invoice', 'receipt'] },
+      description: { type: 'STRING' },
+      vendor: { type: 'STRING' },
+      costCategory: { type: 'STRING', enum: ['material', 'labor'] },
+      amount: { type: 'NUMBER' },
+      date: { type: 'STRING' },
+      checkNumber: { type: 'STRING', nullable: true },
+      tradeCategory: {
+        type: 'STRING',
+        enum: [
+          'Site_Prep_&_Structure',
+          'Framing_&_Lumber',
+          'Mechanicals_&_Utilities',
+          'Interior_Finishes',
+          'Paint_Tile',
+          'House_Exterior_&_Yard',
+          'Project_Overhead_&_Bills',
+          'Paperwork_&_Permits',
+          'Interior_Hardware'
+        ]
+      },
+      tradePhase: { type: 'STRING' },
+      lineItems: {
+        type: 'ARRAY',
+        items: {
+          type: 'OBJECT',
+          properties: {
+            description: { type: 'STRING' },
+            price: { type: 'NUMBER' }
+          },
+          required: ['description', 'price']
+        }
+      }
+    },
+    required: ['type', 'description', 'vendor', 'costCategory', 'amount', 'date', 'tradeCategory', 'tradePhase']
+  };
 
   const res = await fetchImpl(
     `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${apiKey}`,
@@ -87,7 +125,10 @@ async function extractDocumentDataDirectly(fileOrBlob, apiKey, fetchImpl = fetch
             }
           ]
         }],
-        generationConfig: { responseMimeType: 'application/json' }
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: GEMINI_RESPONSE_SCHEMA
+        }
       })
     }
   );

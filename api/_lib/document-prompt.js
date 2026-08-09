@@ -1,24 +1,48 @@
+export const GEMINI_RESPONSE_SCHEMA = {
+  type: 'OBJECT',
+  properties: {
+    type: { type: 'STRING', enum: ['check', 'invoice', 'receipt'] },
+    description: { type: 'STRING' },
+    vendor: { type: 'STRING' },
+    costCategory: { type: 'STRING', enum: ['material', 'labor'] },
+    amount: { type: 'NUMBER' },
+    date: { type: 'STRING' },
+    checkNumber: { type: 'STRING', nullable: true },
+    tradeCategory: {
+      type: 'STRING',
+      enum: [
+        'Site_Prep_&_Structure',
+        'Framing_&_Lumber',
+        'Mechanicals_&_Utilities',
+        'Interior_Finishes',
+        'Paint_Tile',
+        'House_Exterior_&_Yard',
+        'Project_Overhead_&_Bills',
+        'Paperwork_&_Permits',
+        'Interior_Hardware'
+      ]
+    },
+    tradePhase: { type: 'STRING' },
+    lineItems: {
+      type: 'ARRAY',
+      items: {
+        type: 'OBJECT',
+        properties: {
+          description: { type: 'STRING' },
+          price: { type: 'NUMBER' }
+        },
+        required: ['description', 'price']
+      }
+    }
+  },
+  required: ['type', 'description', 'vendor', 'costCategory', 'amount', 'date', 'tradeCategory', 'tradePhase']
+};
+
 export const DOCUMENT_EXTRACTION_PROMPT = `
-You are an OCR and data extraction assistant for a construction company.
-Analyze the attached image or PDF of a check, receipt, or invoice and extract the details in JSON format.
+You are an expert OCR and financial data extraction assistant for a luxury residential construction company.
+Analyze the attached image or PDF of a bank check, vendor invoice, or material receipt and extract the structured details.
 
-Response JSON Schema:
-{
-  "type": "check" | "invoice" | "receipt",
-  "description": "Short description of items purchased, memo of check, or job description.",
-  "vendor": "Name of the store or subcontractor payee.",
-  "costCategory": "material" | "labor",
-  "amount": 0.00,
-  "date": "YYYY-MM-DD or empty string",
-  "checkNumber": "Check number for checks, otherwise null",
-  "tradeCategory": "Site_Prep_&_Structure" | "Framing_&_Lumber" | "Mechanicals_&_Utilities" | "Interior_Finishes" | "Paint_Tile" | "House_Exterior_&_Yard" | "Project_Overhead_&_Bills" | "Paperwork_&_Permits" | "Interior_Hardware",
-  "tradePhase": "The exact phase block matching the category",
-  "lineItems": [
-    { "description": "Clean item description", "price": 0.00 }
-  ]
-}
-
-Classification rules:
+Classification Rules:
 - Site_Prep_&_Structure: Foundation & Flatwork; Roofing; Windows & Exterior Doors
 - Framing_&_Lumber: Framing Lumber & Truss
 - Mechanicals_&_Utilities: Plumbing Rough-In; Electrical & Lighting; HVAC / AC Systems; Insulation & Alarms
@@ -29,11 +53,10 @@ Classification rules:
 - Paperwork_&_Permits: Paperwork & Permits
 - Interior_Hardware: Plumbing Hardware Fixtures; Electrical Hardware Fixtures
 
-Instructions:
-1. Identify whether the document is a check, invoice, or receipt.
-2. Extract payee/vendor, total, date, check number when applicable, and material/labor classification.
-3. Make the description concise and useful to a construction manager.
-4. Extract individual line items for invoices and receipts.
-5. Choose only category and phase values from the lists above.
-6. Output only valid JSON without markdown fences.
+High-Precision OCR Rules:
+1. BANK CHECKS: Extract payee from the "Pay to the Order of" line. Extract total amount from the numerical dollar box and written legal amount line. Check number is located in top-right corner or bottom MICR routing line.
+2. VENDOR RECEIPTS: Identify stores (Home Depot, Lowe's, Ferguson, Builders FirstSource). Extract the FINAL GRAND TOTAL (ignoring tax sub-totals).
+3. HANDWRITTEN RECEIPTS: Pay close attention to handwritten dollar amounts and notes.
+4. Descriptions must be concise and actionable for a construction project manager.
+5. Select exact tradeCategory and tradePhase from the classification rules above.
 `;

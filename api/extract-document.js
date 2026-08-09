@@ -1,4 +1,4 @@
-import { DOCUMENT_EXTRACTION_PROMPT } from './_lib/document-prompt.js';
+import { DOCUMENT_EXTRACTION_PROMPT, GEMINI_RESPONSE_SCHEMA } from './_lib/document-prompt.js';
 import {
   HttpError,
   errorResponse,
@@ -45,7 +45,10 @@ export async function generateDocumentData({ bytes, mimeType, apiKey, fetchImpl 
             }
           ]
         }],
-        generationConfig: { responseMimeType: 'application/json' }
+        generationConfig: {
+          responseMimeType: 'application/json',
+          responseSchema: GEMINI_RESPONSE_SCHEMA
+        }
       })
     }
   );

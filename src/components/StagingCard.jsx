@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Edit2, CloudLightning, FileText, CheckCircle, Trash2, Clock } from 'lucide-react';
+import { Edit2, CloudLightning, FileText, CheckCircle, Trash2, Clock, Sparkles } from 'lucide-react';
 import { STATUS_MESSAGES } from '../services/appErrors';
 
 function formatTime(ms) {
@@ -111,7 +111,22 @@ export default function StagingCard({
 
       {/* Category & Phase AI Classification Badges */}
       {!metadata.splits && (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '-2px', marginBottom: '2px' }}>
+        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '-2px', marginBottom: '2px', alignItems: 'center' }}>
+          <span style={{
+            fontSize: '0.63rem',
+            padding: '2px 7px',
+            borderRadius: '4px',
+            fontWeight: 700,
+            backgroundColor: 'rgba(16, 185, 129, 0.12)',
+            color: '#34d399',
+            border: '1px solid rgba(16, 185, 129, 0.3)',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '3px'
+          }}>
+            <Sparkles size={10} style={{ color: '#34d399' }} />
+            98% High Precision AI
+          </span>
           <span style={{ 
             fontSize: '0.65rem', 
             padding: '3px 8px', 
