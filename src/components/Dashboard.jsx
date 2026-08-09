@@ -360,7 +360,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       {data && (
         <>
           <DashboardKpiCards
-            projectInfo={data.projectInfo}
+            projectInfo={data?.projectInfo || {}}
             formatCurrency={formatCurrency}
           />
 
@@ -390,8 +390,8 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
           {/* Trade Phase Categories Accordion List */}
           <DashboardTradeSections
-            categories={data.categories}
-            subcontractors={data.subcontractors}
+            categories={data?.categories || []}
+            subcontractors={data?.subcontractors || []}
             expandedCategories={expandedCategories}
             onToggleCategory={toggleCategory}
             onSelectSubcontractor={selectSubcontractor}

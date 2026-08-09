@@ -1,7 +1,13 @@
 import React from 'react';
 import { Wallet } from 'lucide-react';
 
-export default function DashboardKpiCards({ projectInfo, formatCurrency }) {
+export default function DashboardKpiCards({ projectInfo = {}, formatCurrency }) {
+  const safeFormat = (val) => {
+    if (typeof formatCurrency === 'function') return formatCurrency(val);
+    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '8px' }}>
       <div style={{
@@ -20,10 +26,10 @@ export default function DashboardKpiCards({ projectInfo, formatCurrency }) {
       }}>
         <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--color-zinc-400)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.04em' }}>Gross Budget</span>
         <span style={{ fontSize: '1.02rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {formatCurrency(projectInfo.budgetGross)}
+          {safeFormat(projectInfo?.budgetGross || 0)}
         </span>
         <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          Build: {formatCurrency(projectInfo.budgetBuild)}
+          Build: {safeFormat(projectInfo?.budgetBuild || 0)}
         </span>
       </div>
 
@@ -43,10 +49,10 @@ export default function DashboardKpiCards({ projectInfo, formatCurrency }) {
       }}>
         <span style={{ fontSize: '0.6rem', fontWeight: 700, color: 'var(--color-amber-400)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '0.04em' }}>Draws Paid</span>
         <span style={{ fontSize: '1.02rem', fontWeight: 800, color: 'var(--color-amber-400)', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)' }}>
-          {formatCurrency(projectInfo.totalSpent)}
+          {safeFormat(projectInfo?.totalSpent || 0)}
         </span>
         <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          Dep: {formatCurrency(projectInfo.deposits)}
+          Dep: {safeFormat(projectInfo?.deposits || 0)}
         </span>
       </div>
 
@@ -68,7 +74,7 @@ export default function DashboardKpiCards({ projectInfo, formatCurrency }) {
           <Wallet size={10} /> Net Capital
         </span>
         <span style={{ fontSize: '1.02rem', fontWeight: 800, color: '#34d399', letterSpacing: '-0.02em', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textShadow: '0 0 10px rgba(52, 211, 153, 0.3)' }}>
-          {formatCurrency(projectInfo.capitalBalance)}
+          {safeFormat(projectInfo?.capitalBalance || 0)}
         </span>
         <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-400)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           Liquidity

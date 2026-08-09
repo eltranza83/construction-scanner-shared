@@ -2,6 +2,12 @@ import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 function PhaseMetricGroup({ sub, formatCurrency }) {
+  const safeFormat = (val) => {
+    if (typeof formatCurrency === 'function') return formatCurrency(val);
+    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const phaseTotal = sub.totalSpent || (
     (parseFloat(String(sub.totalMaterial || 0).replace(/[^0-9.-]/g, '')) || 0) +
     (parseFloat(String(sub.totalLabor || 0).replace(/[^0-9.-]/g, '')) || 0)
@@ -11,7 +17,7 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
         <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-amber-500)', lineHeight: '1.2' }}>
-          {formatCurrency(sub.totalMaterial || 0)}
+          {safeFormat(sub.totalMaterial || 0)}
         </span>
         <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
           Mat
@@ -29,7 +35,7 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
       }}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
-            {formatCurrency(sub.totalLabor || 0)}
+            {safeFormat(sub.totalLabor || 0)}
           </span>
           <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
             Lab
@@ -40,7 +46,7 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
 
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
           <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-emerald-400)', lineHeight: '1.2' }}>
-            {formatCurrency(phaseTotal)}
+            {safeFormat(phaseTotal)}
           </span>
           <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
             Total
@@ -52,13 +58,22 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
 }
 
 export default function DashboardTradeSections({
-  categories,
-  subcontractors,
-  expandedCategories,
+  categories = [],
+  subcontractors = [],
+  expandedCategories = {},
   onToggleCategory,
   onSelectSubcontractor,
   formatCurrency
 }) {
+  const safeCategories = Array.isArray(categories) ? categories : [];
+  const safeSubcontractors = Array.isArray(subcontractors) ? subcontractors : [];
+
+  const safeFormat = (val) => {
+    if (typeof formatCurrency === 'function') return formatCurrency(val);
+    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   return (
     <div>
       <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-200)', marginBottom: '10px' }}>
@@ -66,9 +81,9 @@ export default function DashboardTradeSections({
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {categories.map((cat, index) => {
+        {safeCategories.map((cat, index) => {
           const isExpanded = !!expandedCategories[cat.name];
-          const catSubs = subcontractors.filter(sub => sub.category === cat.name);
+          const catSubs = safeSubcontractors.filter(sub => sub.category === cat.name);
 
           return (
             <div
@@ -112,13 +127,13 @@ export default function DashboardTradeSections({
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
                     <span style={{ fontWeight: 700, color: 'var(--color-amber-400)', backgroundColor: 'rgba(197, 160, 89, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(197, 160, 89, 0.25)' }}>
-                      Mat: {formatCurrency(cat.totalMaterial || 0)}
+                      Mat: {safeFormat(cat.totalMaterial || 0)}
                     </span>
                     <span style={{ fontWeight: 700, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
-                      Lab: {formatCurrency(cat.totalLabor || 0)}
+                      Lab: {safeFormat(cat.totalLabor || 0)}
                     </span>
                     <span style={{ fontWeight: 700, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                      Spent: {formatCurrency(cat.totalPaid || 0)}
+                      Spent: {safeFormat(cat.totalPaid || 0)}
                     </span>
                     <span style={{ color: 'var(--color-zinc-400)', fontSize: '0.66rem' }}>
                       {cat.phasesCount} Phase{cat.phasesCount > 1 ? 's' : ''}
