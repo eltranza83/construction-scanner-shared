@@ -66,7 +66,7 @@ export default function DashboardTradeSections({
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {categories.map(cat => {
+        {categories.map((cat, index) => {
           const isExpanded = !!expandedCategories[cat.name];
           const catSubs = subcontractors.filter(sub => sub.category === cat.name);
 
@@ -99,7 +99,15 @@ export default function DashboardTradeSections({
                 }}
               >
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1, paddingRight: '8px' }}>
-                  <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: '1.2' }}>
+                  <span style={{
+                    fontSize: '0.86rem',
+                    fontWeight: 800,
+                    color: '#E5C158',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.02em',
+                    lineHeight: '1.2',
+                    textShadow: '0 0 12px rgba(197, 160, 89, 0.25)'
+                  }}>
                     {cat.name}
                   </span>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
