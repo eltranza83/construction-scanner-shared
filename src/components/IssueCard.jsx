@@ -242,6 +242,8 @@ export default function IssueCard({ issue, onUpdateStatus, onDelete, onEdit, onS
             <img
               src={getDisplayImageUrl(photoUrl, issue.photoBase64, 'w200')}
               alt="Issue thumbnail"
+              loading="lazy"
+              decoding="async"
               onClick={() => setIsFullscreenPhoto(true)}
               style={{
                 width: '60px',

@@ -1,4 +1,3 @@
-import { jsPDF } from 'jspdf';
 import { getProjectPacketInfo } from './projectInfoFormatter';
 
 const ADEPEC_GOLD = [197, 160, 89];
@@ -209,6 +208,7 @@ export async function generateIssuePacketPDF({
   issuePhotoBlob = null,
   floorPlanSnapshotBlob = null
 }) {
+  const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({
     orientation: 'p',
     unit: 'mm',
@@ -361,6 +361,7 @@ export async function generateIssuePacketPDF({
  * @returns {Promise<Blob>} The generated PDF as a Blob
  */
 export async function generateDocumentPDF(metadata, imageUrls) {
+  const { jsPDF } = await import('jspdf');
   const pdf = new jsPDF({
     orientation: 'p',
     unit: 'mm',

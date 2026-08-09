@@ -113,6 +113,8 @@ export default function DashboardPhotoGallery({
                       <img
                         src={photo.thumbnailLink}
                         alt={photo.name}
+                        loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', height: '100%', objectFit: 'cover' }}
                       />
                     </div>
