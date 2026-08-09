@@ -108,20 +108,21 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
   // Get active reminder candidates
   const getActiveReminders = () => {
-    if (!data?.subcontractors) return [];
+    if (!data?.subcontractors || !Array.isArray(data.subcontractors)) return [];
 
     // Check if Drywall & Sheetrock is Complete or In Progress
-    const drywallSub = data.subcontractors.find(sub => sub.phase.toLowerCase().includes('drywall'));
+    const drywallSub = data.subcontractors.find(sub => String(sub?.phase || '').toLowerCase().includes('drywall'));
     const isDrywallActive = drywallSub &&
-      (drywallSub.status.toLowerCase().includes('progress') || drywallSub.status.toLowerCase().includes('complete') || drywallSub.status.toLowerCase().includes('done'));
+      (String(drywallSub?.status || '').toLowerCase().includes('progress') || String(drywallSub?.status || '').toLowerCase().includes('complete') || String(drywallSub?.status || '').toLowerCase().includes('done'));
 
     return data.subcontractors.filter(sub => {
+      if (!sub) return false;
       const status = String(sub.status || '').trim().toLowerCase();
       const isActive = status.includes('progress') || (status.includes('started') && !status.includes('not'));
       if (!isActive) return false;
 
       // If drywall is active/done, silence rough-ins
-      const phaseName = sub.phase.toLowerCase();
+      const phaseName = String(sub.phase || '').toLowerCase();
       if (isDrywallActive) {
         const isRoughIn = phaseName.includes('plumbing') ||
           phaseName.includes('electrical') ||
@@ -133,10 +134,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       }
 
       // Check if user dismissed it permanently
-      if (dismissedReminders[sub.phase]) return false;
+      if (sub.phase && dismissedReminders[sub.phase]) return false;
 
       // Check if user snoozed it (and 24 hrs hasn't passed)
-      const snoozeUntil = snoozedReminders[sub.phase] || 0;
+      const snoozeUntil = sub.phase ? (snoozedReminders[sub.phase] || 0) : 0;
       if (Date.now() < snoozeUntil) return false;
 
       return true;
@@ -237,13 +238,17 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   }, [activeProject, selectedFolder, googleToken]);
 
   // Autocomplete suggestions for contractor search
-  const suggestions = data?.subcontractors
+  const suggestions = (data?.subcontractors && Array.isArray(data.subcontractors))
     ? data.subcontractors.filter(sub => {
-      const query = searchTerm.toLowerCase();
+      if (!sub) return false;
+      const query = String(searchTerm || '').toLowerCase();
+      const payee = String(sub.payee || '').toLowerCase();
+      const phase = String(sub.phase || '').toLowerCase();
+      const category = String(sub.category || '').toLowerCase();
       return (
-        sub.payee.toLowerCase().includes(query) ||
-        sub.phase.toLowerCase().includes(query) ||
-        sub.category.toLowerCase().includes(query)
+        payee.includes(query) ||
+        phase.includes(query) ||
+        category.includes(query)
       );
     })
     : [];

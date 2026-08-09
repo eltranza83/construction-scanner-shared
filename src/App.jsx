@@ -8,6 +8,7 @@ import { useProjects } from './hooks/useProjects';
 import { useStagedDocuments } from './hooks/useStagedDocuments';
 import { STATUS_MESSAGES } from './services/appErrors';
 import ToastNotification from './components/ToastNotification';
+import DashboardErrorBoundary from './components/DashboardErrorBoundary';
 
 const Scanner = lazy(() => import('./components/Scanner'));
 const EditForm = lazy(() => import('./components/EditForm'));
@@ -586,13 +587,15 @@ export default function App() {
             )}
           </div>
         ) : activeTab === 'dashboard' ? (
-          <Dashboard 
-            googleToken={googleToken}
-            activeProject={activeProject}
-            selectedFolder={selectedFolder}
-            onSessionExpired={handleSessionExpired}
-            onShowToast={setSuccess}
-          />
+          <DashboardErrorBoundary>
+            <Dashboard 
+              googleToken={googleToken}
+              activeProject={activeProject}
+              selectedFolder={selectedFolder}
+              onSessionExpired={handleSessionExpired}
+              onShowToast={setSuccess}
+            />
+          </DashboardErrorBoundary>
         ) : activeTab === 'xray' ? (
           <BlueprintPinboard
             googleToken={googleToken}
