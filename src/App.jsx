@@ -591,6 +591,7 @@ export default function App() {
             activeProject={activeProject}
             selectedFolder={selectedFolder}
             onSessionExpired={handleSessionExpired}
+            onShowToast={setSuccess}
           />
         ) : activeTab === 'xray' ? (
           <BlueprintPinboard

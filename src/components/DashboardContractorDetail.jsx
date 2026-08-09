@@ -19,8 +19,16 @@ export default function DashboardContractorDetail({
     );
   }
 
+  const safeFormatCurrency = (val) => {
+    if (typeof formatCurrency === 'function') {
+      return formatCurrency(val);
+    }
+    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  };
+
   const handleCopySummary = () => {
-    const summaryText = `${selectedSub.payee} - ${selectedSub.phase} (${selectedSub.category})\nQuote: ${formatCurrency(selectedSub.originalQuote)}\nSpent: ${formatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}\nRemaining: ${formatCurrency(selectedSub.remainingBalance)}`;
+    const summaryText = `${selectedSub.payee} - ${selectedSub.phase} (${selectedSub.category})\nQuote: ${safeFormatCurrency(selectedSub.originalQuote)}\nSpent: ${safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}\nRemaining: ${safeFormatCurrency(selectedSub.remainingBalance)}`;
     navigator.clipboard.writeText(summaryText);
     setCopied(true);
     if (onShowToast) {
@@ -29,7 +37,9 @@ export default function DashboardContractorDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const statusStyle = getStatusStyle(selectedSub.status);
+  const statusStyle = (typeof getStatusStyle === 'function')
+    ? getStatusStyle(selectedSub.status)
+    : { bg: 'rgba(113, 113, 122, 0.15)', text: '#a1a1aa', border: 'rgba(113, 113, 122, 0.3)' };
 
   const laborPayments = (selectedSub.payments || []).filter((p) => {
     const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
@@ -127,19 +137,19 @@ export default function DashboardContractorDetail({
         <div style={{ padding: '9px 6px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px' }}>
           <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Original Quote</span>
           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', marginTop: '3px' }}>
-            {formatCurrency(selectedSub.originalQuote)}
+            {safeFormatCurrency(selectedSub.originalQuote)}
           </div>
         </div>
         <div style={{ padding: '9px 6px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px' }}>
           <span style={{ fontSize: '0.62rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Summary Spent</span>
           <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px' }}>
-            {formatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
+            {safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
         <div style={{ padding: '9px 6px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px' }}>
           <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Remaining Balance</span>
           <div style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)' }}>
-            {formatCurrency(selectedSub.remainingBalance)}
+            {safeFormatCurrency(selectedSub.remainingBalance)}
           </div>
         </div>
       </div>
@@ -176,7 +186,7 @@ export default function DashboardContractorDetail({
                   </div>
 
                   <div style={{ textAlign: 'right', fontWeight: 700, color: 'var(--color-blue-400)' }}>
-                    {formatCurrency(lab)}
+                    {safeFormatCurrency(lab)}
                   </div>
                 </div>
               );

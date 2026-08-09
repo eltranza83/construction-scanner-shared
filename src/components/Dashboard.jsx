@@ -16,7 +16,7 @@ import DashboardPhotoReminders from './DashboardPhotoReminders';
 import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
 
-export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired }) {
+export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired, onShowToast }) {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -385,6 +385,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             onSelectSubcontractor={selectSubcontractor}
             onClearSelection={() => setSelectedSub(null)}
             onViewPhasePhotos={setActiveGalleryPhase}
+            onShowToast={onShowToast}
           />
 
           {/* Trade Phase Categories Accordion List */}
