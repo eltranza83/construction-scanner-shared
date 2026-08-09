@@ -295,9 +295,6 @@ export default function App() {
 
       {/* 2. Main Content */}
       <main className="app-content">
-        {success && <div className="alert-box alert-success">{success}</div>}
-        {error && <div className="alert-box alert-error">{error}</div>}
-
         {activeProject?.folderId && hasUnprocessedUploads && (
           <div className="settings-card" style={{ 
             display: 'flex', 
