@@ -74,60 +74,62 @@ export default function DashboardTradeSections({
             <div
               key={cat.name}
               style={{
-                border: '1px solid var(--color-zinc-800)',
-                borderRadius: '8px',
+                border: isExpanded ? '1px solid rgba(197, 160, 89, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)',
+                borderRadius: '10px',
                 overflow: 'hidden',
-                backgroundColor: 'var(--color-zinc-900)'
+                backgroundColor: 'rgba(24, 24, 27, 0.85)',
+                backdropFilter: 'blur(12px)',
+                WebkitBackdropFilter: 'blur(12px)',
+                boxShadow: isExpanded ? '0 6px 20px rgba(0, 0, 0, 0.3), 0 0 12px rgba(197, 160, 89, 0.08)' : '0 2px 8px rgba(0, 0, 0, 0.2)',
+                transition: 'all 0.25s ease'
               }}
             >
               <div
                 onClick={() => onToggleCategory(cat.name)}
                 style={{
-                  padding: '12px 14px',
+                  padding: '13px 15px',
                   display: 'flex',
                   justifyContent: 'space-between',
                   alignItems: 'center',
                   cursor: 'pointer',
                   userSelect: 'none',
-                  backgroundColor: isExpanded ? 'var(--color-zinc-950)' : 'transparent',
-                  borderBottom: isExpanded ? '1px solid var(--color-zinc-800)' : 'none'
+                  backgroundColor: isExpanded ? 'rgba(10, 10, 10, 0.9)' : 'transparent',
+                  borderBottom: isExpanded ? '1px solid rgba(255, 255, 255, 0.08)' : 'none',
+                  transition: 'background-color 0.2s ease'
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', minWidth: 0, flex: 1, paddingRight: '8px' }}>
-                  <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#fff', textTransform: 'uppercase', letterSpacing: '0.01em', lineHeight: '1.2' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1, paddingRight: '8px' }}>
+                  <span style={{ fontSize: '0.84rem', fontWeight: 800, color: '#ffffff', textTransform: 'uppercase', letterSpacing: '0.02em', lineHeight: '1.2' }}>
                     {cat.name}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--color-amber-500)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
+                    <span style={{ fontWeight: 700, color: 'var(--color-amber-400)', backgroundColor: 'rgba(197, 160, 89, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(197, 160, 89, 0.25)' }}>
                       Mat: {formatCurrency(cat.totalMaterial || 0)}
                     </span>
-                    <span style={{ color: 'var(--color-zinc-700)' }}>-</span>
-                    <span style={{ fontWeight: 700, color: 'var(--color-blue-500)' }}>
+                    <span style={{ fontWeight: 700, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
                       Lab: {formatCurrency(cat.totalLabor || 0)}
                     </span>
-                    <span style={{ color: 'var(--color-zinc-700)' }}>-</span>
-                    <span style={{ fontWeight: 700, color: 'var(--color-emerald-500)' }}>
+                    <span style={{ fontWeight: 700, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
                       Spent: {formatCurrency(cat.totalPaid || 0)}
                     </span>
-                    <span style={{ color: 'var(--color-zinc-700)' }}>-</span>
-                    <span style={{ color: 'var(--color-zinc-500)' }}>
+                    <span style={{ color: 'var(--color-zinc-400)', fontSize: '0.66rem' }}>
                       {cat.phasesCount} Phase{cat.phasesCount > 1 ? 's' : ''}
                     </span>
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0 }}>
-                  {isExpanded ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-500)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-500)' }} />}
+                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, paddingLeft: '4px' }}>
+                  {isExpanded ? <ChevronUp size={18} style={{ color: 'var(--color-amber-400)' }} /> : <ChevronDown size={18} style={{ color: 'var(--color-zinc-500)' }} />}
                 </div>
               </div>
 
               {isExpanded && (
                 <div style={{
-                  padding: '8px 12px',
-                  backgroundColor: 'var(--color-zinc-950)',
+                  padding: '10px 12px',
+                  backgroundColor: 'rgba(10, 10, 10, 0.95)',
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: '6px'
+                  gap: '8px'
                 }}>
                   {catSubs.map(sub => (
                     <div
@@ -137,13 +139,13 @@ export default function DashboardTradeSections({
                         display: 'flex',
                         flexDirection: 'column',
                         gap: '6px',
-                        padding: '10px 12px',
+                        padding: '11px 13px',
                         borderRadius: '8px',
-                        backgroundColor: 'var(--color-zinc-900)',
+                        backgroundColor: 'rgba(24, 24, 27, 0.9)',
                         fontSize: '0.78rem',
                         cursor: 'pointer',
-                        border: '1px solid var(--color-zinc-800)',
-                        transition: 'all 0.15s'
+                        border: '1px solid rgba(255, 255, 255, 0.06)',
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
                       }}
                       className="project-profile-row"
                     >
@@ -159,10 +161,10 @@ export default function DashboardTradeSections({
                         alignItems: 'flex-end',
                         width: '100%',
                         gap: '10px',
-                        borderTop: '1px solid rgba(255,255,255,0.03)',
+                        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
                         paddingTop: '6px'
                       }}>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingBottom: '2px' }}>
+                        <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingBottom: '2px' }}>
                           {sub.payee}
                         </span>
                         <PhaseMetricGroup sub={sub} formatCurrency={formatCurrency} />

@@ -25,20 +25,23 @@ export default function DashboardContractorDetail({
 
   return (
     <div style={{
-      backgroundColor: 'var(--color-zinc-950)',
-      border: '1px solid var(--color-zinc-800)',
-      borderRadius: '8px',
-      padding: '14px',
+      background: 'linear-gradient(135deg, rgba(20, 20, 22, 0.95) 0%, rgba(10, 10, 10, 0.98) 100%)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
+      border: '1px solid rgba(197, 160, 89, 0.3)',
+      boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(197, 160, 89, 0.1)',
+      borderRadius: '12px',
+      padding: '16px',
       display: 'flex',
       flexDirection: 'column',
-      gap: '12px',
-      marginTop: '4px'
+      gap: '14px',
+      marginTop: '6px'
     }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--color-zinc-900)', paddingBottom: '8px', position: 'relative' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '10px', position: 'relative' }}>
         <div style={{ flex: 1, minWidth: 0, paddingRight: '40px' }}>
-          <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#fff' }}>{selectedSub.payee}</h4>
-          <p style={{ fontSize: '0.72rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
-            Phase: <strong>{selectedSub.phase}</strong> ({selectedSub.category})
+          <h4 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{selectedSub.payee}</h4>
+          <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px' }}>
+            Phase: <strong style={{ color: 'var(--color-amber-400)' }}>{selectedSub.phase}</strong> ({selectedSub.category})
           </p>
           <button
             type="button"
@@ -46,11 +49,11 @@ export default function DashboardContractorDetail({
             style={{
               background: 'transparent',
               border: 'none',
-              color: 'var(--color-amber-500)',
-              fontSize: '0.7rem',
-              fontWeight: 600,
+              color: 'var(--color-amber-400)',
+              fontSize: '0.72rem',
+              fontWeight: 700,
               padding: 0,
-              marginTop: '4px',
+              marginTop: '6px',
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
@@ -58,7 +61,7 @@ export default function DashboardContractorDetail({
               textDecoration: 'underline'
             }}
           >
-            <Camera size={12} /> View Phase Photos
+            <Camera size={13} /> View Phase Photos
           </button>
         </div>
 
@@ -67,15 +70,15 @@ export default function DashboardContractorDetail({
             type="button"
             onClick={onClearSelection}
             style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--color-zinc-500)',
+              background: 'rgba(255, 255, 255, 0.06)',
+              border: '1px solid rgba(255, 255, 255, 0.1)',
+              color: 'var(--color-zinc-400)',
               cursor: 'pointer',
-              padding: '4px',
+              padding: '5px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              borderRadius: '4px',
+              borderRadius: '6px',
               transition: 'all 0.15s'
             }}
             title="Clear Selection"
@@ -86,21 +89,21 @@ export default function DashboardContractorDetail({
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', textAlign: 'center' }}>
-        <div style={{ padding: '8px', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
-          <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Original Quote</span>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-zinc-200)', marginTop: '2px' }}>
+        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px' }}>
+          <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Original Quote</span>
+          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', marginTop: '3px' }}>
             {formatCurrency(selectedSub.originalQuote)}
           </div>
         </div>
-        <div style={{ padding: '8px', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
-          <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-500)', textTransform: 'uppercase', fontWeight: 600 }}>Summary Spent</span>
-          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--color-zinc-200)', marginTop: '2px' }}>
+        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px' }}>
+          <span style={{ fontSize: '0.62rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Summary Spent</span>
+          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px' }}>
             {formatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
-        <div style={{ padding: '8px', backgroundColor: 'rgba(245, 158, 11, 0.05)', border: '1px solid rgba(245, 158, 11, 0.1)', borderRadius: '6px' }}>
-          <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-500)', textTransform: 'uppercase', fontWeight: 700 }}>Remaining Balance</span>
-          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#f59e0b', marginTop: '2px' }}>
+        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px' }}>
+          <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Remaining Balance</span>
+          <div style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)' }}>
             {formatCurrency(selectedSub.remainingBalance)}
           </div>
         </div>
