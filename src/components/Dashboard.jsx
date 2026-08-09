@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, AlertCircle } from 'lucide-react';
+import { RefreshCw, AlertCircle, Database, FileSpreadsheet } from 'lucide-react';
 import { STATUS_MESSAGES, getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import {
   getCachedDashboardSpreadsheetId,
@@ -213,13 +213,22 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
           return;
         }
       }
+      
+      const rawError = getDriveErrorMessage(err, 'load dashboard data');
+      const isMissingSpreadsheet = String(err?.message || '').toLowerCase().includes('no spreadsheet found');
+      
+      const customError = isMissingSpreadsheet
+        ? `No financial spreadsheet found in the Google Drive folder for "${activeProject?.name || 'this project'}".`
+        : rawError;
+
       // Try to load cached data offline
       const cached = loadCachedDashboard(localStorage, activeProject?.id);
       if (cached) {
         setData(cached);
-        setError('Could not load live dashboard data. Displaying cached report from last load.');
+        setError(`Could not refresh live Google Sheet. Displaying cached report from last load. (${customError})`);
       } else {
-        setError(getDriveErrorMessage(err, 'load dashboard data'));
+        setData(null);
+        setError(customError);
       }
     } finally {
       setLoading(false);
@@ -228,18 +237,25 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
   // Load on mount or active project change
   useEffect(() => {
+    // Reset previous project state immediately when switching active projects
+    setData(null);
+    setError(null);
+    setSheetWarnings([]);
+    setSelectedSub(null);
+
     if (activeProject && selectedFolder) {
-      // Load cached first for instant responsiveness
+      // Load cached first for instant responsiveness if present
       const cached = loadCachedDashboard(localStorage, activeProject.id);
       if (cached) {
         setData(cached);
       }
       loadDashboardData();
+    } else if (activeProject && !selectedFolder) {
+      setError(`No Google Drive folder linked to project "${activeProject.name}". Go to Settings to link a Drive folder.`);
     } else {
-      setData(null);
       setError('Please select an active project in Settings to load the dashboard.');
     }
-  }, [activeProject, selectedFolder, googleToken]);
+  }, [activeProject?.id, selectedFolder?.id, googleToken]);
 
   // Autocomplete suggestions for contractor search
   const suggestions = (data?.subcontractors && Array.isArray(data.subcontractors))
@@ -351,7 +367,52 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         </button>
       </div>
 
-      {error && (
+      {error && !data && (
+        <div className="settings-card" style={{
+          border: '1px solid rgba(245, 158, 11, 0.35)',
+          backgroundColor: 'rgba(245, 158, 11, 0.04)',
+          padding: '24px 18px',
+          borderRadius: '12px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          gap: '12px',
+          textAlign: 'center',
+          margin: '12px 0'
+        }}>
+          <div style={{
+            backgroundColor: 'rgba(245, 158, 11, 0.15)',
+            color: 'var(--color-amber-500)',
+            padding: '12px',
+            borderRadius: '50%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <FileSpreadsheet size={28} />
+          </div>
+          <h3 style={{ fontSize: '1.05rem', fontWeight: 800, color: '#ffffff' }}>No Spreadsheet Found in Drive Folder</h3>
+          <p style={{ fontSize: '0.84rem', color: 'var(--color-zinc-300)', maxWidth: '440px', lineHeight: '1.5', margin: 0 }}>
+            The Google Drive folder for <strong style={{ color: 'var(--color-amber-400)' }}>"{activeProject?.name || 'this project'}"</strong> does not contain a tracking spreadsheet.
+          </p>
+          <div style={{
+            fontSize: '0.78rem',
+            color: 'var(--color-zinc-300)',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: '8px',
+            padding: '12px 14px',
+            maxWidth: '460px',
+            textAlign: 'left',
+            marginTop: '4px',
+            lineHeight: '1.4'
+          }}>
+            💡 <strong>How to fix:</strong> Move or copy your project expense spreadsheet into this project's Google Drive folder, then click <strong>Refresh</strong> above.
+          </div>
+        </div>
+      )}
+
+      {error && data && (
         <div className="alert-box alert-error" style={{ fontSize: '0.78rem', margin: 0, padding: '10px 12px' }}>
           <AlertCircle size={14} style={{ flexShrink: 0 }} />
           {error}
