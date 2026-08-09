@@ -17,50 +17,71 @@ export default function ToastNotification({ message, type = 'success', onClose, 
   return (
     <div style={{
       position: 'fixed',
-      bottom: '76px',
+      top: '84px',
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: 9999,
       display: 'flex',
       alignItems: 'center',
       gap: '10px',
-      padding: '10px 16px',
+      padding: '10px 18px',
       borderRadius: '30px',
-      backgroundColor: isSuccess ? 'rgba(10, 10, 10, 0.94)' : 'rgba(28, 10, 12, 0.95)',
-      border: isSuccess ? '1px solid rgba(197, 160, 89, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
-      backdropFilter: 'blur(16px)',
-      WebkitBackdropFilter: 'blur(16px)',
+      backgroundColor: isSuccess ? '#141416' : '#1c0a0c',
+      border: isSuccess ? '1.5px solid #E5C158' : '1.5px solid #ef4444',
+      backdropFilter: 'blur(20px)',
+      WebkitBackdropFilter: 'blur(20px)',
       boxShadow: isSuccess
-        ? '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(197, 160, 89, 0.25)'
-        : '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(239, 68, 68, 0.25)',
+        ? '0 12px 36px rgba(0, 0, 0, 0.85), 0 0 24px rgba(229, 193, 88, 0.45)'
+        : '0 12px 36px rgba(0, 0, 0, 0.85), 0 0 24px rgba(239, 68, 68, 0.45)',
       color: isSuccess ? '#ffffff' : '#fca5a5',
-      fontSize: '0.78rem',
-      fontWeight: 700,
+      fontSize: '0.84rem',
+      fontWeight: 800,
       maxWidth: '90vw',
       width: 'max-content',
-      animation: 'toastSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+      animation: 'toastSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
     }}>
       {isSuccess ? (
-        <CheckCircle2 size={16} style={{ color: '#E5C158', flexShrink: 0 }} />
+        <div style={{
+          backgroundColor: 'rgba(229, 193, 88, 0.18)',
+          borderRadius: '50%',
+          padding: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <CheckCircle2 size={18} style={{ color: '#E5C158' }} />
+        </div>
       ) : (
-        <AlertCircle size={16} style={{ color: '#f87171', flexShrink: 0 }} />
+        <div style={{
+          backgroundColor: 'rgba(239, 68, 68, 0.18)',
+          borderRadius: '50%',
+          padding: '4px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <AlertCircle size={18} style={{ color: '#f87171' }} />
+        </div>
       )}
-      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', letterSpacing: '0.01em' }}>
         {message}
       </span>
       <button
         type="button"
         onClick={onClose}
         style={{
-          background: 'none',
+          background: 'rgba(255, 255, 255, 0.08)',
           border: 'none',
           color: 'var(--color-zinc-400)',
           cursor: 'pointer',
-          padding: '2px',
+          padding: '3px',
+          borderRadius: '50%',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginLeft: '4px'
+          marginLeft: '6px'
         }}
       >
         <X size={14} />
