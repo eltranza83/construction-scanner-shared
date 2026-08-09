@@ -1175,6 +1175,11 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
+@keyframes toastSlideUp {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
 /* Tactile Spring Button Press Feedback */
 button:active, .btn:active {
   transform: scale(0.97) !important;

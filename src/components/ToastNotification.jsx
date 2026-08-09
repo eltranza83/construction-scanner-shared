@@ -17,7 +17,7 @@ export default function ToastNotification({ message, type = 'success', onClose, 
   return (
     <div style={{
       position: 'fixed',
-      top: '16px',
+      bottom: '76px',
       left: '50%',
       transform: 'translateX(-50%)',
       zIndex: 9999,
@@ -26,19 +26,19 @@ export default function ToastNotification({ message, type = 'success', onClose, 
       gap: '10px',
       padding: '10px 16px',
       borderRadius: '30px',
-      backgroundColor: isSuccess ? 'rgba(10, 10, 10, 0.92)' : 'rgba(28, 10, 12, 0.95)',
+      backgroundColor: isSuccess ? 'rgba(10, 10, 10, 0.94)' : 'rgba(28, 10, 12, 0.95)',
       border: isSuccess ? '1px solid rgba(197, 160, 89, 0.4)' : '1px solid rgba(239, 68, 68, 0.4)',
       backdropFilter: 'blur(16px)',
       WebkitBackdropFilter: 'blur(16px)',
       boxShadow: isSuccess
-        ? '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(197, 160, 89, 0.2)'
-        : '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(239, 68, 68, 0.2)',
+        ? '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(197, 160, 89, 0.25)'
+        : '0 10px 30px rgba(0, 0, 0, 0.6), 0 0 15px rgba(239, 68, 68, 0.25)',
       color: isSuccess ? '#ffffff' : '#fca5a5',
       fontSize: '0.78rem',
       fontWeight: 700,
       maxWidth: '90vw',
       width: 'max-content',
-      animation: 'toastSlideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
+      animation: 'toastSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards'
     }}>
       {isSuccess ? (
         <CheckCircle2 size={16} style={{ color: '#E5C158', flexShrink: 0 }} />
