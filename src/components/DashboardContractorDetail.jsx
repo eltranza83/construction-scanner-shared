@@ -77,7 +77,7 @@ export default function DashboardContractorDetail({
           <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             Phase: <strong style={{ color: 'var(--color-amber-400)' }}>{selectedSub.phase}</strong> ({selectedSub.category})
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'nowrap', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', marginTop: '8px', flexWrap: 'nowrap' }}>
             <button
               type="button"
               onClick={() => onViewPhasePhotos({ category: selectedSub.category, phase: selectedSub.phase })}
