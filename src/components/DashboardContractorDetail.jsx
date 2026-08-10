@@ -53,6 +53,14 @@ export default function DashboardContractorDetail({
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const getDynamicFontSize = (val) => {
+    const formatted = safeFormatCurrency(val);
+    const len = formatted.length;
+    if (len >= 13) return '0.72rem';
+    if (len >= 11) return '0.80rem';
+    return '0.90rem';
+  };
+
   return (
     <div style={{
       background: 'linear-gradient(135deg, rgba(20, 20, 22, 0.95) 0%, rgba(10, 10, 10, 0.98) 100%)',
@@ -153,7 +161,7 @@ export default function DashboardContractorDetail({
           <span style={{ fontSize: '0.64rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>
             Quote
           </span>
-          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: getDynamicFontSize(selectedSub.originalQuote), fontWeight: 800, color: '#ffffff', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.originalQuote)}
           </div>
         </div>
@@ -161,7 +169,7 @@ export default function DashboardContractorDetail({
           <span style={{ fontSize: '0.64rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>
             Paid ({laborPayments.length})
           </span>
-          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: getDynamicFontSize(selectedSub.totalLabor || selectedSub.totalPaid || 0), fontWeight: 800, color: '#60a5fa', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
@@ -169,7 +177,7 @@ export default function DashboardContractorDetail({
           <span style={{ fontSize: '0.64rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>
             Balance
           </span>
-          <div style={{ fontSize: '0.9rem', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ fontSize: getDynamicFontSize(selectedSub.remainingBalance), fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.remainingBalance)}
           </div>
         </div>
