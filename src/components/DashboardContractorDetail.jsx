@@ -152,7 +152,7 @@ export default function DashboardContractorDetail({
         </div>
         <div style={{ padding: '8px 4px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
           <span style={{ fontSize: '0.64rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>
-            Paid
+            Paid ({laborPayments.length})
           </span>
           <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
