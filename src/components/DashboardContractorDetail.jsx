@@ -54,16 +54,20 @@ export default function DashboardContractorDetail({
       border: '1px solid rgba(197, 160, 89, 0.3)',
       boxShadow: '0 10px 30px rgba(0, 0, 0, 0.5), 0 0 15px rgba(197, 160, 89, 0.1)',
       borderRadius: '12px',
-      padding: '16px',
+      padding: '14px 12px',
       display: 'flex',
       flexDirection: 'column',
       gap: '14px',
-      marginTop: '6px'
+      marginTop: '6px',
+      width: '100%',
+      maxWidth: '100%',
+      boxSizing: 'border-box',
+      overflow: 'hidden'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '10px', position: 'relative' }}>
         <div style={{ flex: 1, minWidth: 0, paddingRight: '40px' }}>
-          <h4 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em' }}>{selectedSub.payee}</h4>
-          <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px' }}>
+          <h4 style={{ fontSize: '1.08rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.01em', overflow: 'hidden', textOverflow: 'ellipsis' }}>{selectedSub.payee}</h4>
+          <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             Phase: <strong style={{ color: 'var(--color-amber-400)' }}>{selectedSub.phase}</strong> ({selectedSub.category})
           </p>
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
@@ -133,22 +137,22 @@ export default function DashboardContractorDetail({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '8px', textAlign: 'center' }}>
-        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px' }}>
-          <span style={{ fontSize: '0.62rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Original Quote</span>
-          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ffffff', marginTop: '3px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', textAlign: 'center', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ padding: '8px 4px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.06)', borderRadius: '8px', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: 'clamp(0.52rem, 2.1vw, 0.62rem)', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original Quote</span>
+          <div style={{ fontSize: 'clamp(0.72rem, 3.2vw, 0.95rem)', fontWeight: 800, color: '#ffffff', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.originalQuote)}
           </div>
         </div>
-        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px' }}>
-          <span style={{ fontSize: '0.62rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Summary Spent</span>
-          <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px' }}>
+        <div style={{ padding: '8px 4px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: 'clamp(0.52rem, 2.1vw, 0.62rem)', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Summary Spent</span>
+          <div style={{ fontSize: 'clamp(0.72rem, 3.2vw, 0.95rem)', fontWeight: 800, color: '#60a5fa', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
-        <div style={{ padding: '9px 6px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px' }}>
-          <span style={{ fontSize: '0.62rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em' }}>Remaining Balance</span>
-          <div style={{ fontSize: '0.98rem', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)' }}>
+        <div style={{ padding: '8px 4px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: 'clamp(0.52rem, 2.1vw, 0.62rem)', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.02em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Remaining Balance</span>
+          <div style={{ fontSize: 'clamp(0.72rem, 3.2vw, 0.95rem)', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.remainingBalance)}
           </div>
         </div>

@@ -42,7 +42,7 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
   );
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
       <div style={{
         fontWeight: 700,
         color: 'var(--color-amber-400)',
@@ -50,11 +50,13 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
         padding: '3px 4px',
         borderRadius: '5px',
         border: '1px solid rgba(197, 160, 89, 0.2)',
-        fontSize: '0.66rem',
+        fontSize: 'clamp(0.58rem, 2vw, 0.66rem)',
         textAlign: 'center',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        textOverflow: 'ellipsis',
+        minWidth: 0,
+        boxSizing: 'border-box'
       }}>
         Mat: {safeFormat(sub.totalMaterial || 0)}
       </div>
@@ -66,11 +68,13 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
         padding: '3px 4px',
         borderRadius: '5px',
         border: '1px solid rgba(59, 130, 246, 0.2)',
-        fontSize: '0.66rem',
+        fontSize: 'clamp(0.58rem, 2vw, 0.66rem)',
         textAlign: 'center',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        textOverflow: 'ellipsis',
+        minWidth: 0,
+        boxSizing: 'border-box'
       }}>
         Lab: {safeFormat(sub.totalLabor || 0)}
       </div>
@@ -82,11 +86,13 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
         padding: '3px 4px',
         borderRadius: '5px',
         border: '1px solid rgba(16, 185, 129, 0.2)',
-        fontSize: '0.66rem',
+        fontSize: 'clamp(0.58rem, 2vw, 0.66rem)',
         textAlign: 'center',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
-        textOverflow: 'ellipsis'
+        textOverflow: 'ellipsis',
+        minWidth: 0,
+        boxSizing: 'border-box'
       }}>
         Total: {safeFormat(phaseTotal)}
       </div>
@@ -177,7 +183,7 @@ export default function DashboardTradeSections({
                 </div>
 
                 {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Spent) */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px', width: '100%', boxSizing: 'border-box' }}>
                   <div style={{
                     fontWeight: 700,
                     color: 'var(--color-amber-400)',
@@ -185,11 +191,13 @@ export default function DashboardTradeSections({
                     padding: '3px 4px',
                     borderRadius: '5px',
                     border: '1px solid rgba(197, 160, 89, 0.25)',
-                    fontSize: '0.68rem',
+                    fontSize: 'clamp(0.58rem, 2vw, 0.68rem)',
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                    boxSizing: 'border-box'
                   }}>
                     Mat: {safeFormat(cat.totalMaterial || 0)}
                   </div>
@@ -201,11 +209,13 @@ export default function DashboardTradeSections({
                     padding: '3px 4px',
                     borderRadius: '5px',
                     border: '1px solid rgba(59, 130, 246, 0.25)',
-                    fontSize: '0.68rem',
+                    fontSize: 'clamp(0.58rem, 2vw, 0.68rem)',
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                    boxSizing: 'border-box'
                   }}>
                     Lab: {safeFormat(cat.totalLabor || 0)}
                   </div>
@@ -217,11 +227,13 @@ export default function DashboardTradeSections({
                     padding: '3px 4px',
                     borderRadius: '5px',
                     border: '1px solid rgba(16, 185, 129, 0.25)',
-                    fontSize: '0.68rem',
+                    fontSize: 'clamp(0.58rem, 2vw, 0.68rem)',
                     textAlign: 'center',
                     whiteSpace: 'nowrap',
                     overflow: 'hidden',
-                    textOverflow: 'ellipsis'
+                    textOverflow: 'ellipsis',
+                    minWidth: 0,
+                    boxSizing: 'border-box'
                   }}>
                     Spent: {safeFormat(cat.totalPaid || 0)}
                   </div>
