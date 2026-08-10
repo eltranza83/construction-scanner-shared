@@ -8,11 +8,24 @@ const PAYEE_REQUIRED_KEYWORDS = [
   'countertop', 'counter', 'glasswork', 'glass', 'tile', 'flooring', 'floor',
   'paint', 'finishes', 'stucco', 'masonry', 'driveway', 'sidewalk', 'cantina',
   'stone', 'fencing', 'fence', 'gate', 'landscaping', 'landscape', 'irrigation',
-  'dumpster', 'cleaning', 'clean'
+  'dumpster', 'cleaning', 'clean', 'electrical', 'electrician', 'lighting'
+];
+
+const EXCLUDED_PAYEE_KEYWORDS = [
+  'plumbing hardware',
+  'plumbing fixtures',
+  'hardware fixtures',
+  'plumbing fixture',
+  'hardware fixture'
 ];
 
 const requiresPayeeTracking = (phaseName, catName) => {
   const combined = `${phaseName || ''} ${catName || ''}`.toLowerCase();
+  
+  if (EXCLUDED_PAYEE_KEYWORDS.some(ex => combined.includes(ex))) {
+    return false;
+  }
+
   return PAYEE_REQUIRED_KEYWORDS.some(kw => combined.includes(kw));
 };
 
