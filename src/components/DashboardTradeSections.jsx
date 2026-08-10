@@ -208,40 +208,51 @@ export default function DashboardTradeSections({
                   flexDirection: 'column',
                   gap: '8px'
                 }}>
-                  {catSubs.map(sub => (
-                    <div
-                      key={sub.id}
-                      onClick={() => onSelectSubcontractor(sub)}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: '8px',
-                        padding: '10px 12px',
-                        borderRadius: '8px',
-                        backgroundColor: 'rgba(24, 24, 27, 0.9)',
-                        fontSize: '0.78rem',
-                        cursor: 'pointer',
-                        border: '1px solid rgba(255, 255, 255, 0.06)',
-                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-                      }}
-                      className="project-profile-row"
-                    >
-                      {/* Row 1: Full Phase Name & Payee Name (Full Width) */}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
-                          {sub.phase}
-                          {sub.payee && sub.payee !== sub.phase && (
-                            <span style={{ fontWeight: 500, color: 'var(--color-zinc-400)', marginLeft: '6px', fontSize: '0.74rem' }}>
-                              • {sub.payee}
-                            </span>
-                          )}
-                        </span>
-                      </div>
+                    {catSubs.map(sub => {
+                      const cleanPayee = String(sub.payee || '').trim();
+                      const cleanPhase = String(sub.phase || '').trim();
+                      const isPlaceholder = !cleanPayee ||
+                        cleanPayee.toLowerCase() === cleanPhase.toLowerCase() ||
+                        cleanPayee.toLowerCase().endsWith('payee') ||
+                        cleanPayee.toLowerCase() === `${cleanPhase.toLowerCase()} payee`;
 
-                      {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Total) */}
-                      <PhaseMetricGroup sub={sub} formatCurrency={formatCurrency} />
-                    </div>
-                  ))}
+                      const displayPayee = !isPlaceholder ? cleanPayee : null;
+
+                      return (
+                        <div
+                          key={sub.id}
+                          onClick={() => onSelectSubcontractor(sub)}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '6px',
+                            padding: '10px 12px',
+                            borderRadius: '8px',
+                            backgroundColor: 'rgba(24, 24, 27, 0.9)',
+                            fontSize: '0.78rem',
+                            cursor: 'pointer',
+                            border: '1px solid rgba(255, 255, 255, 0.06)',
+                            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
+                          }}
+                          className="project-profile-row"
+                        >
+                          {/* Row 1: Full Phase Name & Real Payee Name */}
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
+                            <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.84rem' }}>
+                              {sub.phase}
+                            </span>
+                            {displayPayee && (
+                              <span style={{ fontWeight: 500, color: 'var(--color-amber-400)', fontSize: '0.74rem' }}>
+                                {displayPayee}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Total) */}
+                          <PhaseMetricGroup sub={sub} formatCurrency={formatCurrency} />
+                        </div>
+                      );
+                    })}
                 </div>
               )}
             </div>
