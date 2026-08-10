@@ -217,7 +217,7 @@ export default function DashboardTradeSections({
                         cleanPayee.toLowerCase() === `${cleanPhase.toLowerCase()} payee`;
 
                       const isAssigned = !isPlaceholder;
-                      const displayPayee = isAssigned ? cleanPayee : 'Assigned Payee - Unassigned';
+                      const displayPayee = isAssigned ? cleanPayee : 'Payee - Unassigned';
 
                       return (
                         <div
@@ -227,7 +227,7 @@ export default function DashboardTradeSections({
                             display: 'flex',
                             flexDirection: 'column',
                             gap: '6px',
-                            padding: '10px 12px',
+                            padding: '9px 11px',
                             borderRadius: '8px',
                             backgroundColor: 'rgba(24, 24, 27, 0.9)',
                             fontSize: '0.78rem',
@@ -237,16 +237,25 @@ export default function DashboardTradeSections({
                           }}
                           className="project-profile-row"
                         >
-                          {/* Row 1: Full Phase Name & Payee Status */}
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
-                            <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.84rem' }}>
+                          {/* Row 1: Phase Name on Left • Payee Status on Right */}
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '8px', width: '100%' }}>
+                            <span style={{
+                              fontWeight: 700,
+                              color: 'var(--color-zinc-100)',
+                              fontSize: '0.82rem',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              flex: 1
+                            }}>
                               {sub.phase}
                             </span>
                             <span style={{
-                              fontWeight: isAssigned ? 600 : 400,
+                              fontWeight: isAssigned ? 700 : 400,
                               color: isAssigned ? 'var(--color-amber-400)' : 'var(--color-zinc-500)',
-                              fontSize: '0.73rem',
-                              fontStyle: isAssigned ? 'normal' : 'italic'
+                              fontSize: '0.72rem',
+                              fontStyle: isAssigned ? 'normal' : 'italic',
+                              flexShrink: 0
                             }}>
                               {displayPayee}
                             </span>
