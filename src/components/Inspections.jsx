@@ -14,9 +14,7 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Folder,
-  Flame,
-  X
+  Folder
 } from 'lucide-react';
 import {
   INSPECTION_STAGES,
@@ -24,30 +22,13 @@ import {
   saveInspectionData
 } from '../services/inspectionService';
 
-const CUSTOM_REMINDERS_KEY = 'jobscan_watch_outs_';
-
-function loadCustomReminders(stageId) {
-  try {
-    const raw = localStorage.getItem(CUSTOM_REMINDERS_KEY + stageId);
-    return raw ? JSON.parse(raw) : [];
-  } catch { return []; }
-}
-
-function saveCustomReminders(stageId, list) {
-  try { localStorage.setItem(CUSTOM_REMINDERS_KEY + stageId, JSON.stringify(list)); } catch { /* noop */ }
-}
-
 export default function Inspections({ activeProject, selectedFolder }) {
   const [activeStageId, setActiveStageId] = useState('rough-in-plumbing');
   const [items, setItems] = useState([]);
   const [filterCategory, setFilterCategory] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState({});
-  const [isWatchOutsOpen, setIsWatchOutsOpen] = useState(true);
-
-  // Custom watch-out reminders per stage
-  const [customReminders, setCustomReminders] = useState([]);
-  const [newReminderText, setNewReminderText] = useState('');
+  const [isWatchOutsOpen, setIsWatchOutsOpen] = useState(false);
 
   // New Custom Item Form State
   const [newItemTitle, setNewItemTitle] = useState('');
@@ -60,7 +41,6 @@ export default function Inspections({ activeProject, selectedFolder }) {
   useEffect(() => {
     const loaded = loadInspectionData(projectId, activeStageId);
     setItems(loaded);
-    setCustomReminders(loadCustomReminders(activeStageId));
   }, [projectId, activeStageId]);
 
   const handleStatusChange = (itemId, newStatus) => {
@@ -257,153 +237,7 @@ export default function Inspections({ activeProject, selectedFolder }) {
         </div>
       </div>
 
-      {/* ⚠️ Watch-Outs Accordion Panel — custom reminders only */}
-      {(() => {
-        const handleAddReminder = (e) => {
-          e.preventDefault();
-          if (!newReminderText.trim()) return;
-          const updated = [...customReminders, newReminderText.trim()];
-          setCustomReminders(updated);
-          saveCustomReminders(activeStageId, updated);
-          setNewReminderText('');
-        };
 
-        const handleDeleteReminder = (idx) => {
-          const updated = customReminders.filter((_, i) => i !== idx);
-          setCustomReminders(updated);
-          saveCustomReminders(activeStageId, updated);
-        };
-
-        return (
-          <div style={{
-            border: customReminders.length > 0 ? '1.5px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--color-zinc-800)',
-            borderRadius: '12px',
-            overflow: 'hidden',
-            background: 'var(--color-zinc-950)'
-          }}>
-            {/* Accordion Header */}
-            <button
-              type="button"
-              onClick={() => setIsWatchOutsOpen(p => !p)}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                padding: '12px 14px',
-                background: customReminders.length > 0 ? 'rgba(245, 158, 11, 0.08)' : 'var(--color-zinc-900)',
-                border: 'none',
-                cursor: 'pointer',
-                color: '#fff'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Flame size={16} style={{ color: '#f59e0b' }} />
-                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: customReminders.length > 0 ? '#fde68a' : 'var(--color-zinc-300)' }}>
-                  My Watch-Out Reminders
-                </span>
-                {customReminders.length > 0 && (
-                  <span style={{
-                    fontSize: '0.72rem',
-                    background: 'rgba(245, 158, 11, 0.22)',
-                    color: '#fbbf24',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    padding: '1px 8px',
-                    borderRadius: '10px',
-                    fontWeight: 700
-                  }}>
-                    {customReminders.length} saved
-                  </span>
-                )}
-              </div>
-              {isWatchOutsOpen ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-400)', flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-400)', flexShrink: 0 }} />}
-            </button>
-
-            {isWatchOutsOpen && (
-              <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
-
-                {customReminders.length === 0 && (
-                  <p style={{ fontSize: '0.82rem', color: 'var(--color-zinc-500)', margin: 0, textAlign: 'center', padding: '8px 0' }}>
-                    No custom reminders yet for this stage. Add things you've learned from past failures below.
-                  </p>
-                )}
-
-                {/* Custom reminders added by user */}
-                {customReminders.map((reminder, idx) => (
-                  <div key={`custom-${idx}`} style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    background: 'rgba(245, 158, 11, 0.06)',
-                    border: '1px solid rgba(245, 158, 11, 0.25)',
-                    borderRadius: '8px',
-                    padding: '10px 12px'
-                  }}>
-                    <Flame size={14} style={{ color: '#f59e0b', flexShrink: 0, marginTop: '2px' }} />
-                    <p style={{ fontSize: '0.82rem', color: '#fde68a', margin: 0, lineHeight: '1.4', flex: 1 }}>
-                      {reminder}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteReminder(idx)}
-                      title="Remove reminder"
-                      style={{
-                        background: 'none',
-                        border: 'none',
-                        cursor: 'pointer',
-                        color: 'var(--color-zinc-500)',
-                        padding: '2px',
-                        flexShrink: 0
-                      }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add custom reminder input */}
-                <form onSubmit={handleAddReminder} style={{ display: 'flex', gap: '8px', marginTop: '4px' }}>
-                  <input
-                    type="text"
-                    value={newReminderText}
-                    onChange={e => setNewReminderText(e.target.value)}
-                    placeholder="Add your own reminder (e.g. Plumber must label copper at top plate)..."
-                    style={{
-                      flex: 1,
-                      background: 'var(--color-zinc-900)',
-                      border: '1px solid var(--color-zinc-700)',
-                      borderRadius: '8px',
-                      padding: '8px 12px',
-                      color: '#fff',
-                      fontSize: '0.82rem',
-                      outline: 'none'
-                    }}
-                  />
-                  <button
-                    type="submit"
-                    style={{
-                      background: 'rgba(245, 158, 11, 0.18)',
-                      border: '1px solid rgba(245, 158, 11, 0.4)',
-                      borderRadius: '8px',
-                      color: '#fbbf24',
-                      padding: '8px 12px',
-                      cursor: 'pointer',
-                      fontSize: '0.82rem',
-                      fontWeight: 700,
-                      whiteSpace: 'nowrap',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <Plus size={14} /> Add
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        );
-      })()}
 
       {/* Category Filter Pills */}
       {categories.length > 2 && (
