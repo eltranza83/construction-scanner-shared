@@ -216,7 +216,8 @@ export default function DashboardTradeSections({
                         cleanPayee.toLowerCase().endsWith('payee') ||
                         cleanPayee.toLowerCase() === `${cleanPhase.toLowerCase()} payee`;
 
-                      const displayPayee = !isPlaceholder ? cleanPayee : null;
+                      const isAssigned = !isPlaceholder;
+                      const displayPayee = isAssigned ? cleanPayee : 'Assign Payee (Unassigned)';
 
                       return (
                         <div
@@ -236,16 +237,19 @@ export default function DashboardTradeSections({
                           }}
                           className="project-profile-row"
                         >
-                          {/* Row 1: Full Phase Name & Real Payee Name */}
+                          {/* Row 1: Full Phase Name & Payee Status */}
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', width: '100%' }}>
                             <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.84rem' }}>
                               {sub.phase}
                             </span>
-                            {displayPayee && (
-                              <span style={{ fontWeight: 500, color: 'var(--color-amber-400)', fontSize: '0.74rem' }}>
-                                {displayPayee}
-                              </span>
-                            )}
+                            <span style={{
+                              fontWeight: isAssigned ? 600 : 400,
+                              color: isAssigned ? 'var(--color-amber-400)' : 'var(--color-zinc-500)',
+                              fontSize: '0.73rem',
+                              fontStyle: isAssigned ? 'normal' : 'italic'
+                            }}>
+                              {displayPayee}
+                            </span>
                           </div>
 
                           {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Total) */}
