@@ -349,10 +349,12 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
       {/* Header Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>Project Financial Dashboard</h2>
+          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>Financial Dashboard</h2>
           {data?.projectInfo?.address && (
             <p style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
-              {data.projectInfo.address}, {data.projectInfo.cityStateZip}
+              {data.projectInfo.address.toLowerCase().startsWith('n/a')
+                ? data.projectInfo.cityStateZip || ''
+                : `${data.projectInfo.address}${data.projectInfo.cityStateZip ? `, ${data.projectInfo.cityStateZip}` : ''}`}
             </p>
           )}
         </div>

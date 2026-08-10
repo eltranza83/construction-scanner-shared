@@ -25,7 +25,7 @@ export default function DashboardContractorSearch({
         <input
           type="text"
           className="form-input"
-          placeholder="Search contractor payee (e.g. Painter, Electrician)..."
+          placeholder="Search payee or trade (e.g. Framing)..."
           value={searchTerm}
           onChange={(e) => onSearchTermChange(e.target.value)}
           style={{ width: '100%', paddingLeft: '36px' }}

@@ -176,7 +176,7 @@ button, input, select, textarea {
 /* Main Content Area */
 .app-content {
   flex: 1;
-  padding: 20px;
+  padding: 20px 20px calc(90px + env(safe-area-inset-bottom, 20px)) 20px;
   display: flex;
   flex-direction: column;
   gap: 20px;
