@@ -3,9 +3,9 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 function PhaseMetricGroup({ sub, formatCurrency }) {
   const safeFormat = (val) => {
-    if (typeof formatCurrency === 'function') return formatCurrency(val);
-    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    const hasCents = Math.abs(num % 1) > 0.009;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
   const phaseTotal = sub.totalSpent || (
@@ -14,44 +14,53 @@ function PhaseMetricGroup({ sub, formatCurrency }) {
   );
 
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-        <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-amber-500)', lineHeight: '1.2' }}>
-          {safeFormat(sub.totalMaterial || 0)}
-        </span>
-        <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-          Mat
-        </span>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px', width: '100%' }}>
+      <div style={{
+        fontWeight: 700,
+        color: 'var(--color-amber-400)',
+        backgroundColor: 'rgba(197, 160, 89, 0.1)',
+        padding: '3px 4px',
+        borderRadius: '5px',
+        border: '1px solid rgba(197, 160, 89, 0.2)',
+        fontSize: '0.66rem',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}>
+        Mat: {safeFormat(sub.totalMaterial || 0)}
       </div>
 
       <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '10px',
-        padding: '4px 7px',
-        border: '1px solid rgba(52, 211, 153, 0.22)',
-        borderRadius: '6px',
-        backgroundColor: 'rgba(52, 211, 153, 0.04)'
+        fontWeight: 700,
+        color: '#60a5fa',
+        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+        padding: '3px 4px',
+        borderRadius: '5px',
+        border: '1px solid rgba(59, 130, 246, 0.2)',
+        fontSize: '0.66rem',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
       }}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-blue-500)', lineHeight: '1.2' }}>
-            {safeFormat(sub.totalLabor || 0)}
-          </span>
-          <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-            Lab
-          </span>
-        </div>
+        Lab: {safeFormat(sub.totalLabor || 0)}
+      </div>
 
-        <div style={{ width: '1px', alignSelf: 'stretch', backgroundColor: 'rgba(148, 163, 184, 0.16)' }} />
-
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-          <span style={{ fontSize: '0.74rem', fontWeight: 700, color: 'var(--color-emerald-400)', lineHeight: '1.2' }}>
-            {safeFormat(phaseTotal)}
-          </span>
-          <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-500)', lineHeight: '1.1' }}>
-            Total
-          </span>
-        </div>
+      <div style={{
+        fontWeight: 700,
+        color: '#34d399',
+        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+        padding: '3px 4px',
+        borderRadius: '5px',
+        border: '1px solid rgba(16, 185, 129, 0.2)',
+        fontSize: '0.66rem',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis'
+      }}>
+        Total: {safeFormat(phaseTotal)}
       </div>
     </div>
   );
@@ -206,8 +215,8 @@ export default function DashboardTradeSections({
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
-                        gap: '6px',
-                        padding: '11px 13px',
+                        gap: '8px',
+                        padding: '10px 12px',
                         borderRadius: '8px',
                         backgroundColor: 'rgba(24, 24, 27, 0.9)',
                         fontSize: '0.78rem',
@@ -217,26 +226,20 @@ export default function DashboardTradeSections({
                       }}
                       className="project-profile-row"
                     >
-                      <div style={{ display: 'flex', alignItems: 'center', width: '100%' }}>
-                        <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+                      {/* Row 1: Full Phase Name & Payee Name (Full Width) */}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', width: '100%' }}>
+                        <span style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.82rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
                           {sub.phase}
+                          {sub.payee && sub.payee !== sub.phase && (
+                            <span style={{ fontWeight: 500, color: 'var(--color-zinc-400)', marginLeft: '6px', fontSize: '0.74rem' }}>
+                              • {sub.payee}
+                            </span>
+                          )}
                         </span>
                       </div>
 
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'flex-end',
-                        width: '100%',
-                        gap: '10px',
-                        borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-                        paddingTop: '6px'
-                      }}>
-                        <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-400)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1, paddingBottom: '2px' }}>
-                          {sub.payee}
-                        </span>
-                        <PhaseMetricGroup sub={sub} formatCurrency={formatCurrency} />
-                      </div>
+                      {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Total) */}
+                      <PhaseMetricGroup sub={sub} formatCurrency={formatCurrency} />
                     </div>
                   ))}
                 </div>
