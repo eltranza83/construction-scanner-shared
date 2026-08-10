@@ -69,9 +69,9 @@ export default function DashboardTradeSections({
   const safeSubcontractors = Array.isArray(subcontractors) ? subcontractors : [];
 
   const safeFormat = (val) => {
-    if (typeof formatCurrency === 'function') return formatCurrency(val);
-    const num = parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
-    return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
+    const hasCents = Math.abs(num % 1) > 0.009;
+    return `$${num.toLocaleString('en-US', { minimumFractionDigits: hasCents ? 2 : 0, maximumFractionDigits: 2 })}`;
   };
 
   return (
@@ -99,13 +99,14 @@ export default function DashboardTradeSections({
                 transition: 'all 0.25s ease'
               }}
             >
+              {/* Category Card Header - Structured 2-Row Layout */}
               <div
                 onClick={() => onToggleCategory(cat.name)}
                 style={{
-                  padding: '13px 15px',
+                  padding: '12px 14px',
                   display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
+                  flexDirection: 'column',
+                  gap: '8px',
                   cursor: 'pointer',
                   userSelect: 'none',
                   backgroundColor: isExpanded ? 'rgba(10, 10, 10, 0.9)' : 'transparent',
@@ -113,7 +114,8 @@ export default function DashboardTradeSections({
                   transition: 'background-color 0.2s ease'
                 }}
               >
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0, flex: 1, paddingRight: '8px' }}>
+                {/* Row 1: Category Title + Phase Count & Expand Arrow */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <span style={{
                     fontSize: '0.86rem',
                     fontWeight: 800,
@@ -121,28 +123,71 @@ export default function DashboardTradeSections({
                     textTransform: 'uppercase',
                     letterSpacing: '0.02em',
                     lineHeight: '1.2',
-                    textShadow: '0 0 12px rgba(197, 160, 89, 0.25)'
+                    textShadow: '0 0 12px rgba(197, 160, 89, 0.25)',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap'
                   }}>
                     {cat.name}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.7rem', flexWrap: 'wrap', marginTop: '2px' }}>
-                    <span style={{ fontWeight: 700, color: 'var(--color-amber-400)', backgroundColor: 'rgba(197, 160, 89, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(197, 160, 89, 0.25)' }}>
-                      Mat: {safeFormat(cat.totalMaterial || 0)}
-                    </span>
-                    <span style={{ fontWeight: 700, color: '#60a5fa', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
-                      Lab: {safeFormat(cat.totalLabor || 0)}
-                    </span>
-                    <span style={{ fontWeight: 700, color: '#34d399', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '2px 6px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.25)' }}>
-                      Spent: {safeFormat(cat.totalPaid || 0)}
-                    </span>
-                    <span style={{ color: 'var(--color-zinc-400)', fontSize: '0.66rem' }}>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                    <span style={{ color: 'var(--color-zinc-400)', fontSize: '0.7rem', fontWeight: 600 }}>
                       {cat.phasesCount} Phase{cat.phasesCount > 1 ? 's' : ''}
                     </span>
+                    {isExpanded ? <ChevronUp size={16} style={{ color: 'var(--color-amber-400)' }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-500)' }} />}
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', flexShrink: 0, paddingLeft: '4px' }}>
-                  {isExpanded ? <ChevronUp size={18} style={{ color: 'var(--color-amber-400)' }} /> : <ChevronDown size={18} style={{ color: 'var(--color-zinc-500)' }} />}
+                {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Spent) */}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
+                  <div style={{
+                    fontWeight: 700,
+                    color: 'var(--color-amber-400)',
+                    backgroundColor: 'rgba(197, 160, 89, 0.12)',
+                    padding: '3px 4px',
+                    borderRadius: '5px',
+                    border: '1px solid rgba(197, 160, 89, 0.25)',
+                    fontSize: '0.68rem',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    Mat: {safeFormat(cat.totalMaterial || 0)}
+                  </div>
+
+                  <div style={{
+                    fontWeight: 700,
+                    color: '#60a5fa',
+                    backgroundColor: 'rgba(59, 130, 246, 0.12)',
+                    padding: '3px 4px',
+                    borderRadius: '5px',
+                    border: '1px solid rgba(59, 130, 246, 0.25)',
+                    fontSize: '0.68rem',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    Lab: {safeFormat(cat.totalLabor || 0)}
+                  </div>
+
+                  <div style={{
+                    fontWeight: 700,
+                    color: '#34d399',
+                    backgroundColor: 'rgba(16, 185, 129, 0.12)',
+                    padding: '3px 4px',
+                    borderRadius: '5px',
+                    border: '1px solid rgba(16, 185, 129, 0.25)',
+                    fontSize: '0.68rem',
+                    textAlign: 'center',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}>
+                    Spent: {safeFormat(cat.totalPaid || 0)}
+                  </div>
                 </div>
               </div>
 
