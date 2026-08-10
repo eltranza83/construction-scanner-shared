@@ -27,8 +27,24 @@ export default function DashboardContractorDetail({
     return `$${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
   };
 
+  const laborPayments = (selectedSub.payments || []).filter((p) => {
+    const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
+    return lab > 0;
+  });
+
   const handleCopySummary = () => {
-    const summaryText = `${selectedSub.payee} - ${selectedSub.phase} (${selectedSub.category})\nQuote: ${safeFormatCurrency(selectedSub.originalQuote)}\nSpent: ${safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}\nRemaining: ${safeFormatCurrency(selectedSub.remainingBalance)}`;
+    let summaryText = `${selectedSub.payee} - ${selectedSub.phase} (${selectedSub.category})\nQuote: ${safeFormatCurrency(selectedSub.originalQuote)}\nPaid (${laborPayments.length}): ${safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}\nBalance: ${safeFormatCurrency(selectedSub.remainingBalance)}`;
+
+    if (laborPayments.length > 0) {
+      summaryText += `\n\nPayment History Logs (${laborPayments.length}):`;
+      laborPayments.forEach((p, idx) => {
+        const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
+        const checkDetails = p.checkNumber && p.checkNumber !== 'N/A' ? ` - Check: ${p.checkNumber}` : '';
+        const dateDetails = p.date ? `Date: ${p.date}` : 'Date: N/A';
+        summaryText += `\n${idx + 1}. ${safeFormatCurrency(lab)} (${dateDetails}${checkDetails})`;
+      });
+    }
+
     navigator.clipboard.writeText(summaryText);
     setCopied(true);
     if (onShowToast) {
@@ -36,15 +52,6 @@ export default function DashboardContractorDetail({
     }
     setTimeout(() => setCopied(false), 2000);
   };
-
-  const statusStyle = (typeof getStatusStyle === 'function')
-    ? getStatusStyle(selectedSub.status)
-    : { bg: 'rgba(113, 113, 122, 0.15)', text: '#a1a1aa', border: 'rgba(113, 113, 122, 0.3)' };
-
-  const laborPayments = (selectedSub.payments || []).filter((p) => {
-    const lab = parseFloat(String(p.laborCost || '').replace(/[^0-9.-]/g, '')) || 0;
-    return lab > 0;
-  });
 
   return (
     <div style={{
