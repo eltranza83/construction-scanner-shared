@@ -70,7 +70,7 @@ export default function DashboardContractorDetail({
           <p style={{ fontSize: '0.74rem', color: 'var(--color-zinc-400)', marginTop: '2px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             Phase: <strong style={{ color: 'var(--color-amber-400)' }}>{selectedSub.phase}</strong> ({selectedSub.category})
           </p>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginTop: '6px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '6px', flexWrap: 'nowrap', overflow: 'hidden' }}>
             <button
               type="button"
               onClick={() => onViewPhasePhotos({ category: selectedSub.category, phase: selectedSub.phase })}
@@ -78,14 +78,16 @@ export default function DashboardContractorDetail({
                 background: 'transparent',
                 border: 'none',
                 color: 'var(--color-amber-400)',
-                fontSize: '0.72rem',
+                fontSize: '0.7rem',
                 fontWeight: 700,
                 padding: 0,
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
                 cursor: 'pointer',
-                textDecoration: 'underline'
+                textDecoration: 'underline',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}
             >
               <Camera size={13} /> View Phase Photos
@@ -97,19 +99,21 @@ export default function DashboardContractorDetail({
                 background: 'rgba(197, 160, 89, 0.12)',
                 border: '1px solid rgba(197, 160, 89, 0.3)',
                 color: 'var(--color-amber-400)',
-                fontSize: '0.7rem',
+                fontSize: '0.68rem',
                 fontWeight: 700,
-                padding: '3px 8px',
+                padding: '3px 7px',
                 borderRadius: '5px',
-                display: 'flex',
+                display: 'inline-flex',
                 alignItems: 'center',
                 gap: '4px',
                 cursor: 'pointer',
-                transition: 'all 0.15s ease'
+                transition: 'all 0.15s ease',
+                whiteSpace: 'nowrap',
+                flexShrink: 0
               }}
             >
               {copied ? <Check size={12} style={{ color: '#34d399' }} /> : <Copy size={12} />}
-              {copied ? 'Copied Summary!' : 'Copy Payment Summary'}
+              {copied ? 'Copied!' : 'Copy Summary'}
             </button>
           </div>
         </div>
