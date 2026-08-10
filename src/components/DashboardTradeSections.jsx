@@ -217,7 +217,7 @@ export default function DashboardTradeSections({
                         cleanPayee.toLowerCase() === `${cleanPhase.toLowerCase()} payee`;
 
                       const isAssigned = !isPlaceholder;
-                      const displayPayee = isAssigned ? cleanPayee : 'Assign Payee (Unassigned)';
+                      const displayPayee = isAssigned ? cleanPayee : 'Assigned Payee - Unassigned';
 
                       return (
                         <div
