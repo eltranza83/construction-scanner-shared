@@ -141,34 +141,22 @@ export default function DashboardContractorDetail({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', width: '100%', boxSizing: 'border-box' }}>
-        <div style={{ padding: '9px 8px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}>
-          <span style={{ fontSize: '0.64rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>Original Quote</span>
-          <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#ffffff', marginTop: '3px' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '5px', width: '100%', boxSizing: 'border-box' }}>
+        <div style={{ padding: '8px 3px', backgroundColor: 'rgba(30, 30, 35, 0.8)', border: '1px solid rgba(255, 255, 255, 0.08)', borderRadius: '8px', textAlign: 'center', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: '0.58rem', color: 'var(--color-zinc-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.01em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Original Quote</span>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#ffffff', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.originalQuote)}
           </div>
         </div>
-        <div style={{ padding: '9px 8px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', textAlign: 'center', boxSizing: 'border-box' }}>
-          <span style={{ fontSize: '0.64rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.04em', display: 'block' }}>Summary Spent</span>
-          <div style={{ fontSize: '0.98rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px' }}>
+        <div style={{ padding: '8px 3px', backgroundColor: 'rgba(59, 130, 246, 0.08)', border: '1px solid rgba(59, 130, 246, 0.25)', borderRadius: '8px', textAlign: 'center', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: '0.58rem', color: '#60a5fa', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.01em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Summary Spent</span>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#60a5fa', marginTop: '3px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.totalLabor || selectedSub.totalPaid || 0)}
           </div>
         </div>
-        <div style={{
-          gridColumn: '1 / -1',
-          padding: '10px 14px',
-          backgroundColor: 'rgba(245, 158, 11, 0.1)',
-          border: '1px solid rgba(245, 158, 11, 0.35)',
-          borderRadius: '8px',
-          display: 'flex',
-          justify: 'space-between',
-          alignItems: 'center',
-          boxSizing: 'border-box'
-        }}>
-          <span style={{ fontSize: '0.7rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.04em' }}>
-            Remaining Balance
-          </span>
-          <div style={{ fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-amber-400)', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)' }}>
+        <div style={{ padding: '8px 3px', backgroundColor: 'rgba(245, 158, 11, 0.08)', border: '1px solid rgba(245, 158, 11, 0.3)', borderRadius: '8px', textAlign: 'center', minWidth: 0, boxSizing: 'border-box', overflow: 'hidden' }}>
+          <span style={{ fontSize: '0.58rem', color: 'var(--color-amber-400)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.01em', display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Remaining Balance</span>
+          <div style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-amber-400)', marginTop: '3px', textShadow: '0 0 10px rgba(197, 160, 89, 0.3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
             {safeFormatCurrency(selectedSub.remainingBalance)}
           </div>
         </div>
