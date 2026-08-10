@@ -1180,9 +1180,42 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   to { transform: translate(-50%, 0); opacity: 1; }
 }
 
-/* Tactile Spring Button Press Feedback */
+/* Tactile Spring Button Press Feedback & Micro-Interactions */
 button:active, .btn:active {
   transform: scale(0.97) !important;
   transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
 }
+
+/* High-Craft Frontend Design System Utilities */
+.font-display {
+  font-family: 'Outfit', sans-serif !important;
+  letter-spacing: -0.01em;
+}
+
+.card-glass-gold {
+  background: linear-gradient(145deg, rgba(24, 24, 28, 0.95) 0%, rgba(12, 12, 14, 0.98) 100%) !important;
+  border: 1px solid rgba(197, 160, 89, 0.28) !important;
+  border-top: 2px solid rgba(197, 160, 89, 0.75) !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.6), 0 0 20px rgba(197, 160, 89, 0.12) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+
+.gold-badge-glow {
+  box-shadow: 0 0 12px rgba(197, 160, 89, 0.25);
+}
+
+.btn-gold-action {
+  background: linear-gradient(135deg, rgba(197, 160, 89, 0.18) 0%, rgba(178, 135, 65, 0.1) 100%) !important;
+  border: 1px solid rgba(197, 160, 89, 0.4) !important;
+  color: #f59e0b !important;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+.btn-gold-action:hover {
+  background: rgba(197, 160, 89, 0.25) !important;
+  border-color: rgba(197, 160, 89, 0.6) !important;
+  box-shadow: 0 0 10px rgba(197, 160, 89, 0.2) !important;
+}
+
 
