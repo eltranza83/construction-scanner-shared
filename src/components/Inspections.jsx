@@ -257,19 +257,8 @@ export default function Inspections({ activeProject, selectedFolder }) {
         </div>
       </div>
 
-      {/* ⚠️ Watch-Outs Accordion Panel */}
+      {/* ⚠️ Watch-Outs Accordion Panel — custom reminders only */}
       {(() => {
-        // Pull CRITICAL notes from built-in checklist items
-        const CRITICAL_PREFIXES = ['CRITICAL', 'BUILDER REMINDER', 'Ensure', 'Verify'];
-        const builtInWatchOuts = items
-          .filter(i => i.note && CRITICAL_PREFIXES.some(p => i.note.startsWith(p)))
-          .map(i => ({ id: i.id, text: i.note, title: i.title, custom: false }));
-
-        const allWatchOuts = [
-          ...builtInWatchOuts,
-          ...customReminders.map((r, idx) => ({ id: `custom-${idx}`, text: r, custom: true, title: null }))
-        ];
-
         const handleAddReminder = (e) => {
           e.preventDefault();
           if (!newReminderText.trim()) return;
@@ -287,7 +276,7 @@ export default function Inspections({ activeProject, selectedFolder }) {
 
         return (
           <div style={{
-            border: allWatchOuts.length > 0 ? '1.5px solid rgba(239, 68, 68, 0.35)' : '1px solid var(--color-zinc-800)',
+            border: customReminders.length > 0 ? '1.5px solid rgba(245, 158, 11, 0.35)' : '1px solid var(--color-zinc-800)',
             borderRadius: '12px',
             overflow: 'hidden',
             background: 'var(--color-zinc-950)'
@@ -302,28 +291,30 @@ export default function Inspections({ activeProject, selectedFolder }) {
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 padding: '12px 14px',
-                background: allWatchOuts.length > 0 ? 'rgba(239, 68, 68, 0.08)' : 'var(--color-zinc-900)',
+                background: customReminders.length > 0 ? 'rgba(245, 158, 11, 0.08)' : 'var(--color-zinc-900)',
                 border: 'none',
                 cursor: 'pointer',
                 color: '#fff'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Flame size={16} style={{ color: '#f43f5e' }} />
-                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: allWatchOuts.length > 0 ? '#fca5a5' : 'var(--color-zinc-300)' }}>
-                  Watch Out For This
+                <Flame size={16} style={{ color: '#f59e0b' }} />
+                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: customReminders.length > 0 ? '#fde68a' : 'var(--color-zinc-300)' }}>
+                  My Watch-Out Reminders
                 </span>
-                <span style={{
-                  fontSize: '0.72rem',
-                  background: allWatchOuts.length > 0 ? 'rgba(239, 68, 68, 0.25)' : 'var(--color-zinc-800)',
-                  color: allWatchOuts.length > 0 ? '#f87171' : 'var(--color-zinc-400)',
-                  border: allWatchOuts.length > 0 ? '1px solid rgba(239, 68, 68, 0.4)' : '1px solid transparent',
-                  padding: '1px 8px',
-                  borderRadius: '10px',
-                  fontWeight: 700
-                }}>
-                  {allWatchOuts.length} reminder{allWatchOuts.length !== 1 ? 's' : ''}
-                </span>
+                {customReminders.length > 0 && (
+                  <span style={{
+                    fontSize: '0.72rem',
+                    background: 'rgba(245, 158, 11, 0.22)',
+                    color: '#fbbf24',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    padding: '1px 8px',
+                    borderRadius: '10px',
+                    fontWeight: 700
+                  }}>
+                    {customReminders.length} saved
+                  </span>
+                )}
               </div>
               {isWatchOutsOpen ? <ChevronUp size={16} style={{ color: 'var(--color-zinc-400)', flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: 'var(--color-zinc-400)', flexShrink: 0 }} />}
             </button>
@@ -331,36 +322,11 @@ export default function Inspections({ activeProject, selectedFolder }) {
             {isWatchOutsOpen && (
               <div style={{ padding: '14px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
 
-                {/* Built-in critical reminders */}
-                {builtInWatchOuts.length === 0 && customReminders.length === 0 && (
+                {customReminders.length === 0 && (
                   <p style={{ fontSize: '0.82rem', color: 'var(--color-zinc-500)', margin: 0, textAlign: 'center', padding: '8px 0' }}>
-                    No critical reminders for this stage yet. Add your own below.
+                    No custom reminders yet for this stage. Add things you've learned from past failures below.
                   </p>
                 )}
-
-                {builtInWatchOuts.map(wo => (
-                  <div key={wo.id} style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '10px',
-                    background: 'rgba(239, 68, 68, 0.06)',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                    borderRadius: '8px',
-                    padding: '10px 12px'
-                  }}>
-                    <AlertTriangle size={14} style={{ color: '#f87171', flexShrink: 0, marginTop: '2px' }} />
-                    <div>
-                      {wo.title && (
-                        <div style={{ fontSize: '0.72rem', fontWeight: 700, color: 'var(--color-zinc-400)', marginBottom: '2px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                          {wo.title}
-                        </div>
-                      )}
-                      <p style={{ fontSize: '0.82rem', color: '#fca5a5', margin: 0, lineHeight: '1.4' }}>
-                        {wo.text}
-                      </p>
-                    </div>
-                  </div>
-                ))}
 
                 {/* Custom reminders added by user */}
                 {customReminders.map((reminder, idx) => (
