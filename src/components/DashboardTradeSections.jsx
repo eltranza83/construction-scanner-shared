@@ -1,6 +1,21 @@
 import React from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
+const PAYEE_REQUIRED_KEYWORDS = [
+  'foundation', 'flatwork', 'flat work', 'roofing', 'roof', 'framing', 'lumber', 'truss',
+  'plumbing', 'plumber', 'hvac', 'ac', 'heating', 'cooling', 'insulation', 'alarm',
+  'drywall', 'sheetrock', 'cabinet', 'trim', 'carpentry', 'carpenter', 'porch',
+  'countertop', 'counter', 'glasswork', 'glass', 'tile', 'flooring', 'floor',
+  'paint', 'finishes', 'stucco', 'masonry', 'driveway', 'sidewalk', 'cantina',
+  'stone', 'fencing', 'fence', 'gate', 'landscaping', 'landscape', 'irrigation',
+  'dumpster', 'cleaning', 'clean'
+];
+
+const requiresPayeeTracking = (phaseName, catName) => {
+  const combined = `${phaseName || ''} ${catName || ''}`.toLowerCase();
+  return PAYEE_REQUIRED_KEYWORDS.some(kw => combined.includes(kw));
+};
+
 function PhaseMetricGroup({ sub, formatCurrency }) {
   const safeFormat = (val) => {
     const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
@@ -217,7 +232,8 @@ export default function DashboardTradeSections({
                         cleanPayee.toLowerCase() === `${cleanPhase.toLowerCase()} payee`;
 
                       const isAssigned = !isPlaceholder;
-                      const displayPayee = isAssigned ? cleanPayee : 'Payee - Unassigned';
+                      const needsPayee = isAssigned || requiresPayeeTracking(cleanPhase, cat.name);
+                      const displayPayee = isAssigned ? cleanPayee : (needsPayee ? 'Payee - Unassigned' : null);
 
                       return (
                         <div
@@ -250,15 +266,17 @@ export default function DashboardTradeSections({
                             }}>
                               {sub.phase}
                             </span>
-                            <span style={{
-                              fontWeight: isAssigned ? 700 : 400,
-                              color: isAssigned ? 'var(--color-amber-400)' : 'var(--color-zinc-500)',
-                              fontSize: '0.72rem',
-                              fontStyle: isAssigned ? 'normal' : 'italic',
-                              flexShrink: 0
-                            }}>
-                              {displayPayee}
-                            </span>
+                            {displayPayee && (
+                              <span style={{
+                                fontWeight: isAssigned ? 700 : 400,
+                                color: isAssigned ? 'var(--color-amber-400)' : 'var(--color-zinc-500)',
+                                fontSize: '0.72rem',
+                                fontStyle: isAssigned ? 'normal' : 'italic',
+                                flexShrink: 0
+                              }}>
+                                {displayPayee}
+                              </span>
+                            )}
                           </div>
 
                           {/* Row 2: Fixed 3-Column Pill Bar (Mat, Lab, Total) */}
