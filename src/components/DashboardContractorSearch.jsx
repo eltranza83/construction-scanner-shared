@@ -49,10 +49,10 @@ export default function DashboardContractorSearch({
     onSearchTermChange(rawQuery);
 
     const clientApiKey = getClientGeminiApiKey();
-    const isPdfRequest = text.includes('pdf') || text.includes('receipt') || text.includes('voucher') || text.includes('gas') || text.includes('fuel');
-    const isAnalyticalQuery = text.includes('biggest') || text.includes('total') || text.includes('unpaid') || text.includes('summary') || text.includes('material') || text.includes('labor') || text.includes('all') || text.includes('compare');
+    const allSubs = subcontractors || suggestions || [];
 
-    if (clientApiKey && (isPdfRequest || isAnalyticalQuery)) {
+    // 1. Always use Gemini AI if API key is available
+    if (clientApiKey) {
       setIsProcessingAi(true);
       try {
         if (onShowToast) {
@@ -71,6 +71,19 @@ export default function DashboardContractorSearch({
         if (aiResult?.answerText) {
           speakResponse(aiResult.answerText);
           setAiResponseCard(aiResult);
+
+          // If Gemini identified a specific trade phase, select it automatically on screen
+          if (aiResult.matchedPhase && allSubs.length > 0) {
+            const phaseLower = aiResult.matchedPhase.toLowerCase();
+            const matchedSub = allSubs.find(s =>
+              (s.phase || '').toLowerCase().includes(phaseLower) ||
+              phaseLower.includes((s.phase || '').toLowerCase()) ||
+              (s.payee || '').toLowerCase().includes(phaseLower)
+            );
+            if (matchedSub) {
+              onSelectSubcontractor(matchedSub);
+            }
+          }
 
           if (aiResult.action === 'CREATE_PDF_RECEIPT' && aiResult.pdfDetails) {
             const pdfRes = await generateVoiceExpenseVoucherPdf({
@@ -103,19 +116,47 @@ export default function DashboardContractorSearch({
       }
     }
 
-    const allSubs = subcontractors || suggestions || [];
     if (allSubs.length === 0) {
       speakResponse("No contractor data is available yet.");
       return;
     }
 
-    // Clean conversational filler words
+    // 2. Handle "biggest / largest / most expensive" query locally if offline
+    if (text.includes('biggest') || text.includes('largest') || text.includes('highest') || text.includes('most expensive')) {
+      let maxSub = null;
+      let maxAmount = 0;
+
+      allSubs.forEach(sub => {
+        const amt = parseFloat(sub.originalQuote || sub.totalLabor || sub.totalPaid || 0) || 0;
+        if (amt > maxAmount) {
+          maxAmount = amt;
+          maxSub = sub;
+        }
+      });
+
+      if (maxSub) {
+        onSelectSubcontractor(maxSub);
+        const displayPayee = (!maxSub.payee || maxSub.payee.toLowerCase() === 'unassigned')
+          ? maxSub.phase
+          : `${maxSub.payee} (${maxSub.phase})`;
+        const biggestMsg = `Your biggest expense so far is ${displayPayee} with a total quote of ${safeFormatCurrency(maxAmount)}.`;
+        speakResponse(biggestMsg);
+        if (onShowToast) {
+          onShowToast(`📊 ${biggestMsg}`, 'success');
+        }
+        return;
+      }
+    }
+
+    // 3. Local Search Matcher Fallback for specific contractor lookups
     const cleanSearch = text
-      .replace(/\b(how much|do we owe|have we paid|what is the|balance|quote|for|the|guy|man|person|installer|contractor|sub|company|services|owe|paid|amount|cost|check|total|we|do|how|much|what)\b/gi, ' ')
+      .replace(/\b(how much|do we owe|have we paid|what is the|give me the|can you give me|balance|on|the|a|an|quote|for|guy|man|person|installer|contractor|sub|company|services|owe|paid|amount|cost|check|total|we|do|how|much|what|give|me|can|you|so|far|project|in)\b/gi, ' ')
       .replace(/[^a-z0-9\s]/gi, '')
       .trim();
 
-    const searchTokens = (cleanSearch || text).split(/\s+/).filter(Boolean);
+    const searchTokens = (cleanSearch || text)
+      .split(/\s+/)
+      .filter(t => t.length > 2 && !['and', 'the', 'for', 'was', 'with', 'out', 'off'].includes(t));
 
     const tradeAliases = {
       plumber: ['plumb', 'pipe', 'drain', 'water', 'sewer', 'rough-in', 'faucet'],
@@ -164,10 +205,10 @@ export default function DashboardContractorSearch({
 
       // 3. Search Token Matching against Phase/Category/Payee
       searchTokens.forEach(token => {
-        if (token.length < 2) return;
-        if (phase.includes(token)) score += 30;
+        if (token.length <= 2) return;
+        if (phase.includes(token)) score += 35;
         if (cat.includes(token)) score += 20;
-        if (!isUnassigned && payee.includes(token)) score += 40;
+        if (!isUnassigned && payee.includes(token)) score += 45;
       });
 
       // 4. Trade Alias Matching
@@ -176,7 +217,7 @@ export default function DashboardContractorSearch({
         if (queryHasAlias) {
           const subHasAlias = combined.includes(key) || aliases.some(a => combined.includes(a));
           if (subHasAlias) {
-            score += 55;
+            score += 65;
           }
         }
       }
@@ -187,7 +228,7 @@ export default function DashboardContractorSearch({
       }
     });
 
-    if (bestSub && highestScore > 0) {
+    if (bestSub && highestScore >= 35) {
       onSelectSubcontractor(bestSub);
       const quoteVal = safeFormatCurrency(bestSub.originalQuote);
       const paidVal = safeFormatCurrency(bestSub.totalLabor || bestSub.totalPaid || 0);
