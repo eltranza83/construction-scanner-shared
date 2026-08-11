@@ -470,6 +470,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             searchTerm={searchTerm}
             suggestions={suggestions}
             selectedSub={selectedSub}
+            subcontractors={data?.subcontractors || []}
             formatCurrency={formatCurrency}
             getStatusStyle={getStatusStyle}
             onSearchTermChange={(value) => {
