@@ -474,7 +474,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             dashboardData={data}
             activeProjectName={activeProject?.name || ''}
             activeFolderId={selectedFolder?.id || activeProject?.folderId || ''}
-            googleToken={accessToken || ''}
+            googleToken={googleToken || ''}
             formatCurrency={formatCurrency}
             getStatusStyle={getStatusStyle}
             onSearchTermChange={(value) => {
