@@ -471,6 +471,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
             suggestions={suggestions}
             selectedSub={selectedSub}
             subcontractors={data?.subcontractors || []}
+            dashboardData={data}
+            activeProjectName={activeProject?.name || ''}
+            activeFolderId={selectedFolder?.id || activeProject?.folderId || ''}
+            googleToken={accessToken || ''}
             formatCurrency={formatCurrency}
             getStatusStyle={getStatusStyle}
             onSearchTermChange={(value) => {

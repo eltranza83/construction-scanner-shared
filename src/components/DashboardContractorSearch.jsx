@@ -1,12 +1,19 @@
 import React, { useState } from 'react';
-import { Search, Mic, MicOff } from 'lucide-react';
+import { Search, Mic, MicOff, Sparkles, FileText, Download } from 'lucide-react';
 import DashboardContractorDetail from './DashboardContractorDetail';
+import { queryGeminiProjectAssistant } from '../services/geminiAiAssistant';
+import { generateVoiceExpenseVoucherPdf } from '../services/voicePdfGenerator';
+import { getClientGeminiApiKey } from '../services/gemini';
 
 export default function DashboardContractorSearch({
   searchTerm,
   suggestions,
   selectedSub,
   subcontractors,
+  dashboardData,
+  activeProjectName,
+  activeFolderId,
+  googleToken,
   formatCurrency,
   getStatusStyle,
   onSearchTermChange,
@@ -16,6 +23,8 @@ export default function DashboardContractorSearch({
   onShowToast
 }) {
   const [listening, setListening] = useState(false);
+  const [aiResponseCard, setAiResponseCard] = useState(null);
+  const [isProcessingAi, setIsProcessingAi] = useState(false);
 
   const safeFormatCurrency = (val) => {
     if (typeof formatCurrency === 'function') {
@@ -35,9 +44,64 @@ export default function DashboardContractorSearch({
     }
   };
 
-  const processVoiceQuery = (rawQuery) => {
+  const processVoiceQuery = async (rawQuery) => {
     const text = rawQuery.toLowerCase().trim();
     onSearchTermChange(rawQuery);
+
+    const clientApiKey = getClientGeminiApiKey();
+    const isPdfRequest = text.includes('pdf') || text.includes('receipt') || text.includes('voucher') || text.includes('gas') || text.includes('fuel');
+    const isAnalyticalQuery = text.includes('biggest') || text.includes('total') || text.includes('unpaid') || text.includes('summary') || text.includes('material') || text.includes('labor') || text.includes('all') || text.includes('compare');
+
+    if (clientApiKey && (isPdfRequest || isAnalyticalQuery)) {
+      setIsProcessingAi(true);
+      try {
+        if (onShowToast) {
+          onShowToast('🤖 Gemini 3.1 Flash-Lite analyzing project...', 'info');
+        }
+
+        const aiResult = await queryGeminiProjectAssistant({
+          query: rawQuery,
+          dashboardData,
+          activeProjectName,
+          apiKey: clientApiKey
+        });
+
+        setIsProcessingAi(false);
+
+        if (aiResult?.answerText) {
+          speakResponse(aiResult.answerText);
+          setAiResponseCard(aiResult);
+
+          if (aiResult.action === 'CREATE_PDF_RECEIPT' && aiResult.pdfDetails) {
+            const pdfRes = await generateVoiceExpenseVoucherPdf({
+              ...aiResult.pdfDetails,
+              project: activeProjectName || aiResult.pdfDetails.project || 'Active Lot'
+            });
+
+            // Trigger instant browser download
+            const url = URL.createObjectURL(pdfRes.blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = pdfRes.filename;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            const pdfSuccessMsg = `Created $${aiResult.pdfDetails.amount} PDF Voucher under Extra Costs & Misc!`;
+            if (onShowToast) {
+              onShowToast(`📄 ${pdfSuccessMsg}`, 'success');
+            }
+          } else {
+            if (onShowToast) {
+              onShowToast(`🤖 Gemini AI: ${aiResult.answerText}`, 'success');
+            }
+          }
+          return;
+        }
+      } catch (err) {
+        setIsProcessingAi(false);
+        console.warn('Gemini AI Assistant failed, using local matcher fallback:', err);
+      }
+    }
 
     const allSubs = subcontractors || suggestions || [];
     if (allSubs.length === 0) {
@@ -302,6 +366,83 @@ export default function DashboardContractorSearch({
           </div>
         )}
       </div>
+
+      {isProcessingAi && (
+        <div style={{
+          padding: '12px 14px',
+          background: 'rgba(245, 158, 11, 0.08)',
+          border: '1px solid rgba(245, 158, 11, 0.25)',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          fontSize: '0.8rem',
+          color: '#f59e0b'
+        }}>
+          <Sparkles size={16} className="animate-spin" />
+          <span>Gemini 3.1 Flash-Lite analyzing project & financial data...</span>
+        </div>
+      )}
+
+      {aiResponseCard && !isProcessingAi && (
+        <div className="card-glass-gold" style={{ padding: '14px', borderRadius: '10px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--color-amber-400)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={14} />
+              Gemini 3.1 Flash-Lite AI Answer
+            </span>
+            <button
+              type="button"
+              onClick={() => setAiResponseCard(null)}
+              style={{ background: 'none', border: 'none', color: 'var(--color-zinc-500)', fontSize: '0.72rem', cursor: 'pointer' }}
+            >
+              Dismiss
+            </button>
+          </div>
+
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-zinc-200)', lineHeight: 1.4, margin: 0 }}>
+            {aiResponseCard.answerText}
+          </p>
+
+          {aiResponseCard.action === 'CREATE_PDF_RECEIPT' && aiResponseCard.pdfDetails && (
+            <div style={{
+              marginTop: '4px',
+              padding: '10px 12px',
+              background: 'rgba(16, 185, 129, 0.12)',
+              border: '1px solid rgba(16, 185, 129, 0.3)',
+              borderRadius: '6px',
+              display: 'flex',
+              alignItems: 'center',
+              justify: 'space-between',
+              fontSize: '0.78rem'
+            }}>
+              <span style={{ color: '#34d399', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={14} />
+                PDF Voucher Generated: ${aiResponseCard.pdfDetails.amount.toFixed(2)} (Extra Costs & Misc)
+              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  const pdfRes = await generateVoiceExpenseVoucherPdf({
+                    ...aiResponseCard.pdfDetails,
+                    project: activeProjectName || aiResponseCard.pdfDetails.project || 'Active Lot'
+                  });
+                  const url = URL.createObjectURL(pdfRes.blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = pdfRes.filename;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="btn-gold-action"
+                style={{ padding: '3px 8px', fontSize: '0.7rem' }}
+              >
+                <Download size={11} /> Download PDF
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       <DashboardContractorDetail
         selectedSub={selectedSub}
