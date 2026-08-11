@@ -64,7 +64,7 @@ export default function DashboardContractorSearch({
       paint: ['paint', 'painting', 'painter', 'wall', 'primer', 'finish'],
       drywall: ['drywall', 'sheetrock', 'tape', 'float', 'wallboard'],
       foundation: ['concrete', 'slab', 'flatwork', 'rebar', 'foundation'],
-      tile: ['tile', 'tiling', 'tiler', 'flooring', 'floor', 'grout', 'marble', 'slab'],
+      tile: ['tile', 'tiling', 'tiler', 'tileman', 'flooring', 'floor', 'grout', 'marble', 'slab'],
       stucco: ['stucco', 'masonry', 'stone', 'cantera', 'brick', 'block'],
       landscaping: ['landscaping', 'landscape', 'yard', 'lawn', 'irrigation', 'fence', 'fencing', 'gate'],
       dumpster: ['dumpster', 'dumpsters', 'trash', 'dump', 'cleaning', 'clean', 'debris', 'trash haul'],
