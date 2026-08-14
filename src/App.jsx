@@ -1,3 +1,4 @@
+import GlobalAIAssistant from './components/GlobalAIAssistant';
 import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck, Trash2, X } from 'lucide-react';
 import StagingCard from './components/StagingCard';
@@ -627,6 +628,12 @@ export default function App() {
         )}
         </Suspense>
       </main>
+
+      {/* Global Floating AI Field Agent Button */}
+      <GlobalAIAssistant
+        activeProject={activeProject}
+        selectedFolder={selectedFolder}
+      />
 
       {/* 3. Navigation Footer */}
       {!editingItemId && (

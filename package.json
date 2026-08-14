@@ -11,6 +11,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "chrono-node": "^2.10.1",
     "firebase": "^12.15.0",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.21.0",
