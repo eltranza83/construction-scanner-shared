@@ -381,7 +381,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
-  const [activeSubTab, setActiveSubTab] = useState('specs'); // 'specs' | 'site_setup' | 'phases'
+  const [activeSubTab, setActiveSubTab] = useState('site_setup'); // 'site_setup' | 'phases' | 'specs'
   const [quickInput, setQuickInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -1217,31 +1217,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         }}
       >
         <button
-          onClick={() => setActiveSubTab('specs')}
-          style={{
-            flex: 1.2,
-            padding: '10px 8px',
-            borderRadius: '8px',
-            border: 'none',
-            backgroundColor: activeSubTab === 'specs' ? 'var(--color-amber-500)' : 'transparent',
-            color: activeSubTab === 'specs' ? '#000' : 'var(--color-zinc-400)',
-            fontSize: '0.82rem',
-            fontWeight: 800,
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            transition: 'all 0.15s ease',
-            whiteSpace: 'nowrap',
-            boxShadow: activeSubTab === 'specs' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
-          }}
-        >
-          <Palette size={15} />
-          <span>Finishes & Specs ({specs.length})</span>
-        </button>
-
-        <button
           onClick={() => setActiveSubTab('site_setup')}
           style={{
             flex: 1.2,
@@ -1289,6 +1264,31 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         >
           <CheckSquare size={15} />
           <span>Phase Inspections</span>
+        </button>
+
+        <button
+          onClick={() => setActiveSubTab('specs')}
+          style={{
+            flex: 1.2,
+            padding: '10px 8px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: activeSubTab === 'specs' ? 'var(--color-amber-500)' : 'transparent',
+            color: activeSubTab === 'specs' ? '#000' : 'var(--color-zinc-400)',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+            boxShadow: activeSubTab === 'specs' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
+          }}
+        >
+          <Palette size={15} />
+          <span>Finishes & Specs ({specs.length})</span>
         </button>
       </div>
 
