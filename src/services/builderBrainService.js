@@ -600,21 +600,39 @@ Fluently match English or Spanish automatically.
 `;
 
   // Build multi-turn conversational history
-  const contents = [];
+  const rawContents = [];
   if (Array.isArray(chatHistory) && chatHistory.length > 0) {
     const recent = chatHistory.slice(-8);
     recent.forEach((m) => {
       if (!m.text) return;
-      contents.push({
+      rawContents.push({
         role: m.sender === 'user' ? 'user' : 'model',
         parts: [{ text: m.text }]
       });
     });
   }
-  contents.push({
+  rawContents.push({
     role: 'user',
     parts: [{ text: query }]
   });
+
+  // Ensure first turn is 'user' and roles alternate
+  while (rawContents.length > 0 && rawContents[0].role !== 'user') {
+    rawContents.shift();
+  }
+
+  const contents = [];
+  for (const turn of rawContents) {
+    if (contents.length > 0 && contents[contents.length - 1].role === turn.role) {
+      contents[contents.length - 1].parts.push(...turn.parts);
+    } else {
+      contents.push(turn);
+    }
+  }
+
+  if (contents.length === 0) {
+    contents.push({ role: 'user', parts: [{ text: query }] });
+  }
 
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
   const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? localStorage.getItem('jobscan_gemini_key') : '') || envKey || '';
@@ -866,6 +884,32 @@ Fluently match English or Spanish automatically.
   if (raw.includes('watch') || raw.includes('risk') || raw.includes('hazard') || raw.includes('issue') || raw.includes('defect')) {
     if (pendingW.length === 0) return `Zero active watch-outs for ${activeProjectName}.`;
     return `You have ${pendingW.length} active watch-out${pendingW.length === 1 ? '' : 's'} on ${activeProjectName}: ${pendingW.map(w => w.title).join(', ')}.`;
+  }
+
+  // Google Drive File & Folder queries
+  if (
+    raw.includes('drive') ||
+    raw.includes('file') ||
+    raw.includes('folder') ||
+    raw.includes('document') ||
+    raw.includes('carpetas') ||
+    raw.includes('archivos')
+  ) {
+    const driveData = projectId ? loadProjectDriveTree(projectId) : null;
+    if (driveData) {
+      const subCount = (driveData.subfolders || []).length;
+      const directFileCount = (driveData.directFiles || []).length;
+      const subFileCount = (driveData.subfolders || []).reduce((acc, sub) => acc + (sub.files || []).length, 0);
+      const totalFiles = directFileCount + subFileCount;
+
+      if (raw.includes('file') || raw.includes('document') || raw.includes('how many') || raw.includes('total') || raw.includes('archivos') || raw.includes('cuantos')) {
+        return `You have **${totalFiles} total file${totalFiles === 1 ? '' : 's'}** across ${subCount} subfolders in your **${activeProjectName}** Google Drive project folder.`;
+      }
+      if (raw.includes('subfolder') || raw.includes('folder') || raw.includes('carpetas')) {
+        const names = (driveData.subfolders || []).map((s) => s.folderName).join(', ');
+        return `There are **${subCount} subfolders** in ${activeProjectName} Google Drive: ${names || 'None'}.`;
+      }
+    }
   }
 
   // Catch-all

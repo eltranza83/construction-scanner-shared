@@ -8,14 +8,30 @@ export async function POST(request) {
 
     let formattedContents = [];
     if (Array.isArray(contents) && contents.length > 0) {
-      formattedContents = contents.map((c) => ({
+      const raw = contents.map((c) => ({
         role: c.role === 'assistant' || c.role === 'ai' || c.role === 'model' ? 'model' : 'user',
         parts: Array.isArray(c.parts) ? c.parts : [{ text: String(c.text || c.content || '') }]
       }));
+
+      // Gemini requires the first turn to be 'user'
+      while (raw.length > 0 && raw[0].role !== 'user') {
+        raw.shift();
+      }
+
+      // Merge consecutive identical roles to guarantee strict alternating turns
+      for (const turn of raw) {
+        if (formattedContents.length > 0 && formattedContents[formattedContents.length - 1].role === turn.role) {
+          formattedContents[formattedContents.length - 1].parts.push(...turn.parts);
+        } else {
+          formattedContents.push(turn);
+        }
+      }
     } else if (prompt || query) {
       formattedContents = [{ role: 'user', parts: [{ text: String(prompt || query) }] }];
-    } else {
-      throw new HttpError(400, 'Missing conversation contents or prompt.');
+    }
+
+    if (formattedContents.length === 0) {
+      formattedContents = [{ role: 'user', parts: [{ text: String(prompt || query || 'Hello') }] }];
     }
 
     const payload = {
