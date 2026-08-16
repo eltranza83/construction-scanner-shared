@@ -609,11 +609,13 @@ export default function App() {
             />
           </DashboardErrorBoundary>
         ) : activeTab === 'brain' ? (
-          <BuilderBrain
-            activeProject={activeProject}
-            selectedFolder={selectedFolder}
-            googleToken={googleToken}
-          />
+          <DashboardErrorBoundary>
+            <BuilderBrain
+              activeProject={activeProject}
+              selectedFolder={selectedFolder}
+              googleToken={googleToken}
+            />
+          </DashboardErrorBoundary>
         ) : activeTab === 'xray' ? (
           <BlueprintPinboard
             googleToken={googleToken}

@@ -17,7 +17,8 @@ import {
   Download,
   Printer,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Settings
 } from 'lucide-react';
 import {
   loadProjectSpecs,
