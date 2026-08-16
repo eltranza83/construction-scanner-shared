@@ -803,39 +803,50 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
         }
       }
 
-      // Check if querying a specific phase/trade
-      const matchedPhase = subs.find(
-        (s) =>
-          s.phase &&
-          (raw.includes(s.phase.toLowerCase()) ||
-            (s.payee && raw.includes(s.payee.toLowerCase())) ||
-            (raw.includes('plumb') && s.phase.toLowerCase().includes('plumb')) ||
-            (raw.includes('fram') && s.phase.toLowerCase().includes('fram')) ||
-            (raw.includes('found') && s.phase.toLowerCase().includes('found')) ||
-            (raw.includes('elect') && s.phase.toLowerCase().includes('elect')) ||
-            (raw.includes('hvac') && s.phase.toLowerCase().includes('hvac')))
-      );
+      // Check if querying a specific phase/trade/contractor
+      const tradeKeywords = [
+        'paint', 'drywall', 'sheetrock', 'roof', 'tile', 'floor', 'stucco', 'mason',
+        'cabinet', 'trim', 'carpent', 'window', 'door', 'flatwork', 'insulat', 'foam',
+        'clean', 'dumpster', 'fence', 'landscap', 'plumb', 'elect', 'hvac', 'fram',
+        'found', 'utility', 'permit', 'countertop', 'granite', 'quartz', 'glass'
+      ];
+
+      const matchedPhase = subs.find((s) => {
+        if (!s.phase && !s.payee) return false;
+        const pLower = (s.phase || '').toLowerCase();
+        const payeeLower = (s.payee || '').toLowerCase();
+        if (raw.includes(pLower) || (payeeLower && raw.includes(payeeLower))) return true;
+        return tradeKeywords.some((kw) => raw.includes(kw) && (pLower.includes(kw) || payeeLower.includes(kw)));
+      });
 
       if (matchedPhase) {
-        return (
-          `💰 **${matchedPhase.phase} Financials**:\n\n` +
-          `* **Contractor/Payee**: ${matchedPhase.payee || 'Unassigned'}\n` +
-          `* **Original Quote**: ${matchedPhase.originalQuote || '$0.00'}\n` +
-          `* **Total Spent / Paid**: ${matchedPhase.totalSpent || matchedPhase.totalPaid || '$0.00'}\n` +
-          `* **Remaining Balance Due**: ${matchedPhase.remainingBalance || '$0.00'}\n` +
-          `* **Material**: ${matchedPhase.totalMaterial || '$0.00'} | **Labor**: ${matchedPhase.totalLabor || '$0.00'}\n` +
-          `* **Status**: ${matchedPhase.status || 'In Progress'}`
-        );
+        const spent = matchedPhase.totalSpent || matchedPhase.totalPaid || '$0.00';
+        const bal = matchedPhase.remainingBalance || '$0.00';
+        const quote = matchedPhase.originalQuote || '$0.00';
+        const payee = matchedPhase.payee || 'Unassigned';
+
+        if (raw.includes('balance') || raw.includes('owe') || raw.includes('due')) {
+          return `Your **${matchedPhase.phase}** contractor (${payee}) has a remaining balance of **${bal}** due (Original quote: ${quote}, Paid: ${spent}).`;
+        }
+        if (raw.includes('quote') || raw.includes('estimate') || raw.includes('bid')) {
+          return `The original quote for **${matchedPhase.phase}** (${payee}) is **${quote}** (Paid: ${spent}, Remaining balance: ${bal}).`;
+        }
+        if (raw.includes('paid') || raw.includes('spent')) {
+          return `You have paid **${spent}** to date for **${matchedPhase.phase}** (${payee}) with a remaining balance of **${bal}**.`;
+        }
+        return `**${matchedPhase.phase}** (${payee}): Quote: **${quote}**, Paid: **${spent}**, Remaining Balance: **${bal}**, Status: **${matchedPhase.status || 'In Progress'}**.`;
+      }
+
+      const specificTradeInQuery = tradeKeywords.some((kw) => raw.includes(kw));
+      if (specificTradeInQuery) {
+        return `No recorded contractor quote or payment was found for that trade in your **${activeProjectName}** dashboard sheet.`;
       }
 
       return (
-        `💰 **Project Financial Summary — ${activeProjectName}**:\n\n` +
-        `* **Hard Cost Build Budget**: ${info.budgetBuild || '$0.00'}\n` +
-        `* **Gross Projected Cost**: ${info.budgetGross || '$0.00'}\n` +
-        `* **Lot / Land Cost**: ${info.budgetLand || '$0.00'}\n` +
-        `* **Total Spent to Date (Draws)**: ${info.totalSpent || '$0.00'}\n` +
-        `* **Net Working Capital Balance**: ${info.capitalBalance || '$0.00'}\n\n` +
-        `Tracked across **${subs.length} construction phases** in your Google Sheets Dashboard.`
+        `💰 **Project Financial Summary — ${activeProjectName}**:\n` +
+        `* Hard Cost Build Budget: **${info.budgetBuild || '$0.00'}**\n` +
+        `* Total Spent to Date (Draws): **${info.totalSpent || '$0.00'}**\n` +
+        `* Net Working Capital Balance: **${info.capitalBalance || '$0.00'}**`
       );
     } else {
       return (
