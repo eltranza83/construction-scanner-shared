@@ -42,7 +42,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
   const [showSettings, setShowSettings] = useState(false);
-  const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_gemini_key') || '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const chatEndRef = useRef(null);
 

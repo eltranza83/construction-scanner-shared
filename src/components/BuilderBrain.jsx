@@ -437,7 +437,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
-  const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_gemini_key') || '');
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef(null);
 

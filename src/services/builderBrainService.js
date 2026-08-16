@@ -644,7 +644,7 @@ Along with a short 1-sentence confirmation.
   }
 
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
-  const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? localStorage.getItem('jobscan_gemini_key') : '') || envKey || '';
+  const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key')) : '') || envKey || '';
 
   // 1. Primary: Query the dedicated Serverless Cloud AI Endpoint (/api/ask-brain)
   try {
@@ -921,6 +921,17 @@ Along with a short 1-sentence confirmation.
     }
   }
 
+  const isSpanishQuery =
+    /[áéíóúüñ¿¡]/i.test(raw) ||
+    /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|pintor|electricista|dinero|gastado|cuanto|cuánto|quien|quién|recordatorio|buenos|dias|días|tardes|hola|cómo|como|estás|estas|saldo|deber|debemos)\b/i.test(raw);
+
+  if (raw.includes('hola') || raw.includes('buenos dias') || raw.includes('buenos días') || raw.includes('como estas') || raw.includes('cómo estás')) {
+    return `¡Buenos días! ¿En qué puedo ayudarte hoy con el proyecto del ${activeProjectName}?`;
+  }
+
   // Catch-all
+  if (isSpanishQuery) {
+    return `Estoy listo para ayudarte con el ${activeProjectName}. ¿Qué te gustaría consultar?`;
+  }
   return `I'm ready to help with ${activeProjectName}. What would you like to check on?`;
 }
