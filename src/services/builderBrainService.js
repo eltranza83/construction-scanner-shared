@@ -536,9 +536,33 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
   const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? localStorage.getItem('jobscan_gemini_key') : '') || envKey || '';
 
+  // 1. Primary: Query the dedicated Serverless Cloud AI Endpoint (/api/ask-brain)
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+    const apiRes = await fetch('/api/ask-brain', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ prompt: contextPrompt }),
+      signal: controller.signal
+    });
+    clearTimeout(timeoutId);
+
+    if (apiRes.ok) {
+      const data = await apiRes.json();
+      if (data && data.text) {
+        return data.text.trim();
+      }
+    }
+  } catch (err) {
+    console.warn('Direct /api/ask-brain endpoint note:', err.message);
+  }
+
+  // 2. Direct client fallback if API key is provided
   if (effectiveKey && effectiveKey.trim()) {
     const keyClean = effectiveKey.trim();
-    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.7-flash', 'gemini-flash-latest'];
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
     for (const model of modelsToTry) {
       try {
         const controller = new AbortController();
@@ -565,19 +589,32 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
           const data = await res.json();
           const cand = data.candidates?.[0]?.content?.parts?.[0]?.text;
           if (cand) return cand.trim();
-        } else {
-          const errJson = await res.json().catch(() => ({}));
-          console.warn(`Gemini API error for model ${model}:`, errJson);
         }
-      } catch (e) {
-        console.warn(`Gemini cloud API error with ${model}:`, e);
+      } catch {
+        // continue
       }
     }
   }
 
+  // 3. Fallback: Concise 1-2 sentence local response engine
   const raw = query.toLowerCase().trim();
 
-  // 1. Site Setup & Mobilization Checklist Query Handler (with speech tolerance)
+  // Greetings
+  if (
+    raw.includes('hello') ||
+    raw.includes('hi') ||
+    raw.includes('hey') ||
+    raw.includes('how are you') ||
+    raw.includes("how's it going") ||
+    raw.includes('how you doing') ||
+    raw.includes('good morning') ||
+    raw.includes('good afternoon') ||
+    raw.includes('what\'s up')
+  ) {
+    return `Everything is going well! How can I help you on ${activeProjectName} today?`;
+  }
+
+  // Site Setup & Mobilization
   const isSiteSetupQuery =
     raw.includes('site setup') ||
     raw.includes('foresight setup') ||
@@ -596,24 +633,18 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
     const completedItems = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]);
 
     if (pendingItems.length === 0) {
-      return (
-        `🎉 **Site Setup & Mobilization Complete — ${activeProjectName}** (${siteSetupTotal}/${siteSetupTotal}):\n\n` +
-        `All **5 Site Setup checklist items** have been checked off!\n` +
-        `The lot is fully mobilized and ready for **1. Plumbing Rough-In**.`
-      );
+      return `Site setup for ${activeProjectName} is 100% complete (${siteSetupTotal}/${siteSetupTotal} items checked off) and ready for Plumbing Rough-In.`;
     }
 
-    return (
-      `🚩 **Site Setup Readiness Audit — ${activeProjectName}** (${completedItems.length}/${siteSetupTotal} Completed):\n\n` +
-      `You have **${pendingItems.length} item${pendingItems.length === 1 ? '' : 's'} remaining** to check off before site mobilization is complete:\n\n` +
-      pendingItems.map((item, idx) => `${idx + 1}. ⬜ **${item.text}**`).join('\n') +
-      (completedItems.length > 0
-        ? `\n\n*✅ Completed (${completedItems.length}): ${completedItems.map((c) => c.text).join(', ')}*`
-        : `\n\n*(All ${siteSetupTotal} items are currently pending).*`)
-    );
+    if (raw.includes('list') || raw.includes('detail') || raw.includes('what are') || raw.includes('which') || raw.includes('all')) {
+      return `Site setup for ${activeProjectName} is at ${completedItems.length}/${siteSetupTotal}. Remaining items:\n` +
+        pendingItems.map((item, idx) => `${idx + 1}. ⬜ ${item.text}`).join('\n');
+    }
+
+    return `Site setup for ${activeProjectName} is at ${completedItems.length}/${siteSetupTotal} complete with ${pendingItems.length} item${pendingItems.length === 1 ? '' : 's'} remaining: ${pendingItems.map(p => p.text).join(', ')}.`;
   }
 
-  // Financial & Payment query local fallback
+  // Financial & Payment queries
   if (
     raw.includes('budget') ||
     raw.includes('spent') ||
@@ -634,174 +665,6 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
     if (dashData && dashData.projectInfo) {
       const info = dashData.projectInfo;
       const subs = dashData.subcontractors || [];
-
-      // Collect all phases with recorded spent/payments
-      const paidPhases = subs.filter((s) => {
-        const spent = s.totalSpent ? parseFloat(String(s.totalSpent).replace(/[^0-9.]/g, '')) : 0;
-        const paid = s.totalPaid ? parseFloat(String(s.totalPaid).replace(/[^0-9.]/g, '')) : 0;
-        return spent > 0 || paid > 0 || (s.payments && s.payments.length > 0);
-      });
-
-      // Extract numeric dollar amount from query if present (e.g. 1000 or $1,000)
-      const numMatch = raw.match(/\$?([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{2})?)/);
-      const queryAmount = numMatch ? parseFloat(numMatch[1].replace(/,/g, '')) : null;
-
-      // 1. Ranking Query: Biggest / Largest Expense So Far
-      if (
-        raw.includes('biggest expense') ||
-        raw.includes('largest expense') ||
-        raw.includes('highest expense') ||
-        raw.includes('most expensive so far') ||
-        raw.includes('top expense') ||
-        raw.includes('what did we spend the most on') ||
-        raw.includes('most spent')
-      ) {
-        if (paidPhases.length > 0) {
-          const sortedPaid = [...paidPhases].sort((a, b) => {
-            const aSpent = parseFloat(String(a.totalSpent || a.totalPaid || '0').replace(/[^0-9.]/g, ''));
-            const bSpent = parseFloat(String(b.totalSpent || b.totalPaid || '0').replace(/[^0-9.]/g, ''));
-            return bSpent - aSpent;
-          });
-          const top = sortedPaid[0];
-          return (
-            `🏆 **Biggest Expenditure to Date — ${activeProjectName}**:\n\n` +
-            `* **Phase**: ${top.phase}\n` +
-            `* **Contractor / Payee**: ${top.payee || 'Unassigned'}\n` +
-            `* **Amount Paid**: ${top.totalSpent || top.totalPaid || '$0.00'}\n` +
-            `* **Original Quote**: ${top.originalQuote || '$0.00'}\n` +
-            `* **Remaining Balance**: ${top.remainingBalance || '$0.00'}\n\n` +
-            `*This represents the largest portion of your **${info.totalSpent || '$0.00'} total draws spent to date**.*`
-          );
-        } else {
-          return (
-            `🏆 **Biggest Expense to Date — ${activeProjectName}**:\n\n` +
-            `Aside from the **Land / Acquisition Cost (${info.budgetLand || '$0.00'})**, you have **$0.00 in trade draws spent** recorded so far.\n` +
-            `Total Hard Cost Build Budget is **${info.budgetBuild || '$0.00'}**.`
-          );
-        }
-      }
-
-      // 2. Ranking Query: Highest Quote / Most Expensive Phase Overall
-      if (
-        raw.includes('highest quote') ||
-        raw.includes('biggest quote') ||
-        raw.includes('largest quote') ||
-        raw.includes('most expensive phase') ||
-        raw.includes('biggest phase') ||
-        raw.includes('highest budget phase') ||
-        raw.includes('largest budget')
-      ) {
-        const sortedQuotes = [...subs].sort((a, b) => {
-          const aQ = parseFloat(String(a.originalQuote || '0').replace(/[^0-9.]/g, ''));
-          const bQ = parseFloat(String(b.originalQuote || '0').replace(/[^0-9.]/g, ''));
-          return bQ - aQ;
-        });
-
-        const top3 = sortedQuotes.slice(0, 3);
-        return (
-          `📊 **Top Most Expensive Phases by Quote — ${activeProjectName}**:\n\n` +
-          top3
-            .map((s, idx) => {
-              return `${idx + 1}. **${s.phase}**: **${s.originalQuote || '$0.00'}**\n   * Contractor: ${s.payee || 'Unassigned'} | Paid: ${s.totalSpent || s.totalPaid || '$0.00'} | Balance: ${s.remainingBalance || '$0.00'}`;
-            })
-            .join('\n\n')
-        );
-      }
-
-      // 3. Ranking Query: Largest Remaining Balance / Highest Unpaid
-      if (
-        raw.includes('highest balance') ||
-        raw.includes('largest balance') ||
-        raw.includes('biggest balance') ||
-        raw.includes('who is owed the most') ||
-        raw.includes('owed the most') ||
-        raw.includes('most balance') ||
-        raw.includes('largest unpaid')
-      ) {
-        const sortedOwed = [...subs].sort((a, b) => {
-          const aBal = parseFloat(String(a.remainingBalance || '0').replace(/[^0-9.]/g, ''));
-          const bBal = parseFloat(String(b.remainingBalance || '0').replace(/[^0-9.]/g, ''));
-          return bBal - aBal;
-        });
-
-        const topOwed = sortedOwed.filter((s) => parseFloat(String(s.remainingBalance || '0').replace(/[^0-9.]/g, '')) > 0).slice(0, 3);
-        if (topOwed.length > 0) {
-          return (
-            `💳 **Largest Remaining Balances Owed — ${activeProjectName}**:\n\n` +
-            topOwed
-              .map((s, idx) => {
-                return `${idx + 1}. **${s.phase}**: **${s.remainingBalance || '$0.00'}** balance due\n   * Contractor: ${s.payee || 'Unassigned'} (Quote: ${s.originalQuote || 'N/A'}, Paid: ${s.totalSpent || s.totalPaid || '$0.00'})`;
-              })
-              .join('\n\n')
-          );
-        } else {
-          return `💳 **Balances — ${activeProjectName}**:\nAll phases currently have zero remaining balance due!`;
-        }
-      }
-
-      const isPaymentQuery =
-        raw.includes('pay') ||
-        raw.includes('paid') ||
-        raw.includes('spent') ||
-        raw.includes('check') ||
-        raw.includes('trans') ||
-        raw.includes('who did') ||
-        raw.includes('what did');
-
-      if (isPaymentQuery && (queryAmount !== null || raw.includes('who did') || raw.includes('what did') || raw.includes('payments') || raw.includes('paid so far'))) {
-        // If searching for a specific amount like $1,000
-        if (queryAmount !== null && queryAmount > 0) {
-          const matchingPhases = paidPhases.filter((s) => {
-            const spent = parseFloat(String(s.totalSpent || s.totalPaid || '0').replace(/[^0-9.]/g, ''));
-            const matchesSpent = Math.abs(spent - queryAmount) < 0.01;
-            const matchesIndividual = s.payments?.some((p) => {
-              const pAmt = parseFloat(String(p.amount || '0').replace(/[^0-9.]/g, ''));
-              return Math.abs(pAmt - queryAmount) < 0.01;
-            });
-            return matchesSpent || matchesIndividual;
-          });
-
-          if (matchingPhases.length > 0) {
-            return (
-              `💰 **Payment Breakdown for $${queryAmount.toLocaleString()} — ${activeProjectName}**:\n\n` +
-              matchingPhases
-                .map((s, idx) => {
-                  const lines = [
-                    `${idx + 1}. **Phase**: ${s.phase}`,
-                    `   * **Contractor / Payee**: ${s.payee || 'Unassigned'}`,
-                    `   * **Total Paid to Date**: ${s.totalSpent || s.totalPaid || '$' + queryAmount.toLocaleString()}`,
-                    `   * **Original Quote**: ${s.originalQuote || '$0.00'}`,
-                    `   * **Remaining Balance**: ${s.remainingBalance || '$0.00'}`
-                  ];
-                  if (s.payments && s.payments.length > 0) {
-                    const pLines = s.payments.map((p) => `     - ${p.date || 'Recent'}: ${p.amount || '$' + queryAmount.toLocaleString()} (${p.payee || s.payee || 'Payee'}, Check: ${p.check || 'N/A'})`);
-                    lines.push(`   * **Transactions**:\n${pLines.join('\n')}`);
-                  }
-                  return lines.join('\n');
-                })
-                .join('\n\n')
-            );
-          }
-        }
-
-        // If general "who did we pay" / payments list
-        if (paidPhases.length > 0) {
-          return (
-            `💳 **Payments Made to Date — ${activeProjectName}** (${paidPhases.length} Phases):\n\n` +
-            paidPhases
-              .map((s, idx) => {
-                return `${idx + 1}. **${s.phase}**: Paid **${s.totalSpent || s.totalPaid}** to **${s.payee || 'Contractor'}** (Balance: ${s.remainingBalance || '$0.00'}, Quote: ${s.originalQuote || 'N/A'})`;
-              })
-              .join('\n') +
-            `\n\n*Total Spent to Date: **${info.totalSpent || '$0.00'}** | Net Working Capital Remaining: **${info.capitalBalance || '$0.00'}***`
-          );
-        } else {
-          return (
-            `💳 **Payments — ${activeProjectName}**:\n\n` +
-            `No payments have been recorded yet in the dashboard sheets for this lot. Total Spent is currently **${info.totalSpent || '$0.00'}**.`
-          );
-        }
-      }
 
       // Check if querying a specific phase/trade/contractor
       const tradeKeywords = [
@@ -834,7 +697,7 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
         if (raw.includes('paid') || raw.includes('spent')) {
           return `You have paid **${spent}** to date for **${matchedPhase.phase}** (${payee}) with a remaining balance of **${bal}**.`;
         }
-        return `**${matchedPhase.phase}** (${payee}): Quote: **${quote}**, Paid: **${spent}**, Remaining Balance: **${bal}**, Status: **${matchedPhase.status || 'In Progress'}**.`;
+        return `**${matchedPhase.phase}** (${payee}): Quote: **${quote}**, Paid: **${spent}**, Remaining Balance: **${bal}**.`;
       }
 
       const specificTradeInQuery = tradeKeywords.some((kw) => raw.includes(kw));
@@ -842,34 +705,19 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
         return `No recorded contractor quote or payment was found for that trade in your **${activeProjectName}** dashboard sheet.`;
       }
 
-      return (
-        `💰 **Project Financial Summary — ${activeProjectName}**:\n` +
-        `* Hard Cost Build Budget: **${info.budgetBuild || '$0.00'}**\n` +
-        `* Total Spent to Date (Draws): **${info.totalSpent || '$0.00'}**\n` +
-        `* Net Working Capital Balance: **${info.capitalBalance || '$0.00'}**`
-      );
+      return `For **${activeProjectName}**, your hard cost budget is **${info.budgetBuild || '$0.00'}**, with **${info.totalSpent || '$0.00'}** spent to date and **${info.capitalBalance || '$0.00'}** working capital remaining.`;
     } else {
-      return (
-        `💰 **Dashboard Expenses**:\n\n` +
-        `No cached financial dashboard data found for **${activeProjectName}** yet.\n` +
-        `Open the **Dashboard** tab once to pull the latest budget, quotes, and payment numbers from your Google Sheet!`
-      );
+      return `No cached financial data found for **${activeProjectName}**. Open the Dashboard tab once to pull the latest numbers.`;
     }
   }
 
+  // Reminders
   if (raw.includes('reminder') || raw.includes('schedule') || raw.includes('today') || raw.includes('alarm')) {
-    if (pendingR.length === 0) return "⏰ **Today's Schedule**:\nYou have zero pending field reminders scheduled for today!";
-    return (
-      `⏰ **Field Reminders for Today** (${pendingR.length} total):\n\n` +
-      pendingR
-        .map((r, idx) => {
-          const t = r.targetDate ? new Date(r.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible';
-          return `${idx + 1}. **[${r.lot || activeProjectName}]** ${r.title} — *${t}*`;
-        })
-        .join('\n')
-    );
+    if (pendingR.length === 0) return `You have zero pending field reminders scheduled for today on ${activeProjectName}.`;
+    return `You have ${pendingR.length} reminder${pendingR.length === 1 ? '' : 's'} for today on ${activeProjectName}: ${pendingR.map(r => r.title).join(', ')}.`;
   }
 
+  // Subcontractor calls
   if (
     (raw.includes('call') ||
       raw.includes('phone') ||
@@ -881,27 +729,16 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
     !raw.includes('paid') &&
     !raw.includes('spent')
   ) {
-    if (pendingS.length === 0) return "📞 **Trade Calls**:\nZero pending subcontractor calls for this lot right now!";
-    return (
-      `📞 **Pending Trade Calls — ${activeProjectName}** (${pendingS.length} total):\n\n` +
-      pendingS.map((s, idx) => `${idx + 1}. **${s.subcontractor || 'Trade'}**: "${s.title}"`).join('\n')
-    );
+    if (pendingS.length === 0) return `Zero pending subcontractor calls for ${activeProjectName} right now.`;
+    return `You have ${pendingS.length} pending trade call${pendingS.length === 1 ? '' : 's'} on ${activeProjectName}: ${pendingS.map(s => `${s.subcontractor || 'Trade'} (${s.title})`).join(', ')}.`;
   }
 
+  // Watch-outs
   if (raw.includes('watch') || raw.includes('risk') || raw.includes('hazard') || raw.includes('issue') || raw.includes('defect')) {
-    if (pendingW.length === 0) return `🎉 **Site Watch-Outs**:\nZero active watch-outs for ${activeProjectName}!`;
-    return (
-      `🚨 **Active Site Watch-Outs — ${activeProjectName}** (${pendingW.length} total):\n\n` +
-      pendingW.map((w, idx) => `${idx + 1}. **${w.title}**`).join('\n')
-    );
+    if (pendingW.length === 0) return `Zero active watch-outs for ${activeProjectName}.`;
+    return `You have ${pendingW.length} active watch-out${pendingW.length === 1 ? '' : 's'} on ${activeProjectName}: ${pendingW.map(w => w.title).join(', ')}.`;
   }
 
-  return (
-    `👋 **Adepec Builder Brain (${activeProjectName})**:\n` +
-    `You have **${projectItems.filter((i) => i.status === 'pending').length} active items** on site:\n` +
-    `• 🚨 **${pendingW.length} Watch-Outs**\n` +
-    `• 👷 **${pendingS.length} Trade Calls**\n` +
-    `• ⏰ **${pendingR.length} Reminders**\n\n` +
-    `Ask me anything: *"What did we pay $1,000 for?"*, *"How much spent on framing?"*, *"What reminders do I have today?"*, or *"Who do I need to call?"*.`
-  );
+  // Catch-all
+  return `I'm ready to help with ${activeProjectName}. What would you like to check on?`;
 }
