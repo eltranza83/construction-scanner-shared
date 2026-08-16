@@ -621,24 +621,10 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const handleFlagUncheckedSetup = () => {
     const unchecked = siteSetupProtocol.inspectionChecklist.filter((i) => !siteSetupChecks[i.id]);
     if (unchecked.length === 0) {
-      alert('All Site Setup items are complete! Zero watch-outs created.');
+      alert(`✅ All Site Setup items are marked complete for ${projectName}! Ready for lot mobilization.`);
       return;
     }
-    const newWatchouts = unchecked.map((item) => ({
-      id: 'b_watch_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      rawInput: `Lot Setup: ${item.text}`,
-      title: `Site Setup: ${item.text}`,
-      category: 'watchout',
-      targetDate: null,
-      lot: projectName,
-      subcontractor: 'Site Prep / Supplier',
-      priority: 'high',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      notes: `Pending lot mobilization requirement for ${projectName}.`
-    }));
-    setItems((prev) => [...newWatchouts, ...prev]);
-    alert(`Created ${unchecked.length} Site Setup Watch-Outs for ${projectName}!`);
+    alert(`⚠️ Notice: ${unchecked.length} Site Setup items remain unchecked for ${projectName}. Please verify these items before mobilizing trades.`);
   };
 
   const handleSMSSiteSetupPreNotes = () => {
