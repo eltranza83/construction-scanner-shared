@@ -535,7 +535,11 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
 
       if (isSpanish || aiLanguage === 'es') {
         utterance.lang = 'es-US';
-        const spanishVoice = availableVoices.find((v) => v.lang.startsWith('es'));
+        const spanishVoice =
+          availableVoices.find((v) => v.lang === 'es-MX' || v.lang === 'es-US' || v.lang === 'es-419') ||
+          availableVoices.find((v) => (v.name.includes('Mexico') || v.name.includes('Mexican') || v.name.includes('United States') || v.name.includes('Sabina') || v.name.includes('Raul') || v.name.includes('Jorge') || v.name.includes('Dalia') || v.name.includes('Paulina')) && v.lang.startsWith('es')) ||
+          availableVoices.find((v) => v.lang.startsWith('es') && !v.lang.includes('ES')) ||
+          availableVoices.find((v) => v.lang.startsWith('es'));
         if (spanishVoice) utterance.voice = spanishVoice;
       } else {
         utterance.lang = 'en-US';

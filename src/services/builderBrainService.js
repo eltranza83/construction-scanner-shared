@@ -676,7 +676,7 @@ Along with a short 1-sentence confirmation.
   // 2. Direct client fallback if API key is provided
   if (effectiveKey && effectiveKey.trim()) {
     const keyClean = effectiveKey.trim();
-    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-flash-latest'];
+    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
     for (const model of modelsToTry) {
       try {
         const controller = new AbortController();
