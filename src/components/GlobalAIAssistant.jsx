@@ -76,14 +76,22 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'));
         voices.sort((a, b) => {
-          const aGB = a.lang === 'en-GB' || a.lang.startsWith('en-GB') || a.name.includes('George') || a.name.includes('Daniel') || a.name.includes('Arthur');
-          const bGB = b.lang === 'en-GB' || b.lang.startsWith('en-GB') || b.name.includes('George') || b.name.includes('Daniel') || b.name.includes('Arthur');
+          const maleKeywords = ['George', 'Daniel', 'Arthur', 'David', 'Guy', 'Oliver', 'Ryan', 'James', 'Male', 'Jorge', 'Raul', 'Pablo', 'Alvaro', 'Carlos'];
+          const femaleKeywords = ['Zira', 'Susan', 'Hazel', 'Samantha', 'Karen', 'Victoria', 'Female', 'Sabina', 'Dalia', 'Paulina', 'Helena', 'Laura', 'Monica'];
+          const aMale = maleKeywords.some((k) => a.name.includes(k));
+          const bMale = maleKeywords.some((k) => b.name.includes(k));
+          if (aMale && !bMale) return -1;
+          if (!aMale && bMale) return 1;
+
+          const aFemale = femaleKeywords.some((k) => a.name.includes(k));
+          const bFemale = femaleKeywords.some((k) => b.name.includes(k));
+          if (aFemale && !bFemale) return 1;
+          if (!aFemale && bFemale) return -1;
+
+          const aGB = a.lang === 'en-GB' || a.lang.startsWith('en-GB');
+          const bGB = b.lang === 'en-GB' || b.lang.startsWith('en-GB');
           if (aGB && !bGB) return -1;
           if (!aGB && bGB) return 1;
-          const aNat = a.name.includes('Natural') || a.name.includes('Google') || a.name.includes('Neural');
-          const bNat = b.name.includes('Natural') || b.name.includes('Google') || b.name.includes('Neural');
-          if (aNat && !bNat) return -1;
-          if (!aNat && bNat) return 1;
           return 0;
         });
         setAvailableVoices(voices);
@@ -110,26 +118,25 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       window.speechSynthesis.cancel();
       const clean = text.replace(/[*_#🚨⏰👷📍•]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 0.98;
+      utterance.rate = 0.96;
+      utterance.pitch = 0.86; // Lower pitch for masculine, calm, refined J.A.R.V.I.S. resonance
 
       const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
 
       if (isSpanish || aiLanguage === 'es') {
         utterance.lang = 'es-US';
-        const spanishVoice =
-          availableVoices.find((v) => v.lang === 'es-MX' || v.lang === 'es-US' || v.lang === 'es-419') ||
-          availableVoices.find((v) => (v.name.includes('Mexico') || v.name.includes('Mexican') || v.name.includes('United States') || v.name.includes('Sabina') || v.name.includes('Raul') || v.name.includes('Jorge') || v.name.includes('Dalia') || v.name.includes('Paulina')) && v.lang.startsWith('es')) ||
-          availableVoices.find((v) => v.lang.startsWith('es') && !v.lang.includes('ES')) ||
+        const spanishMaleVoice =
+          availableVoices.find((v) => v.lang.startsWith('es') && (v.name.includes('Jorge') || v.name.includes('Raul') || v.name.includes('Pablo') || v.name.includes('Carlos') || v.name.includes('Alvaro') || v.name.includes('Enrique') || v.name.includes('Male'))) ||
+          availableVoices.find((v) => v.lang.startsWith('es') && !v.name.includes('Sabina') && !v.name.includes('Dalia') && !v.name.includes('Paulina') && !v.name.includes('Helena') && !v.name.includes('Laura') && !v.name.includes('Monica')) ||
           availableVoices.find((v) => v.lang.startsWith('es'));
-        if (spanishVoice) utterance.voice = spanishVoice;
+        if (spanishMaleVoice) utterance.voice = spanishMaleVoice;
       } else {
-        utterance.lang = 'en-GB';
-        const jarvisVoice =
-          availableVoices.find((v) => (v.lang === 'en-GB' || v.lang.startsWith('en-GB')) && (v.name.includes('George') || v.name.includes('Daniel') || v.name.includes('Arthur') || v.name.includes('Oliver') || v.name.includes('UK') || v.name.includes('British') || v.name.includes('Male'))) ||
-          availableVoices.find((v) => v.lang === 'en-GB' || v.lang.startsWith('en-GB')) ||
-          (selectedVoiceURI ? availableVoices.find((x) => x.voiceURI === selectedVoiceURI) : null) ||
+        utterance.lang = 'en-US';
+        const englishMaleVoice =
+          availableVoices.find((v) => v.lang.startsWith('en') && (v.name.includes('George') || v.name.includes('Daniel') || v.name.includes('Arthur') || v.name.includes('David') || v.name.includes('Guy') || v.name.includes('Oliver') || v.name.includes('Ryan') || v.name.includes('James') || v.name.includes('Mark') || v.name.includes('Male'))) ||
+          availableVoices.find((v) => v.lang.startsWith('en') && !v.name.includes('Zira') && !v.name.includes('Susan') && !v.name.includes('Hazel') && !v.name.includes('Samantha') && !v.name.includes('Karen') && !v.name.includes('Victoria') && !v.name.includes('Female')) ||
           availableVoices.find((v) => v.lang.startsWith('en'));
-        if (jarvisVoice) utterance.voice = jarvisVoice;
+        if (englishMaleVoice) utterance.voice = englishMaleVoice;
       }
       window.speechSynthesis.speak(utterance);
     } catch (e) {
