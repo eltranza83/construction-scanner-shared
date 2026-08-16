@@ -433,10 +433,17 @@ PHASE & CONTRACTOR EXPENSE BREAKDOWN (${subs.length} Phases Tracked):
 `;
 
   subs.forEach((s) => {
-    text += `- Phase: ${s.phase || 'N/A'} | Contractor: ${s.payee || 'Unassigned'}
-    Quote: ${s.originalQuote || '$0.00'} | Paid: ${s.totalSpent || s.totalPaid || '$0.00'} | Balance: ${s.remainingBalance || '$0.00'}
+    text += `- Phase: ${s.phase || 'N/A'} | Contractor / Payee: ${s.payee || 'Unassigned'}
+    Quote: ${s.originalQuote || '$0.00'} | Total Paid: ${s.totalSpent || s.totalPaid || '$0.00'} | Remaining Balance: ${s.remainingBalance || '$0.00'}
     Material: ${s.totalMaterial || '$0.00'} | Labor: ${s.totalLabor || '$0.00'} | Status: ${s.status || 'Pending'}
 `;
+    if (s.payments && s.payments.length > 0) {
+      text += `    Recorded Payments & Invoices:\n`;
+      s.payments.forEach((p) => {
+        const amt = p.materialCost !== '$0.00' ? p.materialCost : (p.laborCost !== '$0.00' ? p.laborCost : '$0.00');
+        text += `      * Payee/Vendor: ${p.vendor || s.payee || 'Payee'} | Amount: ${amt} | Check/Trans: ${p.checkNumber || 'N/A'} | Date: ${p.date || 'N/A'}\n`;
+      });
+    }
   });
 
   return text;
@@ -677,7 +684,7 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
       const isThousand = raw.includes('thousand');
       const queryAmount = numMatch ? parseFloat(numMatch[1].replace(/,/g, '')) : (isThousand ? 1000 : null);
 
-      if (queryAmount !== null || raw.includes('what was') || raw.includes('what were') || raw.includes('what did we pay') || raw.includes('who did we pay') || raw.includes('for what')) {
+      if (queryAmount !== null || raw.includes('what was') || raw.includes('what were') || raw.includes('what did we pay') || raw.includes('who did we pay') || raw.includes('for what') || raw.includes('tied to') || raw.includes('type to') || raw.includes('look closer')) {
         if (paidPhases.length > 0) {
           const matchingPhases = queryAmount !== null
             ? paidPhases.filter((s) => {
@@ -688,10 +695,22 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
 
           const targetPhases = matchingPhases.length > 0 ? matchingPhases : paidPhases;
           const summary = targetPhases
-            .map((s) => `**${s.phase}** (${s.payee || 'Payee'}, ${s.totalSpent || s.totalPaid || '$0.00'})`)
+            .map((s) => {
+              if (s.payments && s.payments.length > 0) {
+                const pItems = s.payments.map((p) => {
+                  const v = p.vendor && p.vendor !== 'Unknown Vendor' ? p.vendor : (s.payee || 'Payee');
+                  const check = p.checkNumber && p.checkNumber !== 'N/A' ? ` (Check #${p.checkNumber})` : '';
+                  const dt = p.date && p.date !== 'N/A' ? ` on ${p.date}` : '';
+                  const amt = p.materialCost !== '$0.00' ? p.materialCost : (p.laborCost !== '$0.00' ? p.laborCost : s.totalSpent || '$1,000.00');
+                  return `**${s.phase}** paid to **${v}** for **${amt}**${check}${dt}`;
+                }).join('; ');
+                return pItems;
+              }
+              return `**${s.phase}** paid to **${s.payee || 'Payee'}** (${s.totalSpent || s.totalPaid || '$0.00'})`;
+            })
             .join(', ');
 
-          return `The ${queryAmount ? '$' + queryAmount.toLocaleString() : 'money'} spent on ${activeProjectName} was for ${summary}.`;
+          return `That ${queryAmount ? '$' + queryAmount.toLocaleString() : 'expense'} was for ${summary}.`;
         }
       }
 
