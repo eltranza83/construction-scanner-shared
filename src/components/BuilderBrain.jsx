@@ -481,20 +481,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   }, []);
 
   useEffect(() => {
-    const loaded = loadBrainItems(projectId);
-    setItems(loaded);
-  }, [projectId]);
-
-  const isBrainMounted = useRef(false);
-  useEffect(() => {
-    if (!isBrainMounted.current) {
-      isBrainMounted.current = true;
-      return;
-    }
-    saveBrainItems(projectId, items);
-  }, [items, projectId]);
-
-  useEffect(() => {
     if (chatEndRef.current) {
       chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
     }
@@ -542,28 +528,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   }, []);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date();
-      items.forEach((item) => {
-        if (item.category === 'reminder' && item.status === 'pending' && item.targetDate && !item.alerted) {
-          const target = new Date(item.targetDate);
-          if (now >= target) {
-            playChimeAlert();
-            if ('Notification' in window && Notification.permission === 'granted') {
-              new Notification(`⏰ Adepec Field Alert: ${item.lot || projectName}`, {
-                body: item.title,
-                icon: '/vite.svg'
-              });
-            }
-            setItems((prev) => prev.map((i) => (i.id === item.id ? { ...i, alerted: true } : i)));
-          }
-        }
-      });
-    }, 15000);
-    return () => clearInterval(timer);
-  }, [items, projectName]);
-
   const speakText = (text) => {
     if (!speechEnabled || !('speechSynthesis' in window)) return;
     try {
@@ -597,35 +561,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   };
 
-  const handleQuickSubmit = (e) => {
-    e.preventDefault();
-    if (!quickInput.trim()) return;
-    const parsed = parseFieldNote(quickInput, projectName);
-    if (parsed) {
-      setItems((prev) => [parsed, ...prev]);
-      setQuickInput('');
-    }
-  };
-
-  const handleQuickVoice = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice mic is not supported on this browser.');
-      return;
-    }
-    const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
-    rec.onstart = () => setIsRecording(true);
-    rec.onresult = (e) => {
-      setQuickInput(e.results[0][0].transcript);
-      setIsRecording(false);
-    };
-    rec.onerror = () => setIsRecording(false);
-    rec.onend = () => setIsRecording(false);
-    rec.start();
-  };
-
   const executeAiMessage = async (queryText) => {
     if (!queryText || !queryText.trim() || aiLoading) return;
     const query = queryText.trim();
@@ -640,16 +575,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     setAiLoading(true);
 
     try {
-      const lower = query.toLowerCase();
-      // Client-side quick field item toggle if explicitly requested
-      if (lower.includes('mark') && (lower.includes('done') || lower.includes('complete'))) {
-        const match = items.find(
-          (i) => i.status === 'pending' && (lower.includes(i.title.toLowerCase()) || (i.subcontractor && lower.includes(i.subcontractor.toLowerCase())))
-        );
-        if (match) handleToggleDone(match.id);
-      }
-
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, aiMessages, driveTree);
+      const answer = await askGeminiBrain(query, [], projectName, apiKey, null, projectId, aiMessages, driveTree);
 
       let cleanAnswer = answer;
       const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);
