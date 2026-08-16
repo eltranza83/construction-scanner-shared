@@ -1,3 +1,5 @@
+import { INSPECTION_STAGES } from './inspectionService';
+
 const GLOBAL_PHASES_STORAGE_KEY = 'jobscan_global_phase_protocols_v4';
 const LEGACY_GLOBAL_PHASES_KEY = 'jobscan_global_phase_protocols_v3';
 const GLOBAL_SITE_SETUP_KEY = 'jobscan_global_site_setup_protocol_v2';
@@ -351,10 +353,11 @@ export function loadProjectSiteSetup(projectId) {
   return { protocol, checks };
 }
 
-export async function askGeminiBrain(query, items, activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = [], driveTree = null) {
+export async function askGeminiBrain(query, items = [], activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = [], driveTree = null) {
+  const safeItems = Array.isArray(items) ? items : [];
   // Strict Lot Filtering to prevent cross-lot data leaks
   const cleanLotName = activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const projectItems = items.filter((i) => {
+  const projectItems = safeItems.filter((i) => {
     if (!i.lot || i.lot === 'General Site') return true;
     const itemLot = i.lot.toLowerCase().replace(/[^a-z0-9]/g, '');
     return itemLot === cleanLotName || cleanLotName.includes(itemLot) || itemLot.includes(cleanLotName);

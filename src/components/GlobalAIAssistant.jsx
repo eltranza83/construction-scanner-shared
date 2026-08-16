@@ -151,20 +151,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     setIsLoading(true);
 
     try {
-      const lower = query.toLowerCase();
-      // Client-side quick field item toggle if explicitly requested
-      if (lower.includes('mark') && (lower.includes('done') || lower.includes('complete'))) {
-        const match = items.find(
-          (i) => i.status === 'pending' && (lower.includes(i.title.toLowerCase()) || (i.subcontractor && lower.includes(i.subcontractor.toLowerCase())))
-        );
-        if (match) {
-          const updated = items.map((i) => (i.id === match.id ? { ...i, status: 'completed' } : i));
-          setItems(updated);
-          saveBrainItems(projectId, updated);
-        }
-      }
-
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, messages, driveTree);
+      const answer = await askGeminiBrain(query, [], projectName, apiKey, null, projectId, messages, driveTree);
 
       let cleanAnswer = answer;
       const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);
