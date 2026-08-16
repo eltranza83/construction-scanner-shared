@@ -767,9 +767,9 @@ You are completely fluent in both English and Spanish. If the user writes or spe
         if (paidPhases.length > 0) {
           const matchingPhases = queryAmount !== null
             ? paidPhases.filter((s) => {
-                const spent = parseFloat(String(s.totalSpent || s.totalPaid || '0').replace(/[^0-9.]/g, ''));
-                return Math.abs(spent - queryAmount) < 0.01;
-              })
+              const spent = parseFloat(String(s.totalSpent || s.totalPaid || '0').replace(/[^0-9.]/g, ''));
+              return Math.abs(spent - queryAmount) < 0.01;
+            })
             : paidPhases;
 
           const targetPhases = matchingPhases.length > 0 ? matchingPhases : paidPhases;

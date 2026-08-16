@@ -568,6 +568,31 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
             >
               <button
                 type="button"
+                onClick={() => {
+                  const nextLang = aiLanguage === 'es' ? 'en' : 'es';
+                  setAiLanguage(nextLang);
+                  localStorage.setItem('jobscan_ai_lang', nextLang);
+                }}
+                style={{
+                  padding: '0 8px',
+                  backgroundColor: aiLanguage === 'es' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                  border: '1px solid ' + (aiLanguage === 'es' ? '#22c55e' : '#3b82f6'),
+                  color: aiLanguage === 'es' ? '#86efac' : '#93c5fd',
+                  borderRadius: '6px',
+                  fontSize: '0.75rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '2px',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Click to toggle Mic Language (English / Español)"
+              >
+                {aiLanguage === 'es' ? '🇲🇽 ES' : '🇺🇸 EN'}
+              </button>
+              <button
+                type="button"
                 onClick={handleVoiceInput}
                 style={{
                   padding: '0 12px',
@@ -585,7 +610,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
               </button>
               <input
                 type="text"
-                placeholder='Ask Gemini: "What reminders do I have today?" or "Who do I call?"...'
+                placeholder={aiLanguage === 'es' ? 'Pregunta en Español: "¿Cuánto balance con el pintor?"...' : 'Ask Gemini in English or Spanish...'}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 disabled={isLoading}
