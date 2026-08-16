@@ -123,7 +123,10 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     if (!speechEnabled || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      const clean = text.replace(/[*_#🚨⏰👷📍•]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
+      let clean = text.replace(/[*_#🚨⏰👷📍•]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
+      // Strip commas before and after 'Sir' / 'Señor' so speech synthesis doesn't insert an awkward dramatic pause
+      clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
+
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.rate = 0.98;
       utterance.pitch = 1.0; // Natural, clean pitch
