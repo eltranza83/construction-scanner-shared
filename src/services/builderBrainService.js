@@ -299,6 +299,26 @@ export function saveBrainItems(projectId = 'default', items = []) {
   }
 }
 
+const SPECS_STORAGE_PREFIX = 'jobscan_finish_specs_';
+
+export function loadProjectSpecs(projectId = 'default') {
+  try {
+    const raw = localStorage.getItem(`${SPECS_STORAGE_PREFIX}${projectId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    console.error('Error loading finish specs:', err);
+    return [];
+  }
+}
+
+export function saveProjectSpecs(projectId = 'default', specs = []) {
+  try {
+    localStorage.setItem(`${SPECS_STORAGE_PREFIX}${projectId}`, JSON.stringify(specs));
+  } catch (err) {
+    console.error('Error saving finish specs:', err);
+  }
+}
+
 export function playChimeAlert() {
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
@@ -479,6 +499,8 @@ export async function askGeminiBrain(query, items, activeProjectName = 'General 
   const siteSetupCompleted = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]).length;
   const siteSetupTotal = siteSetupProtocol.inspectionChecklist.length;
 
+  const projectSpecs = projectId ? loadProjectSpecs(projectId) : [];
+
   const systemInstruction = `You are J.A.R.V.I.S., the refined, highly intelligent AI Co-Pilot and Second Brain for custom home builder Adepec Homes.
 Active Lot / Project: ${activeProjectName}
 
@@ -504,13 +526,16 @@ ${pendingS.map((s) => `  * [${s.lot || activeProjectName}] Call ${s.subcontracto
 - Scheduled Field Reminders (${pendingR.length}):
 ${pendingR.map((r) => `  * [${r.lot || activeProjectName}] ${r.title} (Target: ${r.targetDate ? new Date(r.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible'})`).join('\n') || '  (None)'}
 
-3. FINANCIALS, BUDGETS, QUOTES & TRANSACTION INVOICES:
+3. RECORDED HOMEOWNER FINISH SPECS & PAINT SCHEDULE (${projectSpecs.length}):
+${projectSpecs.map((s) => `  * [${s.category || 'Spec'}] ${s.location || 'General'}: ${s.brand ? s.brand + ' ' : ''}${s.code || s.title || ''}${s.sheen ? ' (' + s.sheen + ')' : ''}${s.notes ? ' - Notes: ' + s.notes : ''}`).join('\n') || '  (No finishes logged yet)'}
+
+4. FINANCIALS, BUDGETS, QUOTES & TRANSACTION INVOICES:
 ${financialContext}
 
-4. GOOGLE DRIVE PROJECT FOLDERS & FILES:
+5. GOOGLE DRIVE PROJECT FOLDERS & FILES:
 ${driveContext}
 
-5. CITY INSPECTION STAGES & PROTOCOLS:
+6. CITY INSPECTION STAGES & PROTOCOLS:
 ${INSPECTION_STAGES.map((s) => `- ${s.name} (${s.shortName}): ${s.description}`).join('\n')}
 
 CRITICAL BEHAVIOR & ACCURACY RULES:
@@ -563,6 +588,15 @@ The Google Sheet / spreadsheet in the project folder contains master bookkeeping
 - You are PERMANENTLY FORBIDDEN from ever editing, modifying, writing to, or deleting any Google Sheet or spreadsheet file.
 - You have READ-ONLY permission to answer financial and budget questions.
 - If requested to modify or delete a spreadsheet, state that spreadsheets are permanently protected in read-only mode.
+
+12. FINISH SELECTIONS & PAINT SCHEDULE RECORDING:
+You HAVE FULL PERMISSIONS to record finish selections, paint colors & codes, tile names, grout colors, countertops, and fixtures directly into the project's Homeowner Finish Schedule & dedicated Google Sheet!
+- When the user tells you about paint colors, tile, grout, countertops, fixtures, or finishes (in English or Spanish, e.g. "for Lot 3, walls are SW Pure White 7005 flat and cabinets are Extra White 7006", "el piso del baño principal es Daltile Calacatta Gold"):
+You MUST include this exact tag in your response:
+[[ACTION:ADD_SPEC:{"category":"Paint","location":"Walls","brand":"Sherwin-Williams","code":"Pure White SW 7005","sheen":"Flat","supplier":"Sherwin-Williams","notes":""}]]
+If multiple items are given in a single prompt, you can output multiple [[ACTION:ADD_SPEC:...]] tags!
+Categories must be one of: "Paint", "Tile & Grout", "Countertops & Flooring", "Fixtures & Hardware", "Exterior", "Appliances & Custom", or "General".
+Along with a concise confirmation (e.g. "Recorded **Pure White (SW 7005)** for the walls in the Finish Schedule & Google Sheet, Sir!").
 `;
 
   // Build multi-turn conversational history

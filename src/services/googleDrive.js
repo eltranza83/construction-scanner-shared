@@ -631,5 +631,97 @@ export async function trashDriveFileOrFolder(accessToken, fileOrFolderId) {
   return true;
 }
 
+/**
+ * Creates/locates "Finish Specs & Buyer Handover" folder and syncs the finish specs CSV/Sheet.
+ */
+export async function syncFinishSpecsToDrive(accessToken, projectFolderId, projectName, specsList = []) {
+  if (!accessToken || !projectFolderId) return null;
+  try {
+    const folderName = 'Finish Specs & Buyer Handover';
+    const safeParent = escapeDriveQueryString(projectFolderId);
+
+    // 1. Locate or create "Finish Specs & Buyer Handover" folder
+    const folderQuery = `'${safeParent}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const searchUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(folderQuery)}&fields=files(id,name)&pageSize=1`;
+    const folderRes = await fetch(searchUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const folderData = await folderRes.json();
+
+    let finishFolderId = folderData.files?.[0]?.id;
+    if (!finishFolderId) {
+      const created = await createFolder(accessToken, folderName, projectFolderId);
+      finishFolderId = created?.id;
+    }
+    if (!finishFolderId) return null;
+
+    // 2. Format CSV content
+    const headers = ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'];
+    const rows = specsList.map((s) => [
+      `"${(s.category || 'General').replace(/"/g, '""')}"`,
+      `"${(s.location || '').replace(/"/g, '""')}"`,
+      `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
+      `"${(s.code || s.title || '').replace(/"/g, '""')}"`,
+      `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
+      `"${(s.notes || '').replace(/"/g, '""')}"`,
+      `"${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}"`
+    ]);
+    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
+    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const fileName = `Homeowner Finishes & Specs — ${projectName || 'Project'}.csv`;
+
+    // 3. Check if file already exists in finishFolderId
+    const safeSubParent = escapeDriveQueryString(finishFolderId);
+    const fileQuery = `'${safeSubParent}' in parents and name='${escapeDriveQueryString(fileName)}' and trashed=false`;
+    const fileSearchRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(fileQuery)}&fields=files(id,name,webViewLink)&pageSize=1`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const fileData = await fileSearchRes.json();
+    const existingFile = fileData.files?.[0];
+
+    if (existingFile?.id) {
+      // Overwrite file content
+      const patchRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'text/csv'
+        },
+        body: csvBlob
+      });
+      if (patchRes.ok) {
+        return {
+          folderId: finishFolderId,
+          fileId: existingFile.id,
+          webViewLink: existingFile.webViewLink
+        };
+      }
+    }
+
+    // Upload new file to finishFolderId
+    const uploaded = await uploadFileToDrive(accessToken, finishFolderId, fileName, 'text/csv', csvBlob, 'Adepec Finish Selections & Specs');
+    return {
+      folderId: finishFolderId,
+      fileId: uploaded?.id,
+      webViewLink: uploaded?.webViewLink
+    };
+  } catch (err) {
+    console.warn('Error syncing finish specs to Drive:', err);
+    return null;
+  }
+}
+
+/**
+ * Uploads/syncs the generated Buyer Handover PDF to the "Finish Specs & Buyer Handover" folder.
+ */
+export async function uploadBuyerHandoverPdfToDrive(accessToken, finishFolderId, projectName, pdfBlob) {
+  if (!accessToken || !finishFolderId || !pdfBlob) return null;
+  try {
+    const fileName = `Homeowner Handover & Warranty Binder — ${projectName || 'Project'}.pdf`;
+    return await uploadFileToDrive(accessToken, finishFolderId, fileName, 'application/pdf', pdfBlob, 'Adepec Homes Homeowner Handover Binder');
+  } catch (err) {
+    console.warn('Error uploading Buyer Handover PDF to Drive:', err);
+    return null;
+  }
+}
+
 
 

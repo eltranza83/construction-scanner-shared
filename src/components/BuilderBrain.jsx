@@ -27,11 +27,18 @@ import {
   RotateCcw,
   Flag,
   ListTodo,
-  Loader2
+  Loader2,
+  Palette,
+  FileText,
+  ExternalLink,
+  Download,
+  Printer
 } from 'lucide-react';
 import {
   loadBrainItems,
   saveBrainItems,
+  loadProjectSpecs,
+  saveProjectSpecs,
   parseFieldNote,
   playChimeAlert,
   askGeminiBrain,
@@ -44,7 +51,14 @@ import {
   loadProjectDriveTree,
   saveProjectDriveTree
 } from '../services/builderBrainService';
-import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder } from '../services/googleDrive';
+import {
+  fetchProjectDriveTree,
+  createFolder,
+  trashDriveFileOrFolder,
+  syncFinishSpecsToDrive,
+  uploadBuyerHandoverPdfToDrive
+} from '../services/googleDrive';
+import { generateBuyerHandoverPdf } from '../services/buyerHandoverPdfGenerator';
 
 export const DEFAULT_SITE_SETUP_PROTOCOL = {
   id: 'site_setup_protocol',
@@ -368,11 +382,31 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
   const [items, setItems] = useState([]);
-  const [activeSubTab, setActiveSubTab] = useState('all'); // 'all' | 'site_setup' | 'phases' | 'watchout' | 'subcontractor' | 'reminder'
+  const [activeSubTab, setActiveSubTab] = useState('all'); // 'all' | 'site_setup' | 'phases' | 'watchout' | 'subcontractor' | 'reminder' | 'specs'
   const [quickInput, setQuickInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
+
+  // Finish Selections & Specs state
+  const [specs, setSpecs] = useState(() => loadProjectSpecs(projectId));
+  const [specsCategoryFilter, setSpecsCategoryFilter] = useState('all');
+  const [showAddSpecModal, setShowAddSpecModal] = useState(false);
+  const [newSpecForm, setNewSpecForm] = useState({
+    category: 'Paint',
+    location: '',
+    brand: 'Sherwin-Williams',
+    code: '',
+    sheen: 'Flat/Eggshell',
+    notes: ''
+  });
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
+  const [finishDriveLink, setFinishDriveLink] = useState(null);
+
+  useEffect(() => {
+    const loadedSpecs = loadProjectSpecs(projectId);
+    setSpecs(loadedSpecs);
+  }, [projectId]);
 
   useEffect(() => {
     if (googleToken && activeProject?.folderId) {
@@ -707,6 +741,42 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         }
       }
 
+      // 4. Add Finish Selection / Paint Spec Action
+      const actionAddSpecMatches = [...answer.matchAll(/\[\[ACTION:ADD_SPEC:([^\]]+)\]\]/g)];
+      if (actionAddSpecMatches.length > 0) {
+        const newSpecs = [];
+        actionAddSpecMatches.forEach((m) => {
+          try {
+            const data = JSON.parse(m[1]);
+            newSpecs.push({
+              id: 'spec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+              category: data.category || 'Paint',
+              location: data.location || 'General',
+              brand: data.brand || data.supplier || '',
+              code: data.code || data.title || '',
+              sheen: data.sheen || data.specs || '',
+              notes: data.notes || '',
+              createdAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.warn('Failed to parse ADD_SPEC payload:', err);
+          }
+        });
+        if (newSpecs.length > 0) {
+          setSpecs((prev) => {
+            const updated = [...newSpecs, ...prev];
+            saveProjectSpecs(projectId, updated);
+            if (googleToken && activeProject?.folderId) {
+              syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated).then((res) => {
+                if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
+              });
+            }
+            return updated;
+          });
+        }
+        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_SPEC:[^\]]+\]\]/g, '').trim();
+      }
+
       const aiMsg = {
         sender: 'ai',
         text: cleanAnswer,
@@ -853,6 +923,72 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     if (window.confirm('Reset Site Setup protocol back to standard master defaults?')) {
       const defs = resetGlobalSiteSetupProtocol(DEFAULT_SITE_SETUP_PROTOCOL);
       setSiteSetupProtocol(defs);
+    }
+  };
+
+  const handleAddSpecSubmit = (e) => {
+    e.preventDefault();
+    if (!newSpecForm.code.trim() && !newSpecForm.location.trim()) return;
+    const newSpec = {
+      id: 'spec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+      category: newSpecForm.category || 'Paint',
+      location: newSpecForm.location.trim() || 'General',
+      brand: newSpecForm.brand.trim() || '',
+      code: newSpecForm.code.trim() || '',
+      sheen: newSpecForm.sheen.trim() || '',
+      notes: newSpecForm.notes.trim() || '',
+      createdAt: new Date().toISOString()
+    };
+    const updated = [newSpec, ...specs];
+    setSpecs(updated);
+    saveProjectSpecs(projectId, updated);
+    if (googleToken && activeProject?.folderId) {
+      syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated).then((res) => {
+        if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
+      });
+    }
+    setNewSpecForm({ category: 'Paint', location: '', brand: 'Sherwin-Williams', code: '', sheen: 'Flat/Eggshell', notes: '' });
+    setShowAddSpecModal(false);
+  };
+
+  const handleDeleteSpec = (specId, specTitle) => {
+    if (!window.confirm(`⚠️ Confirm Deletion:\n\nAre you sure you want to delete this finish spec?\n\n"${specTitle}"`)) {
+      return;
+    }
+    const updated = specs.filter((s) => s.id !== specId);
+    setSpecs(updated);
+    saveProjectSpecs(projectId, updated);
+    if (googleToken && activeProject?.folderId) {
+      syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated);
+    }
+  };
+
+  const handlePrintBuyerPdf = async () => {
+    try {
+      setIsGeneratingPdf(true);
+      const pdf = await generateBuyerHandoverPdf({
+        projectName: projectName,
+        projectAddress: activeProject?.address || '',
+        specs: specs,
+        companyName: 'ADEPEC HOMES'
+      });
+
+      // 1. Download/Open locally
+      pdf.save(`Homeowner_Finishes_${projectName.replace(/\s+/g, '_')}.pdf`);
+
+      // 2. Upload to Drive folder if connected
+      if (googleToken && activeProject?.folderId) {
+        const syncRes = await syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, specs);
+        if (syncRes?.folderId) {
+          const pdfBlob = pdf.output('blob');
+          await uploadBuyerHandoverPdfToDrive(googleToken, syncRes.folderId, projectName, pdfBlob);
+        }
+      }
+    } catch (err) {
+      console.error('Error generating buyer PDF:', err);
+      alert('Could not generate PDF: ' + err.message);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -1451,8 +1587,490 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           >
             Reminders ({pendingReminders.length})
           </button>
+
+          <button
+            onClick={() => setActiveSubTab('specs')}
+            style={{
+              flex: 1.2,
+              padding: '8px 6px',
+              borderRadius: '6px',
+              border: 'none',
+              backgroundColor: activeSubTab === 'specs' ? 'var(--color-amber-500)' : 'transparent',
+              color: activeSubTab === 'specs' ? '#000' : 'var(--color-zinc-400)',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px',
+              whiteSpace: 'nowrap'
+            }}
+          >
+            <Palette size={13} />
+            <span>Specs & Finishes ({specs.length})</span>
+          </button>
         </div>
       </div>
+
+      {/* DEDICATED FINISHES & SPECS VIEW */}
+      {activeSubTab === 'specs' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+          {/* Header Action Card */}
+          <div
+            style={{
+              backgroundColor: 'var(--color-zinc-900)',
+              border: '1px solid var(--color-zinc-800)',
+              borderLeft: '4px solid var(--color-amber-500)',
+              borderRadius: '10px',
+              padding: '16px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '12px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '10px' }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 800, color: 'var(--color-zinc-100)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Palette size={18} style={{ color: 'var(--color-amber-400)' }} />
+                  Homeowner Finish Schedule & Specs
+                </h3>
+                <p style={{ margin: '4px 0 0', fontSize: '0.78rem', color: 'var(--color-zinc-400)' }}>
+                  Paint colors, Sherwin-Williams codes, tile, grout, countertops, and fixtures recorded for <strong>{projectName}</strong>.
+                </p>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                <button
+                  onClick={handlePrintBuyerPdf}
+                  disabled={isGeneratingPdf || specs.length === 0}
+                  style={{
+                    backgroundColor: 'var(--color-amber-500)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: specs.length === 0 ? 'not-allowed' : 'pointer',
+                    opacity: specs.length === 0 ? 0.5 : 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Print/Download official Homeowner Warranty & Finishes PDF document"
+                >
+                  {isGeneratingPdf ? <Loader2 size={15} className="animate-spin" /> : <Printer size={15} />}
+                  <span>Print Buyer PDF</span>
+                </button>
+
+                <button
+                  onClick={() => setShowAddSpecModal(true)}
+                  style={{
+                    backgroundColor: 'var(--color-zinc-800)',
+                    color: 'var(--color-zinc-200)',
+                    border: '1px solid var(--color-zinc-700)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  <Plus size={15} />
+                  <span>Add Finish</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Google Drive Subfolder Status Info */}
+            <div
+              style={{
+                backgroundColor: 'rgba(255, 255, 255, 0.03)',
+                borderRadius: '8px',
+                padding: '8px 12px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                fontSize: '0.75rem',
+                color: 'var(--color-zinc-400)',
+                border: '1px solid var(--color-zinc-800)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileText size={14} style={{ color: 'var(--color-amber-400)' }} />
+                <span>Google Drive Subfolder: <strong>Finish Specs & Buyer Handover</strong></span>
+              </div>
+              {finishDriveLink ? (
+                <a
+                  href={finishDriveLink}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  style={{ color: 'var(--color-amber-400)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}
+                >
+                  Open Sheet <ExternalLink size={12} />
+                </a>
+              ) : (
+                <span style={{ color: 'var(--color-zinc-500)' }}>Auto-syncs on update</span>
+              )}
+            </div>
+          </div>
+
+          {/* Category Filter Pills */}
+          <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
+            {[
+              { id: 'all', label: `All (${specs.length})` },
+              { id: 'Paint', label: `🎨 Paint (${specs.filter((s) => (s.category || '').toLowerCase() === 'paint').length})` },
+              { id: 'Tile & Grout', label: `🧱 Tile & Grout (${specs.filter((s) => (s.category || '').toLowerCase().includes('tile')).length})` },
+              { id: 'Countertops & Flooring', label: `🪚 Countertops/Flooring (${specs.filter((s) => (s.category || '').toLowerCase().includes('counter') || (s.category || '').toLowerCase().includes('floor')).length})` },
+              { id: 'Fixtures & Hardware', label: `💡 Fixtures (${specs.filter((s) => (s.category || '').toLowerCase().includes('fixture')).length})` },
+              { id: 'Exterior', label: `🏡 Exterior (${specs.filter((s) => (s.category || '').toLowerCase() === 'exterior').length})` },
+              { id: 'Appliances & Custom', label: `📝 Custom (${specs.filter((s) => (s.category || '').toLowerCase().includes('appliance') || (s.category || '').toLowerCase() === 'general').length})` }
+            ].map((f) => (
+              <button
+                key={f.id}
+                onClick={() => setSpecsCategoryFilter(f.id)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '20px',
+                  border: '1px solid',
+                  borderColor: specsCategoryFilter === f.id ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
+                  backgroundColor: specsCategoryFilter === f.id ? 'rgba(245, 158, 11, 0.15)' : 'var(--color-zinc-900)',
+                  color: specsCategoryFilter === f.id ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Finishes List / Cards */}
+          {(() => {
+            const filtered = specs.filter((s) => {
+              if (specsCategoryFilter === 'all') return true;
+              const cat = (s.category || '').toLowerCase();
+              const f = specsCategoryFilter.toLowerCase();
+              if (f === 'paint') return cat === 'paint';
+              if (f.includes('tile')) return cat.includes('tile');
+              if (f.includes('counter')) return cat.includes('counter') || cat.includes('floor');
+              if (f.includes('fixture')) return cat.includes('fixture');
+              if (f === 'exterior') return cat === 'exterior';
+              return cat.includes('appliance') || cat === 'general';
+            });
+
+            if (filtered.length === 0) {
+              return (
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-zinc-900)',
+                    border: '1px dashed var(--color-zinc-800)',
+                    borderRadius: '10px',
+                    padding: '32px 20px',
+                    textAlign: 'center',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '10px'
+                  }}
+                >
+                  <Palette size={32} style={{ color: 'var(--color-zinc-600)' }} />
+                  <p style={{ margin: 0, fontSize: '0.88rem', fontWeight: 700, color: 'var(--color-zinc-300)' }}>
+                    No finish selections recorded yet for {projectName}
+                  </p>
+                  <p style={{ margin: 0, fontSize: '0.78rem', color: 'var(--color-zinc-500)', maxWidth: '400px', lineHeight: 1.4 }}>
+                    Tap the mic and tell J.A.R.V.I.S. (e.g. <em>"For Lot 3, walls are SW Pure White 7005 flat and cabinets are Extra White 7006"</em>) or tap <strong>Add Finish</strong> above.
+                  </p>
+                </div>
+              );
+            }
+
+            return (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
+                {filtered.map((s) => (
+                  <div
+                    key={s.id}
+                    style={{
+                      backgroundColor: 'var(--color-zinc-900)',
+                      border: '1px solid var(--color-zinc-800)',
+                      borderTop: '3px solid var(--color-amber-500)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '8px',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span
+                        style={{
+                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                          color: 'var(--color-amber-400)',
+                          fontSize: '0.7rem',
+                          fontWeight: 800,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          textTransform: 'uppercase'
+                        }}
+                      >
+                        {s.category || 'Spec'}
+                      </span>
+                      <button
+                        onClick={() => handleDeleteSpec(s.id, `${s.location}: ${s.code || s.title || ''}`)}
+                        style={{
+                          background: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-zinc-500)',
+                          cursor: 'pointer',
+                          padding: '2px'
+                        }}
+                        title="Delete Spec"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    <div>
+                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', textTransform: 'uppercase' }}>
+                        📍 {s.location || 'General Area'}
+                      </div>
+                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-100)', marginTop: '2px' }}>
+                        {s.brand ? `${s.brand} — ` : ''}{s.code || s.title || 'Unspecified'}
+                      </div>
+                    </div>
+
+                    {(s.sheen || s.specs) && (
+                      <div style={{ fontSize: '0.78rem', color: 'var(--color-zinc-300)', backgroundColor: 'var(--color-zinc-950)', padding: '4px 8px', borderRadius: '4px' }}>
+                        <strong>Finish / Specs:</strong> {s.sheen || s.specs}
+                      </div>
+                    )}
+
+                    {s.notes && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontStyle: 'italic' }}>
+                        "{s.notes}"
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ADD FINISH SPEC MODAL */}
+      {showAddSpecModal && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(0, 0, 0, 0.75)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '16px'
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: 'var(--color-zinc-900)',
+              border: '1px solid var(--color-zinc-800)',
+              borderTop: '4px solid var(--color-amber-500)',
+              borderRadius: '12px',
+              padding: '20px',
+              maxWidth: '460px',
+              width: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '14px'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--color-zinc-100)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Palette size={18} style={{ color: 'var(--color-amber-400)' }} />
+                Add Finish Selection for {projectName}
+              </h3>
+              <button
+                onClick={() => setShowAddSpecModal(false)}
+                style={{ background: 'transparent', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <form onSubmit={handleAddSpecSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Category</label>
+                <select
+                  value={newSpecForm.category}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, category: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                >
+                  <option value="Paint">🎨 Paint & Stains</option>
+                  <option value="Tile & Grout">🧱 Tile, Grout & Stone</option>
+                  <option value="Countertops & Flooring">🪚 Countertops & Flooring</option>
+                  <option value="Fixtures & Hardware">💡 Plumbing & Electrical Fixtures</option>
+                  <option value="Exterior">🏡 Exterior & Roofing</option>
+                  <option value="Appliances & Custom">📝 Appliances & Custom</option>
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Room / Surface Location</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Interior Walls, Kitchen Island, Master Bath Shower"
+                  value={newSpecForm.location}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, location: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Brand / Manufacturer / Store</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Sherwin-Williams, Daltile, Floor & Decor, Ferguson"
+                  value={newSpecForm.brand}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, brand: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Color Name / Code # / Model</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Pure White SW 7005, Cascading Waters 12x24"
+                  value={newSpecForm.code}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, code: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                  required
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Sheen / Size / Grout Specs</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Flat/Eggshell, Satin, Polished, Custom Polyblend Frost Grout"
+                  value={newSpecForm.sheen}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, sheen: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Additional Notes (Optional)</label>
+                <input
+                  type="text"
+                  placeholder="e.g. Store #124, 4 extra boxes in garage, receipt in Drive"
+                  value={newSpecForm.notes}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, notes: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '8px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.85rem',
+                    marginTop: '4px'
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowAddSpecModal(false)}
+                  style={{
+                    backgroundColor: 'transparent',
+                    border: '1px solid var(--color-zinc-700)',
+                    color: 'var(--color-zinc-300)',
+                    borderRadius: '6px',
+                    padding: '8px 14px',
+                    fontSize: '0.8rem',
+                    cursor: 'pointer'
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    backgroundColor: 'var(--color-amber-500)',
+                    color: '#000',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '8px 16px',
+                    fontSize: '0.8rem',
+                    fontWeight: 800,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Save Finish Spec
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* DEDICATED SITE SETUP TAB VIEW (Exact same design as Inspection Sections) */}
       {activeSubTab === 'site_setup' && (

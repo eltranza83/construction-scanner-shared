@@ -15,12 +15,14 @@ import {
 import {
   loadBrainItems,
   saveBrainItems,
+  loadProjectSpecs,
+  saveProjectSpecs,
   parseFieldNote,
   askGeminiBrain,
   loadProjectDriveTree,
   saveProjectDriveTree
 } from '../services/builderBrainService';
-import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder } from '../services/googleDrive';
+import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder, syncFinishSpecsToDrive } from '../services/googleDrive';
 
 export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
@@ -259,6 +261,38 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
             });
           }
         }
+      }
+
+      // 4. Add Finish Selection / Paint Spec Action
+      const actionAddSpecMatches = [...answer.matchAll(/\[\[ACTION:ADD_SPEC:([^\]]+)\]\]/g)];
+      if (actionAddSpecMatches.length > 0) {
+        const existingSpecs = loadProjectSpecs(projectId);
+        const newSpecs = [];
+        actionAddSpecMatches.forEach((m) => {
+          try {
+            const data = JSON.parse(m[1]);
+            newSpecs.push({
+              id: 'spec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+              category: data.category || 'Paint',
+              location: data.location || 'General',
+              brand: data.brand || data.supplier || '',
+              code: data.code || data.title || '',
+              sheen: data.sheen || data.specs || '',
+              notes: data.notes || '',
+              createdAt: new Date().toISOString()
+            });
+          } catch (err) {
+            console.warn('Failed to parse ADD_SPEC payload:', err);
+          }
+        });
+        if (newSpecs.length > 0) {
+          const updatedSpecs = [...newSpecs, ...existingSpecs];
+          saveProjectSpecs(projectId, updatedSpecs);
+          if (googleToken && activeProject?.folderId) {
+            syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updatedSpecs);
+          }
+        }
+        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_SPEC:[^\]]+\]\]/g, '').trim();
       }
 
       const aiMsg = {
