@@ -308,59 +308,6 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
             {/* Settings Drawer */}
             {showSettings && (
               <div style={{ padding: '14px', backgroundColor: 'var(--color-zinc-950)', borderBottom: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {/* API Key Input */}
-                <div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px' }}>
-                    <label style={{ fontSize: '0.78rem', fontWeight: 800, color: 'var(--color-amber-500)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                      🔑 Google Gemini API Key (For Full AI Intelligence):
-                    </label>
-                    <a
-                      href="https://aistudio.google.com/app/apikey"
-                      target="_blank"
-                      rel="noreferrer"
-                      style={{ fontSize: '0.72rem', color: '#60a5fa', textDecoration: 'underline' }}
-                    >
-                      Get Free Key ↗
-                    </a>
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px' }}>
-                    <input
-                      type="password"
-                      placeholder="Paste your Gemini API key (AIzaSy...)"
-                      value={apiKey}
-                      onChange={(e) => setApiKey(e.target.value)}
-                      style={{
-                        flex: 1,
-                        padding: '6px 10px',
-                        borderRadius: '6px',
-                        backgroundColor: 'var(--color-zinc-900)',
-                        border: '1px solid ' + (apiKey ? 'rgba(16, 185, 129, 0.4)' : 'var(--color-zinc-700)'),
-                        color: 'var(--color-zinc-100)',
-                        fontSize: '0.82rem',
-                        outline: 'none'
-                      }}
-                    />
-                    <button
-                      onClick={() => {
-                        localStorage.setItem('jobscan_gemini_key', apiKey.trim());
-                        alert(apiKey.trim() ? '✅ Gemini API Key Saved! Full AI is active.' : 'API Key cleared.');
-                      }}
-                      style={{
-                        padding: '0 12px',
-                        backgroundColor: 'var(--color-amber-500)',
-                        color: '#000',
-                        border: 'none',
-                        borderRadius: '6px',
-                        fontWeight: 800,
-                        fontSize: '0.75rem',
-                        cursor: 'pointer'
-                      }}
-                    >
-                      Save
-                    </button>
-                  </div>
-                </div>
-
                 {/* Voice Selector */}
                 <div>
                   <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '4px' }}>
