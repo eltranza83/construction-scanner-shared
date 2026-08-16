@@ -592,6 +592,9 @@ Remember the previous messages in the chat. If the user asks a follow-up ("what 
 
 5. SPEECH RECOGNITION TOLERANCE:
 Understand field voice-dictation typos (e.g. "lottery" = "Lot 3", "type to" = "tied to", "foresight" = "four site / site setup") without correcting the user.
+
+6. FULL BILINGUAL ENGLISH & SPANISH SUPPORT:
+You are completely fluent in both English and Spanish. If the user writes or speaks in Spanish (e.g. "¿Cuánto hemos gastado?", "¿Quién es el plomero?", "Buenos días", "¿Qué recordatorios hay para hoy?"), respond naturally, professionally, and fluently in SPANISH using the exact same concise 1-2 sentence rules. Always automatically match the language (English or Spanish) the user is communicating in.
 `;
 
   // Build multi-turn conversational history

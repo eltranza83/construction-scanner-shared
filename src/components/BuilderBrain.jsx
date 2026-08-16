@@ -436,30 +436,33 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [availableVoices, setAvailableVoices] = useState([]);
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
+  const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
   const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_gemini_key') || '');
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef(null);
 
-  // Auto-sync phase templates on mount
   useEffect(() => {
     const loadedPhases = loadGlobalPhases(DEFAULT_CONSTRUCTION_PHASES);
     setPhases(loadedPhases);
   }, []);
 
-  // Load items
   useEffect(() => {
     const loaded = loadBrainItems(projectId);
     setItems(loaded);
   }, [projectId]);
 
-  // Save items on update
   useEffect(() => {
     if (items.length > 0) {
       saveBrainItems(projectId, items);
     }
   }, [items, projectId]);
 
-  // Load site setup checks when project changes
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [aiMessages, aiLoading]);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem('jobscan_sitesetup_checks_' + projectId);
@@ -475,11 +478,10 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     localStorage.setItem('jobscan_sitesetup_checks_' + projectId, JSON.stringify(next));
   };
 
-  // Load natural voices
   useEffect(() => {
     const loadVoices = () => {
       if ('speechSynthesis' in window) {
-        const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en'));
+        const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'));
         voices.sort((a, b) => {
           const aNat = a.name.includes('Natural') || a.name.includes('Google') || a.name.includes('Neural');
           const bNat = b.name.includes('Natural') || b.name.includes('Google') || b.name.includes('Neural');
@@ -499,7 +501,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   }, []);
 
-  // Reminder alert checker
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date();
@@ -529,9 +530,19 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       const clean = text.replace(/[*_#🚨⏰👷📍•]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.rate = 0.98;
-      if (selectedVoiceURI && availableVoices.length > 0) {
-        const v = availableVoices.find((x) => x.voiceURI === selectedVoiceURI);
-        if (v) utterance.voice = v;
+
+      const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
+
+      if (isSpanish || aiLanguage === 'es') {
+        utterance.lang = 'es-US';
+        const spanishVoice = availableVoices.find((v) => v.lang.startsWith('es'));
+        if (spanishVoice) utterance.voice = spanishVoice;
+      } else {
+        utterance.lang = 'en-US';
+        if (selectedVoiceURI && availableVoices.length > 0) {
+          const v = availableVoices.find((x) => x.voiceURI === selectedVoiceURI);
+          if (v) utterance.voice = v;
+        }
       }
       window.speechSynthesis.speak(utterance);
     } catch (e) {
@@ -557,10 +568,29 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
     const rec = new SpeechRecognition();
     rec.continuous = false;
-    rec.lang = 'en-US';
+    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
     rec.onstart = () => setIsRecording(true);
     rec.onresult = (e) => {
       setQuickInput(e.results[0][0].transcript);
+      setIsRecording(false);
+    };
+    rec.onerror = () => setIsRecording(false);
+    rec.onend = () => setIsRecording(false);
+    rec.start();
+  };
+
+  const handleAiVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice mic is not supported on this browser.');
+      return;
+    }
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
+    rec.onstart = () => setIsRecording(true);
+    rec.onresult = (e) => {
+      setAiInput(e.results[0][0].transcript);
       setIsRecording(false);
     };
     rec.onerror = () => setIsRecording(false);
@@ -2838,10 +2868,70 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
             {/* Settings Drawer */}
             {showSettings && (
               <div style={{ padding: '14px', backgroundColor: 'var(--color-zinc-950)', borderBottom: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {/* Language Mode Selector */}
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '6px' }}>
+                    🌍 Voice & Recognition Language / Idioma:
+                  </label>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => { setAiLanguage('auto'); localStorage.setItem('jobscan_ai_lang', 'auto'); }}
+                      style={{
+                        padding: '8px 4px',
+                        borderRadius: '6px',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        backgroundColor: aiLanguage === 'auto' ? 'var(--color-amber-500)' : 'var(--color-zinc-900)',
+                        color: aiLanguage === 'auto' ? '#000' : 'var(--color-zinc-300)',
+                        border: aiLanguage === 'auto' ? '1px solid var(--color-amber-500)' : '1px solid var(--color-zinc-800)',
+                        cursor: 'pointer',
+                        textAlign: 'center'
+                      }}
+                    >
+                      🌐 Auto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAiLanguage('en'); localStorage.setItem('jobscan_ai_lang', 'en'); }}
+                      style={{
+                        padding: '8px 4px',
+                        borderRadius: '6px',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        backgroundColor: aiLanguage === 'en' ? 'var(--color-amber-500)' : 'var(--color-zinc-900)',
+                        color: aiLanguage === 'en' ? '#000' : 'var(--color-zinc-300)',
+                        border: aiLanguage === 'en' ? '1px solid var(--color-amber-500)' : '1px solid var(--color-zinc-800)',
+                        cursor: 'pointer',
+                        textAlign: 'center'
+                      }}
+                    >
+                      🇺🇸 English
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setAiLanguage('es'); localStorage.setItem('jobscan_ai_lang', 'es'); }}
+                      style={{
+                        padding: '8px 4px',
+                        borderRadius: '6px',
+                        fontSize: '0.76rem',
+                        fontWeight: 700,
+                        backgroundColor: aiLanguage === 'es' ? 'var(--color-amber-500)' : 'var(--color-zinc-900)',
+                        color: aiLanguage === 'es' ? '#000' : 'var(--color-zinc-300)',
+                        border: aiLanguage === 'es' ? '1px solid var(--color-amber-500)' : '1px solid var(--color-zinc-800)',
+                        cursor: 'pointer',
+                        textAlign: 'center'
+                      }}
+                    >
+                      🇲🇽 Español
+                    </button>
+                  </div>
+                </div>
+
                 {/* Voice Selector */}
                 <div>
                   <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '4px' }}>
-                    🎙️ Select Natural Human Voice:
+                    🎙️ Natural Speech Synthesis Voice:
                   </label>
                   <select
                     value={selectedVoiceURI}
@@ -2927,12 +3017,31 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 borderTop: '1px solid var(--color-zinc-800)',
                 backgroundColor: 'var(--color-zinc-900)',
                 display: 'flex',
-                gap: '8px'
+                gap: '8px',
+                alignItems: 'center'
               }}
             >
+              <button
+                type="button"
+                onClick={handleAiVoice}
+                style={{
+                  padding: '10px 12px',
+                  backgroundColor: 'var(--color-zinc-950)',
+                  border: '1px solid var(--color-zinc-800)',
+                  borderRadius: '6px',
+                  color: 'var(--color-amber-500)',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+                title="Voice Dictation (Mic)"
+              >
+                <Mic size={18} />
+              </button>
               <input
                 type="text"
-                placeholder='Ask Gemini: "What reminders do I have today?" or "Who do I call?"...'
+                placeholder={aiLanguage === 'es' ? 'Pregunta a Gemini en Español...' : 'Ask Gemini in English or Spanish...'}
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 disabled={aiLoading}
@@ -2951,7 +3060,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 type="submit"
                 disabled={aiLoading}
                 style={{
-                  padding: '0 16px',
+                  padding: '10px 16px',
                   backgroundColor: 'var(--color-amber-500)',
                   color: '#000',
                   border: 'none',
