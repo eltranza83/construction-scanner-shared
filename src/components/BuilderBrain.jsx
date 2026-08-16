@@ -4,11 +4,7 @@ import {
   Mic,
   Send,
   AlertTriangle,
-  Users,
-  Clock,
-  CheckCircle2,
   Trash2,
-  Phone,
   MessageSquare,
   Sparkles,
   Bot,
@@ -17,16 +13,11 @@ import {
   Settings,
   X,
   Plus,
-  Layers,
-  MapPin,
-  HardHat,
   CheckSquare,
-  Calendar,
   Edit2,
   Check,
   RotateCcw,
   Flag,
-  ListTodo,
   Loader2,
   Palette,
   FileText,
@@ -37,11 +28,8 @@ import {
   ChevronUp
 } from 'lucide-react';
 import {
-  loadBrainItems,
-  saveBrainItems,
   loadProjectSpecs,
   saveProjectSpecs,
-  parseFieldNote,
   playChimeAlert,
   askGeminiBrain,
   loadGlobalPhases,
@@ -384,8 +372,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
   const [activeSubTab, setActiveSubTab] = useState('site_setup'); // 'site_setup' | 'phases' | 'specs'
-  const [quickInput, setQuickInput] = useState('');
-  const [isRecording, setIsRecording] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
 

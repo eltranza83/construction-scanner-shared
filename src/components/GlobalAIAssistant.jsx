@@ -13,11 +13,8 @@ import {
   Loader2
 } from 'lucide-react';
 import {
-  loadBrainItems,
-  saveBrainItems,
   loadProjectSpecs,
   saveProjectSpecs,
-  parseFieldNote,
   askGeminiBrain,
   loadProjectDriveTree,
   saveProjectDriveTree
@@ -29,7 +26,6 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
   const [isOpen, setIsOpen] = useState(false);
-  const [items, setItems] = useState([]);
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
@@ -72,11 +68,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     };
   }, [googleToken, activeProject?.folderId, projectId]);
 
-  // Load items when project changes
-  useEffect(() => {
-    const loaded = loadBrainItems(projectId);
-    setItems(loaded);
-  }, [projectId]);
+
 
   // Load natural voices (English + Spanish) with J.A.R.V.I.S. British English priority
   useEffect(() => {
