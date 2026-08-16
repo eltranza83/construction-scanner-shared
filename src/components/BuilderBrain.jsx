@@ -592,51 +592,9 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     rec.start();
   };
 
-  const handleAiVoice = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice mic is not supported on this browser.');
-      return;
-    }
-    const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
-    rec.onstart = () => setIsRecording(true);
-    rec.onresult = (e) => {
-      setAiInput(e.results[0][0].transcript);
-      setIsRecording(false);
-    };
-    rec.onerror = () => setIsRecording(false);
-    rec.onend = () => setIsRecording(false);
-    rec.start();
-  };
-
-  const handleToggleDone = (id) => {
-    setItems((prev) =>
-      prev.map((i) => (i.id === id ? { ...i, status: i.status === 'completed' ? 'pending' : 'completed' } : i))
-    );
-  };
-
-  const handleDelete = (id, title) => {
-    const item = items.find((i) => i.id === id);
-    const itemTitle = title || item?.title || 'this item';
-    const categoryName = item?.category === 'watchout' ? 'Watch-Out' : item?.category === 'subcontractor' ? 'Trade Call' : 'Reminder';
-
-    if (!window.confirm(`⚠️ Confirm Deletion:\n\nAre you sure you want to delete this ${categoryName}?\n\n"${itemTitle}"`)) {
-      return;
-    }
-
-    setItems((prev) => {
-      const updated = prev.filter((i) => i.id !== id);
-      saveBrainItems(projectId, updated);
-      return updated;
-    });
-  };
-
-  const handleSendAiMessage = async (e) => {
-    e.preventDefault();
-    if (!aiInput.trim() || aiLoading) return;
-    const query = aiInput.trim();
+  const executeAiMessage = async (queryText) => {
+    if (!queryText || !queryText.trim() || aiLoading) return;
+    const query = queryText.trim();
     setAiInput('');
 
     const userMsg = {
@@ -766,6 +724,56 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     } finally {
       setAiLoading(false);
     }
+  };
+
+  const handleSendAiMessage = (e) => {
+    e.preventDefault();
+    executeAiMessage(aiInput);
+  };
+
+  const handleAiVoice = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert('Voice mic is not supported on this browser.');
+      return;
+    }
+    const rec = new SpeechRecognition();
+    rec.continuous = false;
+    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
+    rec.onstart = () => setIsRecording(true);
+    rec.onresult = (e) => {
+      const spoken = e.results[0][0].transcript;
+      setIsRecording(false);
+      if (spoken && spoken.trim()) {
+        setAiInput(spoken);
+        executeAiMessage(spoken.trim());
+      }
+    };
+    rec.onerror = () => setIsRecording(false);
+    rec.onend = () => setIsRecording(false);
+    rec.start();
+  };
+
+  const handleToggleDone = (id) => {
+    setItems((prev) =>
+      prev.map((i) => (i.id === id ? { ...i, status: i.status === 'completed' ? 'pending' : 'completed' } : i))
+    );
+  };
+
+  const handleDelete = (id, title) => {
+    const item = items.find((i) => i.id === id);
+    const itemTitle = title || item?.title || 'this item';
+    const categoryName = item?.category === 'watchout' ? 'Watch-Out' : item?.category === 'subcontractor' ? 'Trade Call' : 'Reminder';
+
+    if (!window.confirm(`⚠️ Confirm Deletion:\n\nAre you sure you want to delete this ${categoryName}?\n\n"${itemTitle}"`)) {
+      return;
+    }
+
+    setItems((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      saveBrainItems(projectId, updated);
+      return updated;
+    });
   };
 
   // Site Setup Protocol Handlers
@@ -2820,26 +2828,31 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           style={{
             position: 'fixed',
             inset: 0,
+            width: '100vw',
+            height: '100dvh',
             backgroundColor: 'rgba(0, 0, 0, 0.85)',
             backdropFilter: 'blur(10px)',
-            zIndex: 3000,
+            zIndex: 9999,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            padding: '16px'
+            padding: typeof window !== 'undefined' && window.innerWidth <= 640 ? '0' : '16px',
+            boxSizing: 'border-box'
           }}
         >
           <div
             style={{
               width: '100%',
-              maxWidth: '620px',
-              height: '85vh',
+              maxWidth: '640px',
+              height: typeof window !== 'undefined' && window.innerWidth <= 640 ? '100dvh' : 'min(88vh, 820px)',
+              maxHeight: '100dvh',
               backgroundColor: 'var(--color-zinc-900)',
-              border: '1px solid var(--color-zinc-800)',
-              borderRadius: '12px',
+              border: typeof window !== 'undefined' && window.innerWidth <= 640 ? 'none' : '1px solid var(--color-zinc-800)',
+              borderRadius: typeof window !== 'undefined' && window.innerWidth <= 640 ? '0' : '14px',
               display: 'flex',
               flexDirection: 'column',
-              overflow: 'hidden'
+              overflow: 'hidden',
+              boxShadow: '0 20px 40px rgba(0, 0, 0, 0.8)'
             }}
           >
             {/* Modal Header */}
@@ -2850,7 +2863,8 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
-                backgroundColor: 'var(--color-zinc-950)'
+                backgroundColor: 'var(--color-zinc-950)',
+                flexShrink: 0
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
@@ -2863,7 +2877,8 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: '#000'
+                    color: '#000',
+                    flexShrink: 0
                   }}
                 >
                   <Bot size={20} />
@@ -2878,7 +2893,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
                 <button
                   onClick={() => setShowSettings(!showSettings)}
                   style={{ background: 'none', border: 'none', color: showSettings ? 'var(--color-amber-500)' : 'var(--color-zinc-400)', cursor: 'pointer' }}
@@ -2907,7 +2922,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
 
             {/* Settings Drawer */}
             {showSettings && (
-              <div style={{ padding: '14px', backgroundColor: 'var(--color-zinc-950)', borderBottom: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              <div style={{ padding: '14px', backgroundColor: 'var(--color-zinc-950)', borderBottom: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px', flexShrink: 0 }}>
                 {/* Language Mode Selector */}
                 <div>
                   <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '6px' }}>
@@ -2971,7 +2986,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 {/* Voice Selector */}
                 <div>
                   <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', display: 'block', marginBottom: '4px' }}>
-                    🎙️ Natural Speech Synthesis Voice:
+                    🎙️ J.A.R.V.I.S. Speech Synthesis Voice:
                   </label>
                   <select
                     value={selectedVoiceURI}
@@ -2989,7 +3004,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                   >
                     {availableVoices.map((v) => (
                       <option key={v.voiceURI} value={v.voiceURI}>
-                        {v.name} ({v.lang}) {v.name.includes('Natural') || v.name.includes('Google') ? '✨ Recommended' : ''}
+                        {v.name} ({v.lang}) {v.name.includes('Natural') || v.name.includes('Google') || v.lang.includes('GB') ? '✨ Recommended' : ''}
                       </option>
                     ))}
                   </select>
@@ -2997,90 +3012,116 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               </div>
             )}
 
-            {/* Messages Body */}
+            {/* Chat Messages */}
             <div
               style={{
                 flex: 1,
-                padding: '16px',
+                minHeight: 0,
                 overflowY: 'auto',
+                padding: '16px',
                 display: 'flex',
                 flexDirection: 'column',
-                gap: '12px',
-                backgroundColor: 'var(--color-zinc-950)'
+                gap: '12px'
               }}
             >
-              {aiMessages.map((msg, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: msg.sender === 'user' ? 'flex-end' : 'flex-start'
-                  }}
-                >
+              {aiMessages.map((m, idx) => {
+                const isUser = m.sender === 'user';
+                return (
                   <div
+                    key={idx}
                     style={{
-                      maxWidth: '85%',
-                      padding: '12px 14px',
-                      borderRadius: '8px',
-                      backgroundColor: msg.sender === 'user' ? 'var(--color-amber-500)' : 'var(--color-zinc-900)',
-                      color: msg.sender === 'user' ? '#000' : 'var(--color-zinc-100)',
-                      fontWeight: msg.sender === 'user' ? 600 : 400,
-                      fontSize: '0.88rem',
-                      lineHeight: '1.5',
-                      whiteSpace: 'pre-wrap',
-                      border: msg.sender === 'user' ? 'none' : '1px solid var(--color-zinc-800)'
+                      display: 'flex',
+                      justifyContent: isUser ? 'flex-end' : 'flex-start'
                     }}
                   >
-                    {msg.text}
+                    <div
+                      style={{
+                        maxWidth: '85%',
+                        padding: '10px 14px',
+                        borderRadius: isUser ? '12px 12px 2px 12px' : '12px 12px 12px 2px',
+                        backgroundColor: isUser ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
+                        color: isUser ? '#000' : 'var(--color-zinc-100)',
+                        fontSize: '0.88rem',
+                        lineHeight: '1.45',
+                        boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
+                      }}
+                    >
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                      <div
+                        style={{
+                          fontSize: '0.68rem',
+                          color: isUser ? 'rgba(0, 0, 0, 0.6)' : 'var(--color-zinc-400)',
+                          textAlign: 'right',
+                          marginTop: '4px'
+                        }}
+                      >
+                        {m.timestamp}
+                      </div>
+                    </div>
                   </div>
-                  <span style={{ fontSize: '0.68rem', color: 'var(--color-zinc-500)', marginTop: '3px' }}>
-                    {msg.timestamp}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
 
               {aiLoading && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-amber-500)', fontSize: '0.82rem' }}>
-                  <Sparkles size={15} className="animate-spin" /> Gemini AI is thinking...
+                <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+                  <div
+                    style={{
+                      padding: '10px 14px',
+                      borderRadius: '12px 12px 12px 2px',
+                      backgroundColor: 'var(--color-zinc-800)',
+                      color: 'var(--color-amber-500)',
+                      fontSize: '0.85rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px'
+                    }}
+                  >
+                    <Loader2 size={16} className="spin-animation" />
+                    <span>J.A.R.V.I.S. is thinking...</span>
+                  </div>
                 </div>
               )}
-
               <div ref={chatEndRef} />
             </div>
 
-            {/* Chat Input */}
+            {/* Input Bar */}
             <form
               onSubmit={handleSendAiMessage}
               style={{
-                padding: '12px',
+                padding: '10px 12px',
+                paddingBottom: 'max(14px, env(safe-area-inset-bottom, 14px))',
+                backgroundColor: 'var(--color-zinc-950)',
                 borderTop: '1px solid var(--color-zinc-800)',
-                backgroundColor: 'var(--color-zinc-900)',
                 display: 'flex',
+                alignItems: 'center',
                 gap: '8px',
-                alignItems: 'center'
+                flexShrink: 0,
+                width: '100%',
+                boxSizing: 'border-box'
               }}
             >
               <button
                 type="button"
                 onClick={() => {
-                  const nextLang = aiLanguage === 'es' ? 'en' : 'es';
-                  setAiLanguage(nextLang);
-                  localStorage.setItem('jobscan_ai_lang', nextLang);
+                  const next = aiLanguage === 'es' ? 'en' : 'es';
+                  setAiLanguage(next);
+                  localStorage.setItem('jobscan_ai_lang', next);
                 }}
                 style={{
-                  padding: '0 8px',
-                  backgroundColor: aiLanguage === 'es' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(59, 130, 246, 0.2)',
+                  height: '44px',
+                  padding: '0 10px',
+                  backgroundColor: aiLanguage === 'es' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
                   border: '1px solid ' + (aiLanguage === 'es' ? '#22c55e' : '#3b82f6'),
                   color: aiLanguage === 'es' ? '#86efac' : '#93c5fd',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   fontSize: '0.75rem',
                   fontWeight: 800,
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '2px',
-                  whiteSpace: 'nowrap'
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
                 }}
                 title="Click to toggle Mic Language (English / Español)"
               >
@@ -3090,55 +3131,65 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 type="button"
                 onClick={handleAiVoice}
                 style={{
-                  padding: '10px 12px',
-                  backgroundColor: 'var(--color-zinc-950)',
-                  border: '1px solid var(--color-zinc-800)',
-                  borderRadius: '6px',
-                  color: 'var(--color-amber-500)',
+                  height: '44px',
+                  minWidth: '44px',
+                  padding: '0 12px',
+                  backgroundColor: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(197, 160, 89, 0.15)',
+                  border: '1px solid ' + (isRecording ? '#ef4444' : 'var(--color-amber-500)'),
+                  color: isRecording ? '#ef4444' : 'var(--color-amber-500)',
+                  borderRadius: '8px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  flexShrink: 0
                 }}
                 title="Voice Dictation (Mic)"
               >
-                <Mic size={18} />
+                <Mic size={20} />
               </button>
               <input
                 type="text"
-                placeholder={aiLanguage === 'es' ? 'Pregunta en Español: "¿Cuánto balance con el pintor?"...' : 'Ask Gemini in English or Spanish...'}
+                placeholder={aiLanguage === 'es' ? 'Pregunta en Español: "¿Cuánto balance con el pintor?"...' : 'Ask J.A.R.V.I.S. in English or Spanish...'}
                 value={aiInput}
                 onChange={(e) => setAiInput(e.target.value)}
                 disabled={aiLoading}
                 style={{
                   flex: 1,
+                  minWidth: 0,
+                  height: '44px',
                   backgroundColor: 'var(--color-zinc-950)',
                   border: '1px solid var(--color-zinc-800)',
-                  borderRadius: '6px',
-                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  padding: '0 12px',
                   color: 'var(--color-zinc-100)',
-                  fontSize: '0.88rem',
-                  outline: 'none'
+                  fontSize: '0.9rem',
+                  outline: 'none',
+                  boxSizing: 'border-box'
                 }}
               />
               <button
                 type="submit"
                 disabled={aiLoading}
                 style={{
-                  padding: '10px 16px',
+                  height: '44px',
+                  minWidth: '44px',
+                  padding: '0 16px',
                   backgroundColor: 'var(--color-amber-500)',
                   color: '#000',
                   border: 'none',
-                  borderRadius: '6px',
+                  borderRadius: '8px',
                   fontWeight: 800,
                   fontSize: '0.85rem',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '4px'
+                  justifyContent: 'center',
+                  gap: '4px',
+                  flexShrink: 0
                 }}
               >
-                <Send size={15} />
+                <Send size={18} />
               </button>
             </form>
           </div>
