@@ -581,5 +581,26 @@ export async function fetchProjectDriveTree(accessToken, rootFolderId) {
   }
 }
 
+/**
+ * Moves a file or folder to the trash in Google Drive.
+ */
+export async function trashDriveFileOrFolder(accessToken, fileOrFolderId) {
+  if (!accessToken || !fileOrFolderId) return false;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileOrFolderId}`;
+  const response = await fetch(url, {
+    method: 'PATCH',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ trashed: true })
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Failed to delete Drive item: ${err}`);
+  }
+  return true;
+}
+
 
 

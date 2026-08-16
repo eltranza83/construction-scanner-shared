@@ -19,7 +19,7 @@ import {
   loadProjectDriveTree,
   saveProjectDriveTree
 } from '../services/builderBrainService';
-import { fetchProjectDriveTree } from '../services/googleDrive';
+import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder } from '../services/googleDrive';
 
 export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
@@ -141,6 +141,85 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           const updated = [newItem, ...items];
           setItems(updated);
           saveBrainItems(projectId, updated);
+        }
+      }
+
+      // 1. Google Drive Folder Creation Action
+      if (
+        (lower.startsWith('create folder') ||
+          lower.startsWith('create a folder') ||
+          lower.startsWith('create subfolder') ||
+          lower.startsWith('create a subfolder') ||
+          lower.startsWith('create new folder') ||
+          lower.startsWith('create a new folder') ||
+          lower.startsWith('make a folder') ||
+          lower.startsWith('make folder') ||
+          lower.startsWith('add folder') ||
+          lower.startsWith('add a folder')) &&
+        googleToken &&
+        activeProject?.folderId
+      ) {
+        const folderName = query
+          .replace(/^(create|make|add)\s+(a\s+)?(new\s+)?(subfolder|folder)\s+(called|named|for)?\s*/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim();
+        if (folderName) {
+          const created = await createFolder(googleToken, folderName, activeProject.folderId);
+          if (created && created.id) {
+            const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+            if (updatedTree) {
+              setDriveTree(updatedTree);
+              saveProjectDriveTree(projectId, updatedTree);
+            }
+            const confirmMsg = `Created the new subfolder **${folderName}** in your ${projectName} Google Drive folder!`;
+            const aiMsg = {
+              sender: 'ai',
+              text: confirmMsg,
+              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+            setMessages((prev) => [...prev, aiMsg]);
+            speakText(confirmMsg);
+            return;
+          }
+        }
+      }
+
+      // 2. Google Drive Folder Deletion Action
+      if (
+        (lower.startsWith('delete folder') ||
+          lower.startsWith('delete the folder') ||
+          lower.startsWith('remove folder') ||
+          lower.startsWith('remove the folder') ||
+          lower.startsWith('trash folder') ||
+          lower.startsWith('trash the folder')) &&
+        googleToken &&
+        activeProject?.folderId &&
+        driveTree?.subfolders
+      ) {
+        const targetName = query
+          .replace(/^(delete|remove|trash)\s+(the\s+)?(subfolder|folder)\s+(called|named)?\s*/i, '')
+          .replace(/^["']|["']$/g, '')
+          .trim().toLowerCase();
+
+        const match = driveTree.subfolders.find(
+          (f) => f.folderName.toLowerCase().includes(targetName) || targetName.includes(f.folderName.toLowerCase())
+        );
+        if (match && match.folderId) {
+          await trashDriveFileOrFolder(googleToken, match.folderId);
+          const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+          if (updatedTree) {
+            setDriveTree(updatedTree);
+            saveProjectDriveTree(projectId, updatedTree);
+          }
+          const confirmMsg = `Deleted the folder **${match.folderName}** from your ${projectName} Google Drive.`;
+          const aiMsg = {
+            sender: 'ai',
+            text: confirmMsg,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+          };
+          setMessages((prev) => [...prev, aiMsg]);
+          speakText(confirmMsg);
+          return;
         }
       }
 
