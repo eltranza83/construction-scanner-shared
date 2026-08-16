@@ -30,7 +30,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
-      text: `👋 Hey Boss! I'm your Adepec Field & Financial AI for "${projectName}". Ask me anything about site watch-outs, inspections, reminders, Google Drive files, or dashboard expenses & budgets!`,
+      text: `Online and at your service, sir. I have indexed all project financials, Google Drive files, and field watch-outs for "${projectName}". How may I assist you today?`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -48,14 +48,25 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
   // Sync Google Drive folders & files manifest
   useEffect(() => {
-    if (googleToken && activeProject?.folderId) {
-      fetchProjectDriveTree(googleToken, activeProject.folderId).then((tree) => {
-        if (tree) {
+    if (!googleToken || !activeProject?.folderId) return;
+    let isSubscribed = true;
+
+    async function syncDriveManifest() {
+      try {
+        const tree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+        if (tree && isSubscribed) {
           setDriveTree(tree);
           saveProjectDriveTree(projectId, tree);
         }
-      });
+      } catch (err) {
+        console.warn('Drive manifest background fetch note:', err);
+      }
     }
+
+    syncDriveManifest();
+    return () => {
+      isSubscribed = false;
+    };
   }, [googleToken, activeProject?.folderId, projectId]);
 
   // Load items when project changes
@@ -64,12 +75,16 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     setItems(loaded);
   }, [projectId]);
 
-  // Load natural voices (English + Spanish)
+  // Load natural voices (English + Spanish) with J.A.R.V.I.S. British English priority
   useEffect(() => {
     const loadVoices = () => {
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'));
         voices.sort((a, b) => {
+          const aGB = a.lang === 'en-GB' || a.lang.startsWith('en-GB') || a.name.includes('George') || a.name.includes('Daniel') || a.name.includes('Arthur');
+          const bGB = b.lang === 'en-GB' || b.lang.startsWith('en-GB') || b.name.includes('George') || b.name.includes('Daniel') || b.name.includes('Arthur');
+          if (aGB && !bGB) return -1;
+          if (!aGB && bGB) return 1;
           const aNat = a.name.includes('Natural') || a.name.includes('Google') || a.name.includes('Neural');
           const bNat = b.name.includes('Natural') || b.name.includes('Google') || b.name.includes('Neural');
           if (aNat && !bNat) return -1;
@@ -113,11 +128,13 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           availableVoices.find((v) => v.lang.startsWith('es'));
         if (spanishVoice) utterance.voice = spanishVoice;
       } else {
-        utterance.lang = 'en-US';
-        if (selectedVoiceURI && availableVoices.length > 0) {
-          const v = availableVoices.find((x) => x.voiceURI === selectedVoiceURI);
-          if (v) utterance.voice = v;
-        }
+        utterance.lang = 'en-GB';
+        const jarvisVoice =
+          availableVoices.find((v) => (v.lang === 'en-GB' || v.lang.startsWith('en-GB')) && (v.name.includes('George') || v.name.includes('Daniel') || v.name.includes('Arthur') || v.name.includes('Oliver') || v.name.includes('UK') || v.name.includes('British') || v.name.includes('Male'))) ||
+          availableVoices.find((v) => v.lang === 'en-GB' || v.lang.startsWith('en-GB')) ||
+          (selectedVoiceURI ? availableVoices.find((x) => x.voiceURI === selectedVoiceURI) : null) ||
+          availableVoices.find((v) => v.lang.startsWith('en'));
+        if (jarvisVoice) utterance.voice = jarvisVoice;
       }
       window.speechSynthesis.speak(utterance);
     } catch (e) {
@@ -391,10 +408,10 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 </div>
                 <div>
                   <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-zinc-100)', margin: 0 }}>
-                    Adepec Field AI — {projectName}
+                    J.A.R.V.I.S. Field AI — {projectName}
                   </h3>
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-amber-500)', margin: 0 }}>
-                    Voice & Text Q&A • Natural Speech Readout
+                    Voice & Text Co-Pilot • J.A.R.V.I.S. Audio Readout
                   </p>
                 </div>
               </div>
