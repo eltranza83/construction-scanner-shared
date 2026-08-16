@@ -32,7 +32,9 @@ import {
   FileText,
   ExternalLink,
   Download,
-  Printer
+  Printer,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import {
   loadBrainItems,
@@ -456,6 +458,20 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const [editingAuditText, setEditingAuditText] = useState('');
   const [addingAuditSubId, setAddingAuditSubId] = useState(null);
   const [newAuditInput, setNewAuditInput] = useState('');
+
+  // Accordion Expand/Collapse states for Phase Inspections (Starts collapsed per user preference)
+  const [isPreNotesExpanded, setIsPreNotesExpanded] = useState(false);
+  const [isAuditExpanded, setIsAuditExpanded] = useState(false);
+  const [expandedPreNoteTrades, setExpandedPreNoteTrades] = useState({});
+  const [expandedAuditTrades, setExpandedAuditTrades] = useState({});
+
+  const togglePreNoteTrade = (tradeId) => {
+    setExpandedPreNoteTrades((prev) => ({ ...prev, [tradeId]: !prev[tradeId] }));
+  };
+
+  const toggleAuditTrade = (tradeId) => {
+    setExpandedAuditTrades((prev) => ({ ...prev, [tradeId]: !prev[tradeId] }));
+  };
 
   // AI Assistant Chat state
   const [aiMessages, setAiMessages] = useState([
@@ -2323,231 +2339,509 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               {currentPhase.name} Protocol
             </h3>
 
-            {/* SECTION 1: TELL SUB BEFORE WORK STARTS */}
-            <div
-              style={{
-                backgroundColor: 'var(--color-zinc-950)',
-                padding: '14px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-zinc-800)',
-                marginBottom: '14px'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase' }}>
-                  1. Tell Sub BEFORE Work Starts
-                </span>
-                {!currentPhase.hasSubcategories && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    {isCustomizing && (
-                      <button
-                        onClick={() => setAddingPreNoteSubId(addingPreNoteSubId ? null : 'single')}
+            {/* SECTION 1: CRITICAL PRE-WORK NOTES (ACCORDION) */}
+            {(() => {
+              const preNotesCount = currentPhase.hasSubcategories
+                ? currentPhase.subcategories.reduce((acc, s) => acc + (s.preTradeNotes?.length || 0), 0)
+                : (currentPhase.preTradeNotes?.length || 0);
+
+              return (
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-zinc-950)',
+                    padding: '14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-zinc-800)',
+                    marginBottom: '14px',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {/* Master Accordion Header */}
+                  <div
+                    onClick={() => setIsPreNotesExpanded((prev) => !prev)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      padding: '2px 0',
+                      marginBottom: isPreNotesExpanded ? '12px' : '0'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        1. Critical Pre-Work Notes
+                      </span>
+                      <span style={{ fontSize: '0.72rem', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--color-amber-400)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                        {preNotesCount} {preNotesCount === 1 ? 'item' : 'items'}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                        {isPreNotesExpanded ? 'Tap to collapse' : 'Tap to expand'}
+                      </span>
+                      <div
                         style={{
-                          padding: '4px 8px',
+                          width: '24px',
+                          height: '24px',
                           borderRadius: '6px',
-                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                          border: '1px solid var(--color-zinc-700)',
-                          color: 'var(--color-zinc-200)',
-                          fontSize: '0.72rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '3px'
+                          justifyContent: 'center',
+                          color: 'var(--color-amber-400)'
                         }}
                       >
-                        <Plus size={12} /> Add Line
-                      </button>
-                    )}
-                    <button
-                      onClick={() => handleSMSPreNotes()}
-                      style={{
-                        padding: '4px 10px',
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(197, 160, 89, 0.15)',
-                        border: '1px solid var(--color-amber-500)',
-                        color: 'var(--color-amber-500)',
-                        fontSize: '0.72rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '4px'
-                      }}
-                    >
-                      <MessageSquare size={12} /> Text Sub (SMS)
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {/* Single Phase Pre-Notes */}
-              {!currentPhase.hasSubcategories && (
-                <>
-                  {isCustomizing && addingPreNoteSubId === 'single' && (
-                    <form onSubmit={(e) => handleAddPreNote(null, e)} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                      <input
-                        type="text"
-                        placeholder="Enter new pre-work trade requirement..."
-                        value={newPreNoteInput}
-                        onChange={(e) => setNewPreNoteInput(e.target.value)}
-                        autoFocus
-                        style={{
-                          flex: 1,
-                          backgroundColor: 'var(--color-zinc-900)',
-                          border: '1px solid var(--color-amber-500)',
-                          borderRadius: '6px',
-                          padding: '6px 10px',
-                          color: 'var(--color-zinc-100)',
-                          fontSize: '0.82rem',
-                          outline: 'none'
-                        }}
-                      />
-                      <button type="submit" style={{ padding: '0 12px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
-                        Add
-                      </button>
-                      <button type="button" onClick={() => setAddingPreNoteSubId(null)} style={{ padding: '0 8px', backgroundColor: 'transparent', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                        Cancel
-                      </button>
-                    </form>
-                  )}
-
-                  {currentPhase.preTradeNotes.length === 0 ? (
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--color-zinc-900)', border: '1px dashed var(--color-zinc-700)' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)' }}>No pre-trade notes listed for this phase.</span>
-                      <button
-                        onClick={handleRestoreCurrentPhaseNotes}
-                        style={{ padding: '4px 10px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-                      >
-                        <RotateCcw size={12} /> Reload Standard Notes
-                      </button>
+                        {isPreNotesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </div>
                     </div>
-                  ) : (
-                    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px', margin: 0, padding: 0 }}>
-                      {currentPhase.preTradeNotes.map((note, idx) => {
-                        const isEditing = editingPreNoteKey === `single_${idx}`;
-                        return (
-                          <li
-                            key={idx}
-                          style={{
-                            fontSize: '0.85rem',
-                            color: 'var(--color-zinc-200)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            padding: '4px 6px',
-                            borderRadius: '4px',
-                            backgroundColor: isEditing ? 'var(--color-zinc-900)' : 'transparent'
-                          }}
-                        >
-                          {isEditing ? (
-                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                              <input
-                                type="text"
-                                value={editingPreNoteText}
-                                onChange={(e) => setEditingPreNoteText(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleSaveEditPreNote(null, idx);
-                                  if (e.key === 'Escape') setEditingPreNoteKey(null);
-                                }}
-                                autoFocus
-                                style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
-                              />
-                              <button onClick={() => handleSaveEditPreNote(null, idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
-                                <Check size={14} />
-                              </button>
-                              <button onClick={() => setEditingPreNoteKey(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                                <X size={14} />
-                              </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
-                                <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
-                                <span>{note}</span>
-                              </div>
-                              {isCustomizing && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
-                                  <button
-                                    onClick={() => {
-                                      setEditingPreNoteKey(`single_${idx}`);
-                                      setEditingPreNoteText(note);
-                                    }}
-                                    style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
-                                    title="Edit line"
-                                  >
-                                    <Edit2 size={13} />
-                                  </button>
-                                  <button
-                                    onClick={() => handleDeletePreNote(null, idx, note)}
-                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                                    title="Delete line"
-                                  >
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              )}
-                            </>
-                          )}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                )}
-              </>
-            )}
+                  </div>
 
-              {/* Combined 5-Trade Pre-Notes for Framing Combo */}
-              {currentPhase.hasSubcategories && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                  {currentPhase.subcategories.map((sub) => (
-                    <div
-                      key={sub.id}
-                      style={{
-                        backgroundColor: 'var(--color-zinc-900)',
-                        border: '1px solid var(--color-zinc-800)',
-                        borderRadius: '6px',
-                        padding: '10px 12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '1rem' }}>{sub.icon}</span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-zinc-200)' }}>
-                            {sub.name} ({sub.trade})
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  {/* Expanded Content */}
+                  {isPreNotesExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--color-zinc-850)' }}>
+                      {!currentPhase.hasSubcategories && (
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginBottom: '6px' }}>
                           {isCustomizing && (
                             <button
-                              onClick={() => setAddingPreNoteSubId(addingPreNoteSubId === sub.id ? null : sub.id)}
+                              onClick={() => setAddingPreNoteSubId(addingPreNoteSubId ? null : 'single')}
                               style={{
-                                padding: '2px 6px',
-                                borderRadius: '4px',
+                                padding: '4px 8px',
+                                borderRadius: '6px',
                                 backgroundColor: 'rgba(255, 255, 255, 0.06)',
                                 border: '1px solid var(--color-zinc-700)',
-                                color: 'var(--color-zinc-300)',
-                                fontSize: '0.68rem',
+                                color: 'var(--color-zinc-200)',
+                                fontSize: '0.72rem',
                                 fontWeight: 700,
                                 cursor: 'pointer',
                                 display: 'flex',
                                 alignItems: 'center',
-                                gap: '2px'
+                                gap: '3px'
                               }}
                             >
-                              <Plus size={11} /> Add Line
+                              <Plus size={12} /> Add Line
                             </button>
                           )}
                           <button
-                            onClick={() => handleSMSPreNotes(sub.trade, sub.preTradeNotes)}
+                            onClick={() => handleSMSPreNotes()}
                             style={{
-                              padding: '2px 8px',
-                              borderRadius: '4px',
-                              backgroundColor: 'rgba(197, 160, 89, 0.12)',
+                              padding: '4px 10px',
+                              borderRadius: '6px',
+                              backgroundColor: 'rgba(197, 160, 89, 0.15)',
                               border: '1px solid var(--color-amber-500)',
                               color: 'var(--color-amber-500)',
-                              fontSize: '0.68rem',
+                              fontSize: '0.72rem',
+                              fontWeight: 700,
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                          >
+                            <MessageSquare size={12} /> Text Sub (SMS)
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Single Phase Pre-Notes */}
+                      {!currentPhase.hasSubcategories && (
+                        <>
+                          {isCustomizing && addingPreNoteSubId === 'single' && (
+                            <form onSubmit={(e) => handleAddPreNote(null, e)} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                              <input
+                                type="text"
+                                placeholder="Enter new pre-work trade requirement..."
+                                value={newPreNoteInput}
+                                onChange={(e) => setNewPreNoteInput(e.target.value)}
+                                autoFocus
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: 'var(--color-zinc-900)',
+                                  border: '1px solid var(--color-amber-500)',
+                                  borderRadius: '6px',
+                                  padding: '6px 10px',
+                                  color: 'var(--color-zinc-100)',
+                                  fontSize: '0.82rem',
+                                  outline: 'none'
+                                }}
+                              />
+                              <button type="submit" style={{ padding: '0 12px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                Add
+                              </button>
+                              <button type="button" onClick={() => setAddingPreNoteSubId(null)} style={{ padding: '0 8px', backgroundColor: 'transparent', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                Cancel
+                              </button>
+                            </form>
+                          )}
+
+                          {currentPhase.preTradeNotes.length === 0 ? (
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '10px 12px', borderRadius: '6px', backgroundColor: 'var(--color-zinc-900)', border: '1px dashed var(--color-zinc-700)' }}>
+                              <span style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)' }}>No pre-trade notes listed for this phase.</span>
+                              <button
+                                onClick={handleRestoreCurrentPhaseNotes}
+                                style={{ padding: '4px 10px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+                              >
+                                <RotateCcw size={12} /> Reload Standard Notes
+                              </button>
+                            </div>
+                          ) : (
+                            <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px', margin: 0, padding: 0 }}>
+                              {currentPhase.preTradeNotes.map((note, idx) => {
+                                const isEditing = editingPreNoteKey === `single_${idx}`;
+                                return (
+                                  <li
+                                    key={idx}
+                                    style={{
+                                      fontSize: '0.85rem',
+                                      color: 'var(--color-zinc-200)',
+                                      display: 'flex',
+                                      alignItems: 'center',
+                                      justifyContent: 'space-between',
+                                      gap: '8px',
+                                      padding: '4px 6px',
+                                      borderRadius: '4px',
+                                      backgroundColor: isEditing ? 'var(--color-zinc-900)' : 'transparent'
+                                    }}
+                                  >
+                                    {isEditing ? (
+                                      <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                                        <input
+                                          type="text"
+                                          value={editingPreNoteText}
+                                          onChange={(e) => setEditingPreNoteText(e.target.value)}
+                                          onKeyDown={(e) => {
+                                            if (e.key === 'Enter') handleSaveEditPreNote(null, idx);
+                                            if (e.key === 'Escape') setEditingPreNoteKey(null);
+                                          }}
+                                          autoFocus
+                                          style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                                        />
+                                        <button onClick={() => handleSaveEditPreNote(null, idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                          <Check size={14} />
+                                        </button>
+                                        <button onClick={() => setEditingPreNoteKey(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                          <X size={14} />
+                                        </button>
+                                      </div>
+                                    ) : (
+                                      <>
+                                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
+                                          <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
+                                          <span>{note}</span>
+                                        </div>
+                                        {isCustomizing && (
+                                          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                                            <button
+                                              onClick={() => {
+                                                setEditingPreNoteKey(`single_${idx}`);
+                                                setEditingPreNoteText(note);
+                                              }}
+                                              style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
+                                              title="Edit line"
+                                            >
+                                              <Edit2 size={13} />
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeletePreNote(null, idx, note)}
+                                              style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                                              title="Delete line"
+                                            >
+                                              <Trash2 size={13} />
+                                            </button>
+                                          </div>
+                                        )}
+                                      </>
+                                    )}
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                        </>
+                      )}
+
+                      {/* Multi-Trade Subcategory Accordions (Framing Combo & Final CO) */}
+                      {currentPhase.hasSubcategories && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {currentPhase.subcategories.map((sub) => {
+                            const isTradeExpanded = !!expandedPreNoteTrades[sub.id];
+
+                            return (
+                              <div
+                                key={sub.id}
+                                style={{
+                                  backgroundColor: 'var(--color-zinc-900)',
+                                  border: '1px solid var(--color-zinc-800)',
+                                  borderRadius: '6px',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                {/* Trade Accordion Header */}
+                                <div
+                                  onClick={() => togglePreNoteTrade(sub.id)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '10px 12px',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    backgroundColor: isTradeExpanded ? 'rgba(255, 255, 255, 0.03)' : 'transparent'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1rem' }}>{sub.icon}</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-zinc-200)' }}>
+                                      {sub.name} ({sub.trade})
+                                    </span>
+                                    <span style={{ fontSize: '0.68rem', backgroundColor: 'rgba(255, 255, 255, 0.06)', color: 'var(--color-zinc-400)', padding: '1px 6px', borderRadius: '10px' }}>
+                                      {sub.preTradeNotes?.length || 0}
+                                    </span>
+                                  </div>
+
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                                    {isCustomizing && (
+                                      <button
+                                        onClick={() => setAddingPreNoteSubId(addingPreNoteSubId === sub.id ? null : sub.id)}
+                                        style={{
+                                          padding: '2px 6px',
+                                          borderRadius: '4px',
+                                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                          border: '1px solid var(--color-zinc-700)',
+                                          color: 'var(--color-zinc-300)',
+                                          fontSize: '0.68rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '2px'
+                                        }}
+                                      >
+                                        <Plus size={11} /> Add Line
+                                      </button>
+                                    )}
+                                    <button
+                                      onClick={() => handleSMSPreNotes(sub.trade, sub.preTradeNotes)}
+                                      style={{
+                                        padding: '2px 8px',
+                                        borderRadius: '4px',
+                                        backgroundColor: 'rgba(197, 160, 89, 0.12)',
+                                        border: '1px solid var(--color-amber-500)',
+                                        color: 'var(--color-amber-500)',
+                                        fontSize: '0.68rem',
+                                        fontWeight: 700,
+                                        cursor: 'pointer',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '3px'
+                                      }}
+                                    >
+                                      <MessageSquare size={11} /> Text {sub.trade}
+                                    </button>
+                                    <div
+                                      onClick={() => togglePreNoteTrade(sub.id)}
+                                      style={{
+                                        width: '20px',
+                                        height: '20px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: 'var(--color-zinc-400)',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {isTradeExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                {/* Expanded Trade Notes Body */}
+                                {isTradeExpanded && (
+                                  <div style={{ padding: '0 12px 10px 12px', borderTop: '1px solid var(--color-zinc-800)', marginTop: '4px', paddingTop: '8px' }}>
+                                    {/* Add Pre-Note under this trade */}
+                                    {isCustomizing && addingPreNoteSubId === sub.id && (
+                                      <form onSubmit={(e) => handleAddPreNote(sub.id, e)} style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                                        <input
+                                          type="text"
+                                          placeholder={`New note for ${sub.trade}...`}
+                                          value={newPreNoteInput}
+                                          onChange={(e) => setNewPreNoteInput(e.target.value)}
+                                          autoFocus
+                                          style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '5px 8px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
+                                        />
+                                        <button type="submit" style={{ padding: '0 10px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer' }}>
+                                          Add
+                                        </button>
+                                        <button type="button" onClick={() => setAddingPreNoteSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}>
+                                          Cancel
+                                        </button>
+                                      </form>
+                                    )}
+
+                                    <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px', margin: 0, padding: 0 }}>
+                                      {sub.preTradeNotes.map((note, idx) => {
+                                        const isEditing = editingPreNoteKey === `${sub.id}_${idx}`;
+                                        return (
+                                          <li
+                                            key={idx}
+                                            style={{
+                                              fontSize: '0.82rem',
+                                              color: 'var(--color-zinc-300)',
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'space-between',
+                                              gap: '6px',
+                                              padding: '3px 4px',
+                                              borderRadius: '4px',
+                                              backgroundColor: isEditing ? 'var(--color-zinc-950)' : 'transparent'
+                                            }}
+                                          >
+                                            {isEditing ? (
+                                              <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                                                <input
+                                                  type="text"
+                                                  value={editingPreNoteText}
+                                                  onChange={(e) => setEditingPreNoteText(e.target.value)}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEditPreNote(sub.id, idx);
+                                                    if (e.key === 'Escape') setEditingPreNoteKey(null);
+                                                  }}
+                                                  autoFocus
+                                                  style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '3px 6px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
+                                                />
+                                                <button onClick={() => handleSaveEditPreNote(sub.id, idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '3px 6px', cursor: 'pointer' }}>
+                                                  <Check size={12} />
+                                                </button>
+                                                <button onClick={() => setEditingPreNoteKey(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                                  <X size={12} />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
+                                                  <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
+                                                  <span>{note}</span>
+                                                </div>
+                                                {isCustomizing && (
+                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                                                    <button onClick={() => { setEditingPreNoteKey(`${sub.id}_${idx}`); setEditingPreNoteText(note); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit line">
+                                                      <Edit2 size={12} />
+                                                    </button>
+                                                    <button onClick={() => handleDeletePreNote(sub.id, idx, note)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete line">
+                                                      <Trash2 size={12} />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </>
+                                            )}
+                                          </li>
+                                        );
+                                      })}
+                                    </ul>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* SECTION 2: PRE-INSPECTION READINESS AUDIT (ACCORDION) */}
+            {(() => {
+              const totalAuditCount = currentPhase.hasSubcategories
+                ? currentPhase.subcategories.reduce((acc, s) => acc + (s.inspectionChecklist?.length || 0), 0)
+                : (currentPhase.inspectionChecklist?.length || 0);
+
+              const passedAuditCount = currentPhase.hasSubcategories
+                ? currentPhase.subcategories.reduce((acc, s) => acc + (s.inspectionChecklist?.filter(chk => isCheckItemChecked(currentPhase.id, chk.id)).length || 0), 0)
+                : (currentPhase.inspectionChecklist?.filter(chk => isCheckItemChecked(currentPhase.id, chk.id)).length || 0);
+
+              const isAllPassed = totalAuditCount > 0 && passedAuditCount === totalAuditCount;
+
+              return (
+                <div
+                  style={{
+                    backgroundColor: 'var(--color-zinc-950)',
+                    padding: '14px',
+                    borderRadius: '8px',
+                    border: '1px solid var(--color-zinc-800)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {/* Master Accordion Header */}
+                  <div
+                    onClick={() => setIsAuditExpanded((prev) => !prev)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      cursor: 'pointer',
+                      userSelect: 'none',
+                      padding: '2px 0',
+                      marginBottom: isAuditExpanded ? '12px' : '0'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        2. Pre-Inspection Readiness Audit
+                      </span>
+                      <span
+                        style={{
+                          fontSize: '0.72rem',
+                          backgroundColor: isAllPassed ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.15)',
+                          color: isAllPassed ? '#10b981' : '#34d399',
+                          border: '1px solid rgba(16, 185, 129, 0.3)',
+                          padding: '2px 8px',
+                          borderRadius: '12px',
+                          fontWeight: 800
+                        }}
+                      >
+                        {passedAuditCount}/{totalAuditCount} Passed
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                        {isAuditExpanded ? 'Tap to collapse' : 'Tap to expand'}
+                      </span>
+                      <div
+                        style={{
+                          width: '24px',
+                          height: '24px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: '#34d399'
+                        }}
+                      >
+                        {isAuditExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Expanded Audit Checklist */}
+                  {isAuditExpanded && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '6px', borderTop: '1px solid var(--color-zinc-850)' }}>
+                      {!currentPhase.hasSubcategories && isCustomizing && (
+                        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                          <button
+                            onClick={() => setAddingAuditSubId(addingAuditSubId ? null : 'single')}
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: '6px',
+                              backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                              border: '1px solid var(--color-zinc-700)',
+                              color: 'var(--color-zinc-200)',
+                              fontSize: '0.72rem',
                               fontWeight: 700,
                               cursor: 'pointer',
                               display: 'flex',
@@ -2555,408 +2849,344 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                               gap: '3px'
                             }}
                           >
-                            <MessageSquare size={11} /> Text {sub.trade}
+                            <Plus size={12} /> Add Item
                           </button>
                         </div>
-                      </div>
-
-                      {/* Add Pre-Note under this trade */}
-                      {isCustomizing && addingPreNoteSubId === sub.id && (
-                        <form onSubmit={(e) => handleAddPreNote(sub.id, e)} style={{ display: 'flex', gap: '6px', marginBottom: '8px', marginTop: '6px' }}>
-                          <input
-                            type="text"
-                            placeholder={`New note for ${sub.trade}...`}
-                            value={newPreNoteInput}
-                            onChange={(e) => setNewPreNoteInput(e.target.value)}
-                            autoFocus
-                            style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '5px 8px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
-                          />
-                          <button type="submit" style={{ padding: '0 10px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer' }}>
-                            Add
-                          </button>
-                          <button type="button" onClick={() => setAddingPreNoteSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}>
-                            Cancel
-                          </button>
-                        </form>
                       )}
 
-                      <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '4px', margin: 0, padding: 0 }}>
-                        {sub.preTradeNotes.map((note, idx) => {
-                          const isEditing = editingPreNoteKey === `${sub.id}_${idx}`;
-                          return (
-                            <li
-                              key={idx}
-                              style={{
-                                fontSize: '0.82rem',
-                                color: 'var(--color-zinc-300)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '6px',
-                                padding: '3px 4px',
-                                borderRadius: '4px',
-                                backgroundColor: isEditing ? 'var(--color-zinc-950)' : 'transparent'
-                              }}
-                            >
-                              {isEditing ? (
-                                <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
-                                  <input
-                                    type="text"
-                                    value={editingPreNoteText}
-                                    onChange={(e) => setEditingPreNoteText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') handleSaveEditPreNote(sub.id, idx);
-                                      if (e.key === 'Escape') setEditingPreNoteKey(null);
-                                    }}
-                                    autoFocus
-                                    style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '3px 6px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
-                                  />
-                                  <button onClick={() => handleSaveEditPreNote(sub.id, idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '3px 6px', cursor: 'pointer' }}>
-                                    <Check size={12} />
-                                  </button>
-                                  <button onClick={() => setEditingPreNoteKey(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                                    <X size={12} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
-                                    <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
-                                    <span>{note}</span>
-                                  </div>
-                                  {isCustomizing && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
-                                      <button onClick={() => { setEditingPreNoteKey(`${sub.id}_${idx}`); setEditingPreNoteText(note); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit line">
-                                        <Edit2 size={12} />
-                                      </button>
-                                      <button onClick={() => handleDeletePreNote(sub.id, idx, note)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete line">
-                                        <Trash2 size={12} />
-                                      </button>
-                                    </div>
-                                  )}
-                                </>
-                              )}
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* SECTION 2: PRE-INSPECTION READINESS AUDIT */}
-            <div
-              style={{
-                backgroundColor: 'var(--color-zinc-950)',
-                padding: '14px',
-                borderRadius: '8px',
-                border: '1px solid var(--color-zinc-800)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase' }}>
-                  2. Pre-Inspection Readiness Audit (Before Calling Inspector)
-                </span>
-                {!currentPhase.hasSubcategories && isCustomizing && (
-                  <button
-                    onClick={() => setAddingAuditSubId(addingAuditSubId ? null : 'single')}
-                    style={{
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid var(--color-zinc-700)',
-                      color: 'var(--color-zinc-200)',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px'
-                    }}
-                  >
-                    <Plus size={12} /> Add Item
-                  </button>
-                )}
-              </div>
-
-              {/* Single Phase Checklist */}
-              {!currentPhase.hasSubcategories && (
-                <>
-                  {isCustomizing && addingAuditSubId === 'single' && (
-                    <form onSubmit={(e) => handleAddAudit(null, e)} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                      <input
-                        type="text"
-                        placeholder="Enter new pre-inspection check item..."
-                        value={newAuditInput}
-                        onChange={(e) => setNewAuditInput(e.target.value)}
-                        autoFocus
-                        style={{ flex: 1, backgroundColor: 'var(--color-zinc-900)', border: '1px solid #34d399', borderRadius: '6px', padding: '6px 10px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
-                      />
-                      <button type="submit" style={{ padding: '0 12px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
-                        Add
-                      </button>
-                      <button type="button" onClick={() => setAddingAuditSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
-                        Cancel
-                      </button>
-                    </form>
-                  )}
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                    {currentPhase.inspectionChecklist.map((chk) => {
-                      const checked = isCheckItemChecked(currentPhase.id, chk.id);
-                      const isEditing = editingAuditId === chk.id;
-
-                      return (
-                        <div
-                          key={chk.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            gap: '8px',
-                            padding: '8px 10px',
-                            borderRadius: '6px',
-                            backgroundColor: checked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-900)',
-                            border: '1px solid ' + (checked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
-                            transition: 'all 0.15s'
-                          }}
-                        >
-                          {isEditing ? (
-                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                      {/* Single Phase Checklist */}
+                      {!currentPhase.hasSubcategories && (
+                        <>
+                          {isCustomizing && addingAuditSubId === 'single' && (
+                            <form onSubmit={(e) => handleAddAudit(null, e)} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
                               <input
                                 type="text"
-                                value={editingAuditText}
-                                onChange={(e) => setEditingAuditText(e.target.value)}
-                                onKeyDown={(e) => {
-                                  if (e.key === 'Enter') handleSaveEditAudit(null, chk.id);
-                                  if (e.key === 'Escape') setEditingAuditId(null);
-                                }}
+                                placeholder="Enter new pre-inspection check item..."
+                                value={newAuditInput}
+                                onChange={(e) => setNewAuditInput(e.target.value)}
                                 autoFocus
-                                style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                                style={{ flex: 1, backgroundColor: 'var(--color-zinc-900)', border: '1px solid #34d399', borderRadius: '6px', padding: '6px 10px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
                               />
-                              <button onClick={() => handleSaveEditAudit(null, chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
-                                <Check size={14} />
+                              <button type="submit" style={{ padding: '0 12px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
+                                Add
                               </button>
-                              <button onClick={() => setEditingAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                                <X size={14} />
+                              <button type="button" onClick={() => setAddingAuditSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                                Cancel
                               </button>
-                            </div>
-                          ) : (
-                            <>
-                              <div onClick={() => toggleCheckItem(currentPhase.id, chk.id)} style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}>
-                                <input
-                                  type="checkbox"
-                                  checked={checked}
-                                  onChange={() => {}}
-                                  style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
-                                />
-                                <span style={{ fontSize: '0.85rem', fontWeight: 600, color: checked ? '#34d399' : 'var(--color-zinc-200)', textDecoration: checked ? 'line-through' : 'none' }}>
-                                  {chk.text}
-                                </span>
-                              </div>
-
-                              {isCustomizing && (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
-                                  <button onClick={() => { setEditingAuditId(chk.id); setEditingAuditText(chk.text); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit item">
-                                    <Edit2 size={13} />
-                                  </button>
-                                  <button onClick={() => handleDeleteAudit(null, chk.id, chk.text)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete item">
-                                    <Trash2 size={13} />
-                                  </button>
-                                </div>
-                              )}
-                            </>
+                            </form>
                           )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
 
-              {/* Combined 5-Trade Checklist for Framing Combo */}
-              {currentPhase.hasSubcategories && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px', marginBottom: '14px' }}>
-                  {currentPhase.subcategories.map((sub) => (
-                    <div
-                      key={sub.id}
-                      style={{
-                        backgroundColor: 'var(--color-zinc-900)',
-                        border: '1px solid var(--color-zinc-800)',
-                        borderRadius: '6px',
-                        padding: '10px 12px'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          <span style={{ fontSize: '1rem' }}>{sub.icon}</span>
-                          <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-zinc-100)' }}>
-                            {sub.name}
-                          </span>
-                        </div>
-                        {isCustomizing && (
-                          <button
-                            onClick={() => setAddingAuditSubId(addingAuditSubId === sub.id ? null : sub.id)}
-                            style={{
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                              border: '1px solid var(--color-zinc-700)',
-                              color: 'var(--color-zinc-300)',
-                              fontSize: '0.68rem',
-                              fontWeight: 700,
-                              cursor: 'pointer',
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: '2px'
-                            }}
-                          >
-                            <Plus size={11} /> Add Item
-                          </button>
-                        )}
-                      </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                            {currentPhase.inspectionChecklist.map((chk) => {
+                              const checked = isCheckItemChecked(currentPhase.id, chk.id);
+                              const isEditing = editingAuditId === chk.id;
 
-                      {/* Add Audit Item under this trade */}
-                      {isCustomizing && addingAuditSubId === sub.id && (
-                        <form onSubmit={(e) => handleAddAudit(sub.id, e)} style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                          <input
-                            type="text"
-                            placeholder={`New audit check for ${sub.name}...`}
-                            value={newAuditInput}
-                            onChange={(e) => setNewAuditInput(e.target.value)}
-                            autoFocus
-                            style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
-                          />
-                          <button type="submit" style={{ padding: '0 10px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer' }}>
-                            Add
-                          </button>
-                          <button type="button" onClick={() => setAddingAuditSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}>
-                            Cancel
-                          </button>
-                        </form>
+                              return (
+                                <div
+                                  key={chk.id}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    gap: '8px',
+                                    padding: '8px 10px',
+                                    borderRadius: '6px',
+                                    backgroundColor: checked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-900)',
+                                    border: '1px solid ' + (checked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
+                                    transition: 'all 0.15s'
+                                  }}
+                                >
+                                  {isEditing ? (
+                                    <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                                      <input
+                                        type="text"
+                                        value={editingAuditText}
+                                        onChange={(e) => setEditingAuditText(e.target.value)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === 'Enter') handleSaveEditAudit(null, chk.id);
+                                          if (e.key === 'Escape') setEditingAuditId(null);
+                                        }}
+                                        autoFocus
+                                        style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                                      />
+                                      <button onClick={() => handleSaveEditAudit(null, chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                        <Check size={14} />
+                                      </button>
+                                      <button onClick={() => setEditingAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                        <X size={14} />
+                                      </button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <div onClick={() => toggleCheckItem(currentPhase.id, chk.id)} style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}>
+                                        <input
+                                          type="checkbox"
+                                          checked={checked}
+                                          onChange={() => {}}
+                                          style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
+                                        />
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: checked ? '#34d399' : 'var(--color-zinc-200)', textDecoration: checked ? 'line-through' : 'none' }}>
+                                          {chk.text}
+                                        </span>
+                                      </div>
+
+                                      {isCustomizing && (
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                                          <button onClick={() => { setEditingAuditId(chk.id); setEditingAuditText(chk.text); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit item">
+                                            <Edit2 size={13} />
+                                          </button>
+                                          <button onClick={() => handleDeleteAudit(null, chk.id, chk.text)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete item">
+                                            <Trash2 size={13} />
+                                          </button>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </>
                       )}
 
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        {sub.inspectionChecklist.map((chk) => {
-                          const checked = isCheckItemChecked(currentPhase.id, chk.id);
-                          const isEditing = editingAuditId === `${sub.id}_${chk.id}`;
+                      {/* Multi-Trade Subcategory Checklist Accordions (Framing Combo & Final CO) */}
+                      {currentPhase.hasSubcategories && (
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                          {currentPhase.subcategories.map((sub) => {
+                            const isTradeExpanded = !!expandedAuditTrades[sub.id];
+                            const subPassed = sub.inspectionChecklist.filter(chk => isCheckItemChecked(currentPhase.id, chk.id)).length;
+                            const subTotal = sub.inspectionChecklist.length;
+                            const subAllDone = subTotal > 0 && subPassed === subTotal;
 
-                          return (
-                            <div
-                              key={chk.id}
-                              style={{
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'space-between',
-                                gap: '6px',
-                                padding: '6px 8px',
-                                borderRadius: '4px',
-                                backgroundColor: checked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-950)',
-                                border: '1px solid ' + (checked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
-                                transition: 'all 0.15s'
-                              }}
-                            >
-                              {isEditing ? (
-                                <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
-                                  <input
-                                    type="text"
-                                    value={editingAuditText}
-                                    onChange={(e) => setEditingAuditText(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') handleSaveEditAudit(sub.id, chk.id);
-                                      if (e.key === 'Escape') setEditingAuditId(null);
-                                    }}
-                                    autoFocus
-                                    style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '3px 6px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
-                                  />
-                                  <button onClick={() => handleSaveEditAudit(sub.id, chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '3px 6px', cursor: 'pointer' }}>
-                                    <Check size={12} />
-                                  </button>
-                                  <button onClick={() => setEditingAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                                    <X size={12} />
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <div onClick={() => toggleCheckItem(currentPhase.id, chk.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, cursor: 'pointer' }}>
-                                    <input
-                                      type="checkbox"
-                                      checked={checked}
-                                      onChange={() => {}}
-                                      style={{ width: '15px', height: '15px', accentColor: '#10b981', cursor: 'pointer' }}
-                                    />
-                                    <span style={{ fontSize: '0.82rem', fontWeight: 600, color: checked ? '#34d399' : 'var(--color-zinc-200)', textDecoration: checked ? 'line-through' : 'none' }}>
-                                      {chk.text}
+                            return (
+                              <div
+                                key={sub.id}
+                                style={{
+                                  backgroundColor: 'var(--color-zinc-900)',
+                                  border: '1px solid var(--color-zinc-800)',
+                                  borderRadius: '6px',
+                                  overflow: 'hidden'
+                                }}
+                              >
+                                {/* Subcategory Accordion Header */}
+                                <div
+                                  onClick={() => toggleAuditTrade(sub.id)}
+                                  style={{
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'space-between',
+                                    padding: '10px 12px',
+                                    cursor: 'pointer',
+                                    userSelect: 'none',
+                                    backgroundColor: isTradeExpanded ? 'rgba(255, 255, 255, 0.03)' : 'transparent'
+                                  }}
+                                >
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                    <span style={{ fontSize: '1rem' }}>{sub.icon}</span>
+                                    <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-zinc-100)' }}>
+                                      {sub.name}
+                                    </span>
+                                    <span
+                                      style={{
+                                        fontSize: '0.68rem',
+                                        backgroundColor: subAllDone ? 'rgba(16, 185, 129, 0.25)' : 'rgba(255, 255, 255, 0.06)',
+                                        color: subAllDone ? '#34d399' : 'var(--color-zinc-400)',
+                                        padding: '1px 6px',
+                                        borderRadius: '10px',
+                                        fontWeight: 700
+                                      }}
+                                    >
+                                      {subPassed}/{subTotal}
                                     </span>
                                   </div>
 
-                                  {isCustomizing && (
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: '3px', opacity: 0.9 }}>
-                                      <button onClick={() => { setEditingAuditId(`${sub.id}_${chk.id}`); setEditingAuditText(chk.text); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit item">
-                                        <Edit2 size={12} />
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }} onClick={(e) => e.stopPropagation()}>
+                                    {isCustomizing && (
+                                      <button
+                                        onClick={() => setAddingAuditSubId(addingAuditSubId === sub.id ? null : sub.id)}
+                                        style={{
+                                          padding: '2px 6px',
+                                          borderRadius: '4px',
+                                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                                          border: '1px solid var(--color-zinc-700)',
+                                          color: 'var(--color-zinc-300)',
+                                          fontSize: '0.68rem',
+                                          fontWeight: 700,
+                                          cursor: 'pointer',
+                                          display: 'flex',
+                                          alignItems: 'center',
+                                          gap: '2px'
+                                        }}
+                                      >
+                                        <Plus size={11} /> Add Item
                                       </button>
-                                      <button onClick={() => handleDeleteAudit(sub.id, chk.id, chk.text)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete item">
-                                        <Trash2 size={12} />
-                                      </button>
+                                    )}
+                                    <div
+                                      onClick={() => toggleAuditTrade(sub.id)}
+                                      style={{
+                                        width: '20px',
+                                        height: '20px',
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        color: '#34d399',
+                                        cursor: 'pointer'
+                                      }}
+                                    >
+                                      {isTradeExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                                     </div>
-                                  )}
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
+                                  </div>
+                                </div>
+
+                                {/* Expanded Trade Checklist Items */}
+                                {isTradeExpanded && (
+                                  <div style={{ padding: '0 12px 10px 12px', borderTop: '1px solid var(--color-zinc-800)', marginTop: '4px', paddingTop: '8px' }}>
+                                    {/* Add Audit Item under this trade */}
+                                    {isCustomizing && addingAuditSubId === sub.id && (
+                                      <form onSubmit={(e) => handleAddAudit(sub.id, e)} style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                                        <input
+                                          type="text"
+                                          placeholder={`New audit check for ${sub.name}...`}
+                                          value={newAuditInput}
+                                          onChange={(e) => setNewAuditInput(e.target.value)}
+                                          autoFocus
+                                          style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
+                                        />
+                                        <button type="submit" style={{ padding: '0 10px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '4px', fontWeight: 800, fontSize: '0.72rem', cursor: 'pointer' }}>
+                                          Add
+                                        </button>
+                                        <button type="button" onClick={() => setAddingAuditSubId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.72rem' }}>
+                                          Cancel
+                                        </button>
+                                      </form>
+                                    )}
+
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                                      {sub.inspectionChecklist.map((chk) => {
+                                        const checked = isCheckItemChecked(currentPhase.id, chk.id);
+                                        const isEditing = editingAuditId === `${sub.id}_${chk.id}`;
+
+                                        return (
+                                          <div
+                                            key={chk.id}
+                                            style={{
+                                              display: 'flex',
+                                              alignItems: 'center',
+                                              justifyContent: 'space-between',
+                                              gap: '6px',
+                                              padding: '6px 8px',
+                                              borderRadius: '4px',
+                                              backgroundColor: checked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-950)',
+                                              border: '1px solid ' + (checked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
+                                              transition: 'all 0.15s'
+                                            }}
+                                          >
+                                            {isEditing ? (
+                                              <div style={{ display: 'flex', gap: '4px', width: '100%' }}>
+                                                <input
+                                                  type="text"
+                                                  value={editingAuditText}
+                                                  onChange={(e) => setEditingAuditText(e.target.value)}
+                                                  onKeyDown={(e) => {
+                                                    if (e.key === 'Enter') handleSaveEditAudit(sub.id, chk.id);
+                                                    if (e.key === 'Escape') setEditingAuditId(null);
+                                                  }}
+                                                  autoFocus
+                                                  style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '3px 6px', color: 'var(--color-zinc-100)', fontSize: '0.8rem', outline: 'none' }}
+                                                />
+                                                <button onClick={() => handleSaveEditAudit(sub.id, chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '3px 6px', cursor: 'pointer' }}>
+                                                  <Check size={12} />
+                                                </button>
+                                                <button onClick={() => setEditingAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                                  <X size={12} />
+                                                </button>
+                                              </div>
+                                            ) : (
+                                              <>
+                                                <div onClick={() => toggleCheckItem(currentPhase.id, chk.id)} style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, cursor: 'pointer' }}>
+                                                  <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    onChange={() => {}}
+                                                    style={{ width: '15px', height: '15px', accentColor: '#10b981', cursor: 'pointer' }}
+                                                  />
+                                                  <span style={{ fontSize: '0.82rem', fontWeight: 600, color: checked ? '#34d399' : 'var(--color-zinc-200)', textDecoration: checked ? 'line-through' : 'none' }}>
+                                                    {chk.text}
+                                                  </span>
+                                                </div>
+
+                                                {isCustomizing && (
+                                                  <div style={{ display: 'flex', alignItems: 'center', gap: '3px', opacity: 0.9 }}>
+                                                    <button onClick={() => { setEditingAuditId(`${sub.id}_${chk.id}`); setEditingAuditText(chk.text); }} style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }} title="Edit item">
+                                                      <Edit2 size={12} />
+                                                    </button>
+                                                    <button onClick={() => handleDeleteAudit(sub.id, chk.id, chk.text)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }} title="Delete item">
+                                                      <Trash2 size={12} />
+                                                    </button>
+                                                  </div>
+                                                )}
+                                              </>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+
+                      {/* Action Buttons */}
+                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                        <button
+                          onClick={handleFlagUncheckedWatchouts}
+                          style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            borderRadius: '6px',
+                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                            border: '1px solid #ef4444',
+                            color: '#ef4444',
+                            fontWeight: 700,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <AlertTriangle size={15} /> Review Incomplete Checks
+                        </button>
+                        <button
+                          onClick={handleScheduleInspection}
+                          style={{
+                            flex: 1,
+                            padding: '10px 12px',
+                            borderRadius: '6px',
+                            backgroundColor: 'var(--color-amber-500)',
+                            border: 'none',
+                            color: '#000',
+                            fontWeight: 800,
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '6px'
+                          }}
+                        >
+                          <CheckSquare size={15} /> Passed — City Inspection Ready
+                        </button>
                       </div>
                     </div>
-                  ))}
+                  )}
                 </div>
-              )}
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                <button
-                  onClick={handleFlagUncheckedWatchouts}
-                  style={{
-                    flex: 1,
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid #ef4444',
-                    color: '#ef4444',
-                    fontWeight: 700,
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <AlertTriangle size={15} /> Review Incomplete Checks
-                </button>
-                <button
-                  onClick={handleScheduleInspection}
-                  style={{
-                    flex: 1,
-                    padding: '10px 12px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--color-amber-500)',
-                    border: 'none',
-                    color: '#000',
-                    fontWeight: 800,
-                    fontSize: '0.8rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '6px'
-                  }}
-                >
-                  <CheckSquare size={15} /> Passed — City Inspection Ready
-                </button>
-              </div>
-            </div>
+              );
+            })()}
           </div>
         </div>
       )}
