@@ -26,7 +26,8 @@ import {
   Check,
   RotateCcw,
   Flag,
-  ListTodo
+  ListTodo,
+  Loader2
 } from 'lucide-react';
 import {
   loadBrainItems,

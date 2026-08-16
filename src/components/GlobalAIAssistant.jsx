@@ -9,7 +9,8 @@ import {
   Settings,
   Sparkles,
   Zap,
-  MessageSquare
+  MessageSquare,
+  Loader2
 } from 'lucide-react';
 import {
   loadBrainItems,
