@@ -36,9 +36,10 @@ export async function POST(request) {
 
     const payload = {
       contents: formattedContents,
+      tools: [{ googleSearch: {} }],
       generationConfig: {
-        maxOutputTokens: 1024,
-        temperature: 0.4
+        maxOutputTokens: 1500,
+        temperature: 0.3
       }
     };
 
@@ -73,13 +74,37 @@ export async function POST(request) {
 
         if (response.ok) {
           const data = await response.json();
-          const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+          const parts = data.candidates?.[0]?.content?.parts || [];
+          const text = parts.map((p) => p.text).filter(Boolean).join('\n');
           if (text) {
             return jsonResponse({ text: text.trim() });
           }
         } else {
           lastError = await response.text();
-          console.warn(`Gemini cloud model ${model} failed (${response.status}):`, lastError);
+          console.warn(`Gemini cloud model ${model} with search failed (${response.status}):`, lastError);
+
+          // Retry without googleSearch tools if model does not support it
+          const retryPayload = { ...payload };
+          delete retryPayload.tools;
+          const retryRes = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+            {
+              method: 'POST',
+              headers: {
+                'content-type': 'application/json',
+                'x-goog-api-key': apiKey
+              },
+              body: JSON.stringify(retryPayload)
+            }
+          );
+          if (retryRes.ok) {
+            const data = await retryRes.json();
+            const parts = data.candidates?.[0]?.content?.parts || [];
+            const text = parts.map((p) => p.text).filter(Boolean).join('\n');
+            if (text) {
+              return jsonResponse({ text: text.trim() });
+            }
+          }
         }
       } catch (err) {
         lastError = err.message;

@@ -551,6 +551,12 @@ You MUST include this exact tag in your response:
 [[ACTION:ADD_ITEM:{"title":"Descriptive title of task","category":"reminder","subcontractor":"Electrician","notes":""}]]
 Categories must be one of: "reminder", "watchout", or "subcontractor".
 Along with a concise 1-sentence confirmation (e.g. "Scheduled a reminder for you to **Call electrician tomorrow at 2:00 PM** in Field Brain!").
+
+10. REAL-TIME GOOGLE SEARCH & LIVE WEB PRICING:
+You HAVE active Google Search capability enabled!
+- When the user asks about current market pricing, quotes, unit specs, local building supplies (Home Depot, Lowes, Ferguson, 84 Lumber, etc.), or material availability:
+  * NEVER say "I will have the figures ready in a moment" or pretend to be surveying in the background.
+  * Search Google immediately and deliver the real, current dollar pricing, vendor names, and item specifications in your immediate response!
 `;
 
   // Build multi-turn conversational history
@@ -634,10 +640,11 @@ Along with a concise 1-sentence confirmation (e.g. "Scheduled a reminder for you
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               contents,
+              tools: [{ googleSearch: {} }],
               systemInstruction: { parts: [{ text: systemInstruction }] },
               generationConfig: {
-                maxOutputTokens: 1024,
-                temperature: 0.4
+                maxOutputTokens: 1500,
+                temperature: 0.3
               }
             }),
             signal: controller.signal
@@ -647,8 +654,9 @@ Along with a concise 1-sentence confirmation (e.g. "Scheduled a reminder for you
 
         if (res.ok) {
           const data = await res.json();
-          const cand = data.candidates?.[0]?.content?.parts?.[0]?.text;
-          if (cand) return cand.trim();
+          const parts = data.candidates?.[0]?.content?.parts || [];
+          const text = parts.map((p) => p.text).filter(Boolean).join('\n');
+          if (text) return text.trim();
         }
       } catch {
         // continue
