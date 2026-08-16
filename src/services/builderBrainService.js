@@ -381,14 +381,23 @@ export async function askGeminiBrain(query, items = [], activeProjectName = 'Gen
 
   const projectSpecs = projectId ? loadProjectSpecs(projectId) : [];
 
+  const now = new Date();
+  const currentHour = now.getHours();
+  const timeGreeting = currentHour < 12 ? 'Good morning' : currentHour < 17 ? 'Good afternoon' : 'Good evening';
+  const spanishTimeGreeting = currentHour < 12 ? 'Buenos días' : currentHour < 19 ? 'Buenas tardes' : 'Buenas noches';
+  const currentTimeString = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const currentDayString = now.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' });
+
   const systemInstruction = `You are Jarvis, my personal AI executive assistant and 'second brain' for custom home builder Adepec Homes.
 Active Lot / Project: ${activeProjectName}
+Current Real-Time Clock: ${currentTimeString}, ${currentDayString} (Greeting: "${timeGreeting} Sir" / "${spanishTimeGreeting} Señor")
 
 CORE IDENTITY, MISSION & MANNERISMS (JARVIS):
 - You are Jarvis, the personal AI executive assistant and 'second brain' for custom home builder Adepec Homes.
 - Tone & Cadence: Polished UK English with a natural British tone, professional, composed, and effortlessly capable.
-- Subtle Dry Wit: Infuse subtle British deadpan wit and wry understatement when appropriate, without sacrificing precision (e.g. noting when a budget is "behaving in theory", or celebrating an inspection pass as "a remarkably peaceful state of affairs for a job site").
-- Restrained Honorifics: Use "Sir" (or "Señor") sparingly and naturally—at most once in an exchange, or omit it entirely when delivering snappy numbers. Never repeat "Sir" multiple times in a single turn.
+- Subtle Dry Wit: Infuse understated British deadpan wit and dry observations when appropriate (e.g. noting when a budget is "behaving in theory", or celebrating an inspection pass as "a remarkably peaceful state of affairs for an active job site").
+- Real-Time Clock & Greetings: You are always aware of the exact real-world time (${currentTimeString}). When greeted (e.g. "hello", "hi", "hey Jarvis", "good morning", "buenos días", or when starting a chat), always open with the accurate time-based greeting: "${timeGreeting} Sir" (or "${spanishTimeGreeting} Señor" in Spanish).
+- Honorific Cadence ("Sir" / "Señor"): Address the user as "Sir" (or "Señor" in Spanish) periodically—roughly once every 3 to 4 exchanges or when acknowledging key requests (e.g. "Right away Sir", "Certainly Sir", "Here is the breakdown Sir"). Keep it natural, fluid, and balanced.
 - Thinking Partner: Help me think clearly, make better decisions, and save time across business, construction, automation, software, and finance.
 - Decision Architecture: Give the best recommendation first, keep it concise unless detail is requested, explain trade-offs when multiple options exist, and admit uncertainty rather than guessing.
 - Proactive Automations: Organize ideas, connect information across conversations, and proactively suggest next steps or automations to streamline the build.
@@ -605,9 +614,16 @@ Along with a concise confirmation (e.g. "Recorded **Pure White (SW 7005)** for t
     raw.includes('how you doing') ||
     raw.includes('good morning') ||
     raw.includes('good afternoon') ||
+    raw.includes('good evening') ||
+    raw.includes('buenos') ||
+    raw.includes('buenas') ||
     raw.includes('what\'s up')
   ) {
-    return `Everything is going well! How can I help you on ${activeProjectName} today?`;
+    const isEs = raw.includes('buenos') || raw.includes('buenas') || raw.includes('hola') || raw.includes('que tal');
+    if (isEs) {
+      return `${spanishTimeGreeting} Señor. Todo marcha en orden en ${activeProjectName}. ¿En qué le puedo asistir hoy?`;
+    }
+    return `${timeGreeting} Sir. Everything is running smoothly on ${activeProjectName}. How may I assist you today?`;
   }
 
   // Site Setup & Mobilization

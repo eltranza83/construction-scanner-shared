@@ -26,13 +26,17 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
   const [isOpen, setIsOpen] = useState(false);
-  const [messages, setMessages] = useState([
-    {
-      sender: 'ai',
-      text: `Online and at your service, sir. I have indexed all project financials, Google Drive files, and field watch-outs for "${projectName}". How may I assist you today?`,
-      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    }
-  ]);
+  const [messages, setMessages] = useState(() => {
+    const hr = new Date().getHours();
+    const timeGreeting = hr < 12 ? 'Good morning Sir' : hr < 17 ? 'Good afternoon Sir' : 'Good evening Sir';
+    return [
+      {
+        sender: 'ai',
+        text: `${timeGreeting}. Online and at your service. I have indexed all project financials, Google Drive files, and field protocols for "${projectName}". How may I assist you today?`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      }
+    ];
+  });
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
