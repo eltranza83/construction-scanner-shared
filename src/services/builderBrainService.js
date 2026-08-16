@@ -485,7 +485,7 @@ export function loadProjectSiteSetup(projectId) {
   return { protocol, checks };
 }
 
-export async function askGeminiBrain(query, items, activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null) {
+export async function askGeminiBrain(query, items, activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = []) {
   // Strict Lot Filtering to prevent cross-lot data leaks
   const cleanLotName = activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const projectItems = items.filter((i) => {
@@ -507,38 +507,56 @@ export async function askGeminiBrain(query, items, activeProjectName = 'General 
   const siteSetupCompleted = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]).length;
   const siteSetupTotal = siteSetupProtocol.inspectionChecklist.length;
 
-  const contextPrompt = `
-You are "Adepec Builder Brain", an expert AI Construction Field & Financial Assistant for custom home builder Adepec Homes.
-Active Project: ${activeProjectName}
+  const systemInstruction = `You are "Adepec Builder Brain", an expert AI Construction Assistant, Co-Pilot, and Second Brain for custom home builder Adepec Homes.
+Active Lot / Project: ${activeProjectName}
 
-PROJECT DATA CONTEXT:
-- Site Setup & Mobilization Status: ${siteSetupCompleted}/${siteSetupTotal} Checked Off
+You have direct, complete access to all project data for this build:
+
+1. SITE SETUP & MOBILIZATION PROTOCOL:
+Status: ${siteSetupCompleted}/${siteSetupTotal} Checked Off
 ${siteSetupProtocol.inspectionChecklist.map((c) => `  * [${siteSetupChecks[c.id] ? 'CHECKED' : 'UNCHECKED'}] ${c.text}`).join('\n')}
 
+2. ACTIVE FIELD ITEMS:
 - Active Site Watch-Outs (${pendingW.length}):
 ${pendingW.map((w) => `  * [${w.lot || activeProjectName}] (${w.subcontractor || 'General'}): ${w.title} - Notes: ${w.notes || 'None'}`).join('\n') || '  (None)'}
 
-- Pending Subcontractor Calls (${pendingS.length}):
+- Pending Trade Calls (${pendingS.length}):
 ${pendingS.map((s) => `  * [${s.lot || activeProjectName}] Call ${s.subcontractor || 'Trade'}: ${s.title}`).join('\n') || '  (None)'}
 
 - Scheduled Field Reminders (${pendingR.length}):
 ${pendingR.map((r) => `  * [${r.lot || activeProjectName}] ${r.title} (Target: ${r.targetDate ? new Date(r.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Flexible'})`).join('\n') || '  (None)'}
 
-FINANCIAL & DASHBOARD EXPENSES LEDGER:
+3. FINANCIALS, BUDGETS, QUOTES & TRANSACTION INVOICES:
 ${financialContext}
 
-CITY INSPECTION STAGES CONFIGURED:
+4. CITY INSPECTION STAGES & PROTOCOLS:
 ${INSPECTION_STAGES.map((s) => `- ${s.name} (${s.shortName}): ${s.description}`).join('\n')}
 
-USER QUESTION: "${query}"
-
-CRITICAL INSTRUCTIONS & RESPONSE RULES:
-1. DEFAULT LENGTH: 1 TO 2 SHORT, DIRECT SENTENCES ONLY. Keep answers punchy, precise, and fast to read / listen to.
-2. ONLY ANSWER WHAT WAS ASKED: NEVER provide unsolicited status summaries, financial dumps, or site setup checklists unless the user explicitly asks for them.
-3. CASUAL GREETINGS: If the user greets you or asks "how's it going", "what's up", or "how are you", reply with a simple, friendly 1-sentence response like: "Everything is going well! How can I help you on ${activeProjectName} today?" (Do NOT dump project status or budgets on greetings).
-4. ON-DEMAND DETAIL MODE: ONLY if the user explicitly asks for "all the details", "be thorough", "full breakdown", "itemized list", or "explain in detail", then provide a structured, comprehensive multi-paragraph breakdown.
-5. NO FLUFF: Avoid robotic intros or repetitive pleasantries before getting to the answer.
+BEHAVIOR AND CONVERSATION GUIDELINES:
+- You are a knowledgeable, natural conversation partner. Converse naturally, intelligently, and contextually.
+- Follow up on previous chat context effortlessly. If the user refers to "that expense", "the tile guy", "what did we pay", "look closer", or "tell me more", use the prior messages in the conversation to know exactly what was being discussed.
+- By default, give direct, concise, and helpful answers (1 to 3 sentences).
+- If the user asks for more details, an itemized list, an explanation, or a breakdown, provide full and thorough details.
+- Handle speech-to-text typos smoothly (e.g. "lottery" = "lot 3", "type to" = "tied to", "foresight" = "four site / site setup").
+- Do NOT provide unsolicited dumps of all project data unless requested.
 `;
+
+  // Build multi-turn conversational history
+  const contents = [];
+  if (Array.isArray(chatHistory) && chatHistory.length > 0) {
+    const recent = chatHistory.slice(-8);
+    recent.forEach((m) => {
+      if (!m.text) return;
+      contents.push({
+        role: m.sender === 'user' ? 'user' : 'model',
+        parts: [{ text: m.text }]
+      });
+    });
+  }
+  contents.push({
+    role: 'user',
+    parts: [{ text: query }]
+  });
 
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
   const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? localStorage.getItem('jobscan_gemini_key') : '') || envKey || '';
@@ -546,12 +564,16 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
   // 1. Primary: Query the dedicated Serverless Cloud AI Endpoint (/api/ask-brain)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 6000);
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     const apiRes = await fetch('/api/ask-brain', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ prompt: contextPrompt }),
+      body: JSON.stringify({
+        contents,
+        systemInstruction,
+        apiKey: effectiveKey
+      }),
       signal: controller.signal
     });
     clearTimeout(timeoutId);
@@ -573,7 +595,7 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
     for (const model of modelsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 4500);
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
 
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyClean}`,
@@ -581,10 +603,11 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              contents: [{ parts: [{ text: contextPrompt }] }],
+              contents,
+              systemInstruction: { parts: [{ text: systemInstruction }] },
               generationConfig: {
-                maxOutputTokens: 350,
-                temperature: 0.2
+                maxOutputTokens: 1024,
+                temperature: 0.4
               }
             }),
             signal: controller.signal

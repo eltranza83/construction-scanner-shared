@@ -3,14 +3,35 @@ import { HttpError, errorResponse, jsonResponse } from './_lib/firebase-auth.js'
 export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
-    const { prompt, query } = body;
-    const apiKey = process.env.GEMINI_API_KEY || '';
+    const { contents, systemInstruction, prompt, query, apiKey: clientApiKey } = body;
+    const apiKey = process.env.GEMINI_API_KEY || clientApiKey || '';
 
-    if (!prompt && !query) {
-      throw new HttpError(400, 'Missing prompt or query in request.');
+    let formattedContents = [];
+    if (Array.isArray(contents) && contents.length > 0) {
+      formattedContents = contents.map((c) => ({
+        role: c.role === 'assistant' || c.role === 'ai' || c.role === 'model' ? 'model' : 'user',
+        parts: Array.isArray(c.parts) ? c.parts : [{ text: String(c.text || c.content || '') }]
+      }));
+    } else if (prompt || query) {
+      formattedContents = [{ role: 'user', parts: [{ text: String(prompt || query) }] }];
+    } else {
+      throw new HttpError(400, 'Missing conversation contents or prompt.');
     }
 
-    const fullPrompt = prompt || query;
+    const payload = {
+      contents: formattedContents,
+      generationConfig: {
+        maxOutputTokens: 1024,
+        temperature: 0.4
+      }
+    };
+
+    if (systemInstruction) {
+      payload.systemInstruction = typeof systemInstruction === 'string'
+        ? { parts: [{ text: systemInstruction }] }
+        : systemInstruction;
+    }
+
     const modelsToTry = [
       process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
       'gemini-3.5-flash',
@@ -29,13 +50,7 @@ export async function POST(request) {
               'content-type': 'application/json',
               'x-goog-api-key': apiKey
             },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: fullPrompt }] }],
-              generationConfig: {
-                maxOutputTokens: 350,
-                temperature: 0.2
-              }
-            })
+            body: JSON.stringify(payload)
           }
         );
 

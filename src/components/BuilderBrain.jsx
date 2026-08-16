@@ -589,7 +589,7 @@ export default function BuilderBrain({ activeProject, selectedFolder }) {
         if (newItem) setItems((prev) => [newItem, ...prev]);
       }
 
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId);
+      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, aiMessages);
       const aiMsg = {
         sender: 'ai',
         text: answer,

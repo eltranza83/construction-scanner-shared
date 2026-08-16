@@ -128,7 +128,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
         }
       }
 
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId);
+      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, messages);
       const aiMsg = {
         sender: 'ai',
         text: answer,
