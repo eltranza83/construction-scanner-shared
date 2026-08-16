@@ -2,7 +2,8 @@ import * as chrono from 'chrono-node';
 import { INSPECTION_STAGES } from './inspectionService';
 
 const BRAIN_STORAGE_PREFIX = 'jobscan_builder_brain_';
-const GLOBAL_PHASES_STORAGE_KEY = 'jobscan_global_phase_protocols_v2';
+const GLOBAL_PHASES_STORAGE_KEY = 'jobscan_global_phase_protocols_v4';
+const LEGACY_GLOBAL_PHASES_KEY = 'jobscan_global_phase_protocols_v3';
 const GLOBAL_SITE_SETUP_KEY = 'jobscan_global_site_setup_protocol_v2';
 
 export function loadGlobalSiteSetupProtocol(defaultProtocol) {
@@ -41,44 +42,62 @@ export function resetGlobalSiteSetupProtocol(defaultProtocol) {
 export function loadGlobalPhases(defaultPhases) {
   try {
     const raw = localStorage.getItem(GLOBAL_PHASES_STORAGE_KEY);
-    if (!raw) return defaultPhases;
+    if (!raw) {
+      saveGlobalPhases(defaultPhases);
+      return defaultPhases;
+    }
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return defaultPhases;
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      saveGlobalPhases(defaultPhases);
+      return defaultPhases;
+    }
 
-    // Auto-migrate: restore any missing preTradeNotes and subcategories
     const migrated = defaultPhases.map((defPhase) => {
       const existing = parsed.find((p) => p.id === defPhase.id);
       if (!existing) return defPhase;
+
+      if (defPhase.hasSubcategories) {
+        if (!existing.subcategories || !Array.isArray(existing.subcategories) || existing.subcategories.length !== defPhase.subcategories.length) {
+          return defPhase;
+        }
+
+        const subcategories = defPhase.subcategories.map((defSub) => {
+          const existSub = existing.subcategories.find((s) => s.id === defSub.id);
+          if (!existSub) return defSub;
+          return {
+            ...defSub,
+            ...existSub,
+            preTradeNotes: (existSub.preTradeNotes && existSub.preTradeNotes.length > 0)
+              ? existSub.preTradeNotes
+              : defSub.preTradeNotes,
+            inspectionChecklist: (existSub.inspectionChecklist && existSub.inspectionChecklist.length > 0)
+              ? existSub.inspectionChecklist
+              : defSub.inspectionChecklist
+          };
+        });
+
+        return {
+          ...defPhase,
+          ...existing,
+          trade: defPhase.trade,
+          hasSubcategories: true,
+          subcategories
+        };
+      }
 
       const preTradeNotes = (existing.preTradeNotes && existing.preTradeNotes.length > 0)
         ? existing.preTradeNotes
         : defPhase.preTradeNotes;
 
-      let subcategories = existing.subcategories;
-      if (defPhase.hasSubcategories) {
-        if (!subcategories || subcategories.length === 0) {
-          subcategories = defPhase.subcategories;
-        } else {
-          subcategories = defPhase.subcategories.map((defSub) => {
-            const existSub = subcategories.find((s) => s.id === defSub.id);
-            if (!existSub) return defSub;
-            return {
-              ...existSub,
-              preTradeNotes: (existSub.preTradeNotes && existSub.preTradeNotes.length > 0)
-                ? existSub.preTradeNotes
-                : defSub.preTradeNotes
-            };
-          });
-        }
-      }
-
       return {
+        ...defPhase,
         ...existing,
-        hasSubcategories: defPhase.hasSubcategories,
-        preTradeNotes,
-        subcategories: defPhase.hasSubcategories ? subcategories : undefined
+        hasSubcategories: false,
+        preTradeNotes
       };
     });
+
+    saveGlobalPhases(migrated);
     return migrated;
   } catch (e) {
     console.error('Error loading global phase protocols:', e);

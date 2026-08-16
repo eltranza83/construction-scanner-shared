@@ -242,21 +242,79 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
     id: 'final_co',
     name: '6. Final Inspection (C.O.)',
     shortName: '6. Final (C.O.)',
-    trade: 'General Builder',
+    trade: 'Multi-Trade Final',
     icon: '🔑',
-    preTradeNotes: [
-      'Set spring hinge tension pins on garage entry door so door fully self-closes and latches.',
-      'Post printed REScheck Energy Compliance Certificate inside main electrical panel door.',
-      'Test all GFCI outlets in kitchen, bath, garage, and exterior.'
-    ],
-    inspectionChecklist: [
-      { id: 'fin1', text: 'Garage entry door fully self-closes and latches automatically' },
-      { id: 'fin2', text: 'REScheck Energy certificate posted inside breaker panel' },
-      { id: 'fin3', text: 'All GFCI & AFCI outlets trip and reset properly' },
-      { id: 'fin4', text: 'Stair handrail & guardrail height / baluster spacing (<4") code compliant' },
-      { id: 'fin5', text: 'Plumbing fixtures tested — zero leaks under sinks and toilets' },
-      { id: 'fin6', text: 'Smoke & Carbon Monoxide detectors tested and interconnected' },
-    ],
+    hasSubcategories: true,
+    subcategories: [
+      {
+        id: 'sub_final_hvac',
+        name: 'Mechanical & HVAC Final',
+        trade: 'HVAC Sub',
+        icon: '❄️',
+        preTradeNotes: [
+          'Verify thermostat is calibrated and tested in both heat and cool cycles.',
+          'Check secondary condensate emergency drain pan float safety switch operation.',
+          'Install fresh HVAC air filter and ensure all supply/return grilles are sealed and clean.'
+        ],
+        inspectionChecklist: [
+          { id: 'fin_h1', text: 'Thermostat calibrated and heating / A/C cooling operational' },
+          { id: 'fin_h2', text: 'Exterior condenser disconnect box installed, fused, and labeled' },
+          { id: 'fin_h3', text: 'Secondary condensate drain pan and safety float cutoff switch tested' },
+          { id: 'fin_h4', text: 'Dryer exhaust duct and bathroom ventilation fans discharge to exterior' }
+        ]
+      },
+      {
+        id: 'sub_final_electrical',
+        name: 'Electrical Final',
+        trade: 'Electrician',
+        icon: '⚡',
+        preTradeNotes: [
+          'Label 100% of breaker circuits clearly in the main panel directory.',
+          'Test all GFCI & AFCI circuits in kitchen, baths, laundry, garage, and exterior.',
+          'Mount cover plates on all receptacles, light switches, and junction boxes.'
+        ],
+        inspectionChecklist: [
+          { id: 'fin_e1', text: 'Main breaker panel directory fully labeled and REScheck energy certificate posted' },
+          { id: 'fin_e2', text: 'All GFCI & AFCI outlets trip and reset properly with test tool' },
+          { id: 'fin_e3', text: 'Smoke and Carbon Monoxide detectors tested, interconnected, and battery backup active' },
+          { id: 'fin_e4', text: 'Exterior weather-resistant in-use outlet covers installed' }
+        ]
+      },
+      {
+        id: 'sub_final_plumbing',
+        name: 'Plumbing Final',
+        trade: 'Plumber',
+        icon: '🚰',
+        preTradeNotes: [
+          'Run all fixtures (sinks, tubs, showers, toilets) under pressure for 15+ minutes.',
+          'Check water heater temperature & pressure (T&P) relief valve discharge piping to exterior.',
+          'Verify anti-siphon vacuum breaker devices on all exterior hose bibbs.'
+        ],
+        inspectionChecklist: [
+          { id: 'fin_p1', text: 'Zero leaks under all sinks, vanity supply stops, traps, and toilet bases' },
+          { id: 'fin_p2', text: 'Water heater T&P relief valve discharge line pitched down to exterior / approved drain' },
+          { id: 'fin_p3', text: 'Anti-siphon vacuum breakers installed on all exterior hose bibbs' },
+          { id: 'fin_p4', text: 'Sewer cleanouts capped, accessible, and flush with finished grade' }
+        ]
+      },
+      {
+        id: 'sub_final_contractor',
+        name: 'Contractor Final Checks',
+        trade: 'General Builder / Finishes',
+        icon: '🔑',
+        preTradeNotes: [
+          'Set spring-loaded hinge tension pins on garage-to-house fire door for self-closing and latching.',
+          'Inspect stair handrails and guardrails for code height and <4" baluster spacing.',
+          'Confirm attic access hatch has weatherstrip gasket and R-38+ insulation cover.'
+        ],
+        inspectionChecklist: [
+          { id: 'fin_c1', text: 'Garage entry door self-closes and latches automatically' },
+          { id: 'fin_c2', text: 'Stair handrails continuous and guardrail baluster spacing under 4 inches' },
+          { id: 'fin_c3', text: 'Attic access opening weatherstripped and insulated' },
+          { id: 'fin_c4', text: 'Window sashes operate smoothly, lock securely, and safety glazing verified in wet areas' }
+        ]
+      }
+    ]
   },
 ];
 
@@ -325,6 +383,12 @@ export default function BuilderBrain({ activeProject, selectedFolder }) {
   const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_gemini_key') || '');
   const [showSettings, setShowSettings] = useState(false);
   const chatEndRef = useRef(null);
+
+  // Auto-sync phase templates on mount
+  useEffect(() => {
+    const loadedPhases = loadGlobalPhases(DEFAULT_CONSTRUCTION_PHASES);
+    setPhases(loadedPhases);
+  }, []);
 
   // Load items
   useEffect(() => {
