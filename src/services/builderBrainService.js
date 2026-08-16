@@ -41,59 +41,116 @@ export function resetGlobalSiteSetupProtocol(defaultProtocol) {
 
 export function loadGlobalPhases(defaultPhases) {
   try {
-    const raw = localStorage.getItem(GLOBAL_PHASES_STORAGE_KEY);
-    if (!raw) {
-      saveGlobalPhases(defaultPhases);
-      return defaultPhases;
+    const historicalKeys = [
+      GLOBAL_PHASES_STORAGE_KEY,
+      LEGACY_GLOBAL_PHASES_KEY,
+      'jobscan_global_phase_protocols_v2',
+      'jobscan_global_phase_protocols'
+    ];
+
+    // Collect all stored phase versions to harvest user-added custom notes/checklists
+    const storedPhaseSets = [];
+    for (const key of historicalKeys) {
+      try {
+        const raw = localStorage.getItem(key);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            storedPhaseSets.push(parsed);
+          }
+        }
+      } catch {
+        // ignore JSON parse error
+      }
     }
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
+
+    if (storedPhaseSets.length === 0) {
       saveGlobalPhases(defaultPhases);
       return defaultPhases;
     }
 
     const migrated = defaultPhases.map((defPhase) => {
-      const existing = parsed.find((p) => p.id === defPhase.id);
-      if (!existing) return defPhase;
+      // Find matches in stored phase sets
+      const matches = storedPhaseSets
+        .map((set) => set.find((p) => p.id === defPhase.id))
+        .filter(Boolean);
+
+      if (matches.length === 0) return defPhase;
 
       if (defPhase.hasSubcategories) {
-        if (!existing.subcategories || !Array.isArray(existing.subcategories) || existing.subcategories.length !== defPhase.subcategories.length) {
-          return defPhase;
-        }
-
         const subcategories = defPhase.subcategories.map((defSub) => {
-          const existSub = existing.subcategories.find((s) => s.id === defSub.id);
-          if (!existSub) return defSub;
+          // Aggregate pre-notes across all matching historical subcategories
+          const allPreNotes = [...(defSub.preTradeNotes || [])];
+          const allChecklist = [...(defSub.inspectionChecklist || [])];
+          const checkIds = new Set(allChecklist.map((c) => (c.text || c).trim().toLowerCase()));
+
+          for (const match of matches) {
+            const matchSub = match.subcategories?.find((s) => s.id === defSub.id);
+            if (matchSub) {
+              if (Array.isArray(matchSub.preTradeNotes)) {
+                for (const note of matchSub.preTradeNotes) {
+                  if (note && typeof note === 'string' && !allPreNotes.includes(note.trim())) {
+                    allPreNotes.push(note.trim());
+                  }
+                }
+              }
+              if (Array.isArray(matchSub.inspectionChecklist)) {
+                for (const item of matchSub.inspectionChecklist) {
+                  const txt = (item.text || item || '').trim();
+                  const key = txt.toLowerCase();
+                  if (txt && !checkIds.has(key)) {
+                    checkIds.add(key);
+                    allChecklist.push(typeof item === 'object' ? item : { id: 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6), text: txt });
+                  }
+                }
+              }
+            }
+          }
+
           return {
             ...defSub,
-            ...existSub,
-            preTradeNotes: (existSub.preTradeNotes && existSub.preTradeNotes.length > 0)
-              ? existSub.preTradeNotes
-              : defSub.preTradeNotes,
-            inspectionChecklist: (existSub.inspectionChecklist && existSub.inspectionChecklist.length > 0)
-              ? existSub.inspectionChecklist
-              : defSub.inspectionChecklist
+            preTradeNotes: allPreNotes,
+            inspectionChecklist: allChecklist
           };
         });
 
         return {
           ...defPhase,
-          ...existing,
-          trade: defPhase.trade,
           hasSubcategories: true,
           subcategories
         };
       }
 
-      const preTradeNotes = (existing.preTradeNotes && existing.preTradeNotes.length > 0)
-        ? existing.preTradeNotes
-        : defPhase.preTradeNotes;
+      // Flat Phase: aggregate all pre-trade notes and checklists across matches
+      const allPreNotes = [...(defPhase.preTradeNotes || [])];
+      const allChecklist = [...(defPhase.inspectionChecklist || [])];
+      const checkIds = new Set(allChecklist.map((c) => (c.text || c).trim().toLowerCase()));
+
+      for (const match of matches) {
+        if (Array.isArray(match.preTradeNotes)) {
+          for (const note of match.preTradeNotes) {
+            if (note && typeof note === 'string' && !allPreNotes.includes(note.trim())) {
+              allPreNotes.push(note.trim());
+            }
+          }
+        }
+        if (Array.isArray(match.inspectionChecklist)) {
+          for (const item of match.inspectionChecklist) {
+            const txt = (item.text || item || '').trim();
+            const key = txt.toLowerCase();
+            if (txt && !checkIds.has(key)) {
+              checkIds.add(key);
+              allChecklist.push(typeof item === 'object' ? item : { id: 'cust_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6), text: txt });
+            }
+          }
+        }
+      }
 
       return {
         ...defPhase,
-        ...existing,
         hasSubcategories: false,
-        preTradeNotes
+        preTradeNotes: allPreNotes,
+        inspectionChecklist: allChecklist
       };
     });
 
@@ -213,7 +270,44 @@ export function loadBrainItems(projectId = 'default') {
   try {
     const key = `${BRAIN_STORAGE_PREFIX}${projectId}`;
     const raw = localStorage.getItem(key);
-    if (!raw) {
+    let items = raw ? JSON.parse(raw) : null;
+
+    // Check if current items only contains default sample items
+    const hasCustomItems = items && Array.isArray(items) && items.some(i => !i.id?.startsWith('b_sample_'));
+
+    if (!hasCustomItems) {
+      // Harvest any user-created items from other project keys in localStorage
+      const harvested = [];
+      const seenIds = new Set();
+
+      for (let i = 0; i < localStorage.length; i++) {
+        const lKey = localStorage.key(i);
+        if (lKey && lKey.startsWith(BRAIN_STORAGE_PREFIX)) {
+          try {
+            const data = JSON.parse(localStorage.getItem(lKey));
+            if (Array.isArray(data)) {
+              for (const item of data) {
+                if (item && item.id && !seenIds.has(item.id) && !item.id.startsWith('b_sample_')) {
+                  seenIds.add(item.id);
+                  harvested.push(item);
+                }
+              }
+            }
+          } catch {
+            // ignore parse error
+          }
+        }
+      }
+
+      if (harvested.length > 0) {
+        // Merge harvested user items with any existing items
+        const combined = [...harvested, ...(Array.isArray(items) ? items.filter(i => i.id?.startsWith('b_sample_')) : [])];
+        saveBrainItems(projectId, combined);
+        return combined;
+      }
+    }
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
       const initial = [
         {
           id: 'b_sample_1',
@@ -258,7 +352,7 @@ export function loadBrainItems(projectId = 'default') {
       localStorage.setItem(key, JSON.stringify(initial));
       return initial;
     }
-    return JSON.parse(raw);
+    return items;
   } catch (err) {
     console.error('Error loading Builder Brain data:', err);
     return [];

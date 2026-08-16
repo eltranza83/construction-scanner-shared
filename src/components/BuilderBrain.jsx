@@ -72,20 +72,23 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
     trade: 'Plumber',
     icon: '🚰',
     preTradeNotes: [
-      'Sleeve all foundation & slab pass-throughs before pour.',
-      'Maintain minimum 1/4 inch per foot slope on main waste lines.',
+      'Sleeve all supply and drain lines passing under form boards or future concrete footings.',
+      'Maintain minimum 1/4" per foot slope on underground sewer lines with sand bedding.',
+      'Fill vertical 8-9ft stack pipe with water to 100% pressure test all underground drain lines before backfilling.',
       'Protect water lines from exterior wall freezing pockets.',
       'Install metal nail plates on all studs notched or drilled within 1.25" of face.',
-      'Set temporary hose bibb with anti-siphon vacuum breaker on water meter line.'
+      'Once inspection passes: Plumber must cap/seal all open pipe ends tightly and backfill trenches with sand/dirt to protect pipes before slab prep.'
     ],
     inspectionChecklist: [
       { id: 'p1', text: 'Water lines pressure tested at 50+ PSI (gauge held for 15+ mins)' },
-      { id: 'p2', text: 'Drain lines filled with water test up to roof stack' },
-      { id: 'p3', text: 'Nail plates installed on all stud & joist penetrations' },
-      { id: 'p4', text: 'Cleanout access plugs installed and accessible' },
-      { id: 'p5', text: 'Shower pan test completed & holding water' },
-      { id: 'p6', text: 'Post-inspection pipe capping & trench backfill verified' },
-    ],
+      { id: 'p2', text: 'Water Head / Stack Pressure Test (8-9ft vertical stack filled with water to roof)' },
+      { id: 'p3', text: 'Drain & waste pipe trenching, sand bedding & 1/4" per ft slopes verified' },
+      { id: 'p4', text: 'Pipe sleeve protectors installed under form boards and concrete footings' },
+      { id: 'p5', text: 'Nail plates installed on all stud & joist penetrations within 1.25"' },
+      { id: 'p6', text: 'Cleanout access plugs installed and accessible' },
+      { id: 'p7', text: 'Shower pan test completed & holding water' },
+      { id: 'p8', text: 'Post-inspection pipe capping & trench backfill verified before slab prep' }
+    ]
   },
   {
     id: 'foundation',
@@ -94,18 +97,24 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
     trade: 'Concrete & Foundation',
     icon: '🏗️',
     preTradeNotes: [
-      'Verify string/yarn setback lines across form boards before pour.',
-      'Check excavation trench depth and compaction before steel rebar grid.',
-      'Ensure 6-mil poly vapor barrier is fully lapped and taped 100%.',
-      'Verify 20ft #4 rebar ufer grounding electrode attached and bonded.'
+      'Pad dirt scraped, leveled, and form boards staked securely with neat square trenches and clean diagonals.',
+      'Dig stirrup & grade beam trenches down at least 12 inches into undisturbed soil (verify natural soil layer color change).',
+      'Spray early-morning termite chemical soil pre-treatment directly across dirt trenches before vapor barrier is laid.',
+      'Lay plastic vapor barrier immediately over treated soil; overlap and tape 100% of seams—zero holes or dirt exposed.',
+      'Elevate rebar grid & stirrups with yellow rebar chairs/dobies so steel is suspended properly.',
+      'Attach and bond 20ft #4 rebar Ufer grounding electrode and verify accessibility.',
+      'String/yarn setback lines strung across form boards for inspector to verify property line setbacks.'
     ],
     inspectionChecklist: [
-      { id: 'fnd1', text: 'Formwork setbacks match approved plot plan' },
-      { id: 'fnd2', text: 'Rebar steel grid chair height & clearances verified' },
-      { id: 'fnd3', text: 'Ufer ground electrode bonded and accessible' },
-      { id: 'fnd4', text: 'Vapor barrier undamaged, lapped, and taped' },
-      { id: 'fnd5', text: 'Plumbing blockouts and sleeve locations verified' },
-    ],
+      { id: 'fnd1', text: 'Pad dirt leveling, formwork & trench squareness / diagonals verified' },
+      { id: 'fnd2', text: '12-inch minimum undisturbed soil depth verified for stirrups & grade beams' },
+      { id: 'fnd3', text: 'Early-morning termite soil pre-treatment applied before plastic' },
+      { id: 'fnd4', text: 'Vapor barrier sheeting 100% lapped, taped, and undamaged' },
+      { id: 'fnd5', text: 'Rebar steel grid elevated on yellow chairs / dobies with proper clearances' },
+      { id: 'fnd6', text: 'Ufer grounding electrode bonded, attached, and accessible' },
+      { id: 'fnd7', text: 'String / yarn setback lines verified against approved plot plan' },
+      { id: 'fnd8', text: 'Plumbing blockouts and sleeve locations verified before pour' }
+    ]
   },
   {
     id: 'framing_combo',
@@ -123,13 +132,17 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         preTradeNotes: [
           'Verify window & door rough opening (R.O.) dimensions per manufacturer cut sheets.',
           'Ensure 3-stud corners for drywall backing and double joists under heavy load areas.',
-          'Verify hurricane tie clips on all truss connections to top plates.'
+          'CRITICAL: Verify 100% of hurricane clips (H2.5A/H10), twist straps, and windstorm tie-down metal plates are fully nailed per engineering specs (TDI/WPI-8).',
+          'Check every perimeter sill plate anchor bolt to ensure plate washers are in place and hex nuts are fully torqued tight against bottom plates.',
+          'CRITICAL: Build continuous OSB catwalk (min 24" wide) from attic hatch to AC unit, plus spacious OSB work deck around unit before HVAC installation.'
         ],
         inspectionChecklist: [
           { id: 'fc_f1', text: 'OSB sheathing nail pattern verified (6" edge / 12" field)' },
-          { id: 'fc_f2', text: 'Truss hanger nails fully installed (zero missing structural nails)' },
-          { id: 'fc_f3', text: 'Hurricane tie clips installed on all truss connections' },
-          { id: 'fc_f4', text: 'Header sizes match structural plan callouts' }
+          { id: 'fc_f2', text: 'Windstorm metal ties & hurricane clip hardware (TDI / WPI-8) 100% nailed' },
+          { id: 'fc_f3', text: 'Truss hanger structural nails fully installed (zero missing nails)' },
+          { id: 'fc_f4', text: 'Sill plate anchor bolt & washer tightness verified around perimeter' },
+          { id: 'fc_f5', text: 'Attic HVAC access catwalk (24" min) & spacious OSB work platform constructed' },
+          { id: 'fc_f6', text: 'Header sizes and load-bearing studs match structural plan callouts' }
         ]
       },
       {
@@ -140,13 +153,17 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         preTradeNotes: [
           'Ensure main panel box has 36" depth clearance per NEC code.',
           'Set box depths for 1/2" drywall thickness.',
-          'Verify dedicated circuits for microwave, refrigerator, and sump pump.'
+          'Verify all white conductors acting as hot/switch legs are re-identified with red electrical tape inside boxes.',
+          'Install safety nail plates wherever Romex cables pass closer than 1.25" to stud face.',
+          'BUILDER REMINDER: Schedule security alarm company to run low-voltage pre-wire (sensors, keypads, cameras) before insulation starts!'
         ],
         inspectionChecklist: [
-          { id: 'fc_e1', text: 'Grounding electrode conductor (Ufer ground) attached' },
-          { id: 'fc_e2', text: 'Nail plates installed where cables pass closer than 1.25" to stud face' },
-          { id: 'fc_e3', text: 'AFCI / GFCI breaker callouts tagged in panel' },
-          { id: 'fc_e4', text: 'Smoke & CO detector box rough-ins at proper heights' }
+          { id: 'fc_e1', text: 'Grounding electrode conductor (Ufer ground) attached and bonded' },
+          { id: 'fc_e2', text: 'Rough electrical wiring, box depths & nail plates within 1.25" of stud face' },
+          { id: 'fc_e3', text: 'White conductor hot/switch legs tagged with red tape inside boxes' },
+          { id: 'fc_e4', text: 'Dedicated circuits for microwave, refrigerator, and sump pump wired' },
+          { id: 'fc_e5', text: 'Smoke & CO detector box rough-ins placed at code heights' },
+          { id: 'fc_e6', text: 'Security alarm & low-voltage pre-wire verified before insulation' }
         ]
       },
       {
@@ -155,15 +172,19 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'HVAC Sub',
         icon: '❄️',
         preTradeNotes: [
-          'Mastic seal all supply and return duct joints before insulation wrap.',
-          'Verify return air grille sizing per room CFM load calculations.',
-          'Ensure condensate drain line has minimum 1/8" per ft pitch to exterior.'
+          'Mastic seal all supply and return flex duct joints before insulation wrap.',
+          'CRITICAL: Install double-thick galvanized metal safety shield plates at top wall plate where refrigerant copper line-sets penetrate.',
+          'CRITICAL: Keep exterior A/C copper line-set wall exit point away from sewer main trench so A/C concrete condenser pad sits on undisturbed solid ground.',
+          'CRITICAL BUILDER REMINDER: Obtain final as-built duct layout and CFM airflow plan from HVAC sub and resubmit plan revisions to City Building Dept.',
+          'Ensure condensate drain lines have minimum 1/8" per ft pitch to visible exterior discharge.'
         ],
         inspectionChecklist: [
-          { id: 'fc_h1', text: 'Ductwork sealed with approved mastic / foil tape' },
-          { id: 'fc_h2', text: 'Flue vent clearances to combustibles verified' },
-          { id: 'fc_h3', text: 'Fresh air intake clearance from exhaust vents verified' },
-          { id: 'fc_h4', text: 'Condensate secondary drain line routed to visible discharge' }
+          { id: 'fc_h1', text: 'Ductwork joints 100% mastic sealed & hung with proper strapping' },
+          { id: 'fc_h2', text: 'Top-plate HVAC copper line-set double metal safety shield plates installed' },
+          { id: 'fc_h3', text: 'Exterior A/C line-set wall exit cleared from sewer trench soil' },
+          { id: 'fc_h4', text: 'HVAC as-built duct layout & CFM airflow plan resubmitted to City' },
+          { id: 'fc_h5', text: 'Flue vent clearances to combustibles verified' },
+          { id: 'fc_h6', text: 'Condensate secondary drain line routed to visible exterior discharge' }
         ]
       },
       {
@@ -172,32 +193,34 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'Plumber',
         icon: '🚰',
         preTradeNotes: [
-          'Verify all vent pipes penetrate roof at required heights with flashing boots.',
-          'Ensure water supply lines and drain stub-outs are properly anchored & centered.',
-          'Install nail plates on all top/bottom plates where pipes pass within 1.25".'
+          'CRITICAL: Ensure plumber places roof vent stack penetrations far away from roof valleys where rain water runs heavy. Never place vent pipes near valleys!',
+          'CRITICAL: Plumber must install heavy metal stud shoes/boots over any 2x4, 2x6, or 2x8 studs notched or bored for plumbing drain/vent lines.',
+          'Verify all vent pipes penetrate roof at required heights with approved flashing boots.',
+          'Ensure water supply lines and drain stub-outs are properly anchored, centered, and pressure tested.'
         ],
         inspectionChecklist: [
-          { id: 'fc_p1', text: 'Vent stacks through roof sealed and strapped' },
-          { id: 'fc_p2', text: 'Drain & water lines pressure test holding' },
-          { id: 'fc_p3', text: 'Nail plates installed on all stud & plate penetrations' },
-          { id: 'fc_p4', text: 'Stub-outs aligned for future vanity and toilet rough-ins' }
+          { id: 'fc_p1', text: 'Roof vent stacks placed far away from roof valleys and sealed with flashing boots' },
+          { id: 'fc_p2', text: 'Notched/bored stud structural reinforcement (metal stud shoes/boots) installed' },
+          { id: 'fc_p3', text: 'Water supply lines pressure tested and holding without drop' },
+          { id: 'fc_p4', text: 'Drain & vent stacks strapped, aligned, and sealed through plates' },
+          { id: 'fc_p5', text: 'Nail plates installed on all stud & plate penetrations within 1.25"' }
         ]
       },
       {
         id: 'sub_polyseal',
-        name: 'Poly Seal & Fireblocking',
+        name: 'Poly Seal & Air Sealing',
         trade: 'Air Sealing Sub',
         icon: '🛡️',
         preTradeNotes: [
-          'Apply poly sealant & red/orange fireblock foam at all top/bottom plate penetrations.',
-          'Seal all wire, pipe, and duct penetrations through floor/ceiling plates.',
-          'Install draft stopping in concealed vertical and horizontal wall chases.'
+          'Apply poly sealant & red/orange fireblock foam at all top/bottom plate penetrations, wire holes, and pipe holes.',
+          'Verify low-expansion foam seal is installed continuously around all exterior window and door rough openings.',
+          'Install draft stopping in all concealed vertical and horizontal wall chases and behind tubs/showers.'
         ],
         inspectionChecklist: [
-          { id: 'fc_s1', text: 'Red/orange fireblock foam installed at all electrical & plumbing holes' },
-          { id: 'fc_s2', text: 'Concealed drop ceiling and soffit draft stops foamed and sealed' },
-          { id: 'fc_s3', text: 'Exterior wall bottom plate caulked/sealed to slab' },
-          { id: 'fc_s4', text: 'Chases behind tubs and showers fireblocked' }
+          { id: 'fc_s1', text: 'Red/orange fireblock foam installed at all electrical, plumbing, & duct penetrations' },
+          { id: 'fc_s2', text: 'Exterior window and door rough openings 100% poly sealed with low-expansion foam' },
+          { id: 'fc_s3', text: 'Exterior wall bottom plates caulked/sealed to concrete slab' },
+          { id: 'fc_s4', text: 'Concealed drop ceilings, soffits, and tub/shower chases draft stopped' }
         ]
       }
     ]
@@ -209,16 +232,18 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
     trade: 'Insulation Sub',
     icon: '🧱',
     preTradeNotes: [
-      'Install baffle vents in soffit overhangs to prevent airflow blockage to attic.',
-      'Seal all top plates and exterior wall junction gaps with foam sealant.',
-      'Ensure friction-fit batts or spray foam fill all exterior wall cavity corners completely.'
+      'Verify batt or spray foam insulation fills all exterior wall cavities snugly with no gaps, voids, compression, or uninsulated space behind electrical boxes and plumbing pipes.',
+      'Inspect open-cell / closed-cell spray foam insulation applied to roof deck underside and gable walls for required thickness depth and 100% continuous air seal coverage.',
+      'Confirm exterior walls behind bathtubs and shower enclosures are 100% insulated and sealed before plumbing fixtures are permanently set.',
+      'Install baffle vents in soffit overhangs to prevent airflow blockage to attic.'
     ],
     inspectionChecklist: [
-      { id: 'ins1', text: 'Exterior wall cavity insulation (R-13/R-15/R-19) fully installed without voids' },
-      { id: 'ins2', text: 'Draft stopping / fireblocking verified behind tubs and fireplace chases' },
-      { id: 'ins3', text: 'Attic baffle chutes open and unobstructed' },
-      { id: 'ins4', text: 'Air sealing foam complete around all exterior wall boxes and wire holes' },
-    ],
+      { id: 'ins1', text: 'Exterior wall cavity insulation (batts/spray foam) filled with zero gaps or voids' },
+      { id: 'ins2', text: 'Attic roof deck & gable wall spray foam insulation depth verified for continuous air seal' },
+      { id: 'ins3', text: 'Exterior wall tub & shower unit backing insulation 100% verified' },
+      { id: 'ins4', text: 'Baffles installed at soffit vents to prevent attic insulation blockage' },
+      { id: 'ins5', text: 'Draft stopping / fireblocking verified behind tubs and fireplace chases' }
+    ]
   },
   {
     id: 'infiltration',
@@ -227,16 +252,17 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
     trade: 'Energy Rater / HVAC',
     icon: '💨',
     preTradeNotes: [
-      'Mastic seal and tape all duct joints and boots tightly before blower door test.',
-      'Install wall escutcheon flashing plate around exterior line-set penetration.',
-      'Cover exterior foam line-set insulation with UV-resistant wrap.'
+      'Schedule certified HERS Rater to perform blower door fan pressure test at 50 Pascals (ACH50 rating) per energy code.',
+      'Schedule certified HERS Rater to perform duct blaster air duct leakage pressure test at 25 Pascals (CFM to outside).',
+      'Verify weatherstripping and gaskets on attic access hatch / pull-down stairs, IC-rated airtight recessed light cans, and exterior door sweeps.'
     ],
     inspectionChecklist: [
-      { id: 'inf1', text: 'Blower door building envelope leakage test meets code CFM limit' },
-      { id: 'inf2', text: 'Duct tightness leakage test verified and documented' },
-      { id: 'inf3', text: 'Exterior line-set flashing and UV protective wrap installed' },
-      { id: 'inf4', text: 'Fresh air intake dampers operating properly' },
-    ],
+      { id: 'inf1', text: 'HERS Blower Door air infiltration test (ACH50 rating) passed' },
+      { id: 'inf2', text: 'HERS Duct Blaster air duct leakage pressure test passed' },
+      { id: 'inf3', text: 'Attic access hatch weatherstripped and insulated with R-38 cover' },
+      { id: 'inf4', text: 'Recessed light cans IC-rated and sealed airtight to drywall' },
+      { id: 'inf5', text: 'Exterior door sweeps and weatherstrip seals verified' }
+    ]
   },
   {
     id: 'final_co',
@@ -252,15 +278,21 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'HVAC Sub',
         icon: '❄️',
         preTradeNotes: [
-          'Verify thermostat is calibrated and tested in both heat and cool cycles.',
-          'Check secondary condensate emergency drain pan float safety switch operation.',
-          'Install fresh HVAC air filter and ensure all supply/return grilles are sealed and clean.'
+          'Wrap 100% of cold copper suction refrigerant lines and condensate pipes with black foam insulation (Armaflex) with sealed joints.',
+          'Install emergency float cutoff switch (Inline / secondary pan Safe-T-Switch) on EVERY A/C unit (closet or attic).',
+          'Install wall escutcheon flashing plate around exterior line-set penetration and cover foam insulation with UV-resistant aluminum jacket.',
+          'CRITICAL: For closet A/C units, install door perimeter gasket pad to seal return plenum bottom compartment, and install bottom door sweep seal.',
+          'CRITICAL: Plumber and HVAC trades must cut all exterior drain line penetrations (A/C condensate, T&P relief, pan drains), elbow them downward facing the ground, and terminate exactly 6 inches above final grade.',
+          'CRITICAL: Builder must supply a safe, sturdy stepladder / extension ladder on-site for city inspector to access attic A/C unit.'
         ],
         inspectionChecklist: [
-          { id: 'fin_h1', text: 'Thermostat calibrated and heating / A/C cooling operational' },
-          { id: 'fin_h2', text: 'Exterior condenser disconnect box installed, fused, and labeled' },
-          { id: 'fin_h3', text: 'Secondary condensate drain pan and safety float cutoff switch tested' },
-          { id: 'fin_h4', text: 'Dryer exhaust duct and bathroom ventilation fans discharge to exterior' }
+          { id: 'fin_h1', text: 'Suction line & condensate pipes 100% wrapped with Armaflex foam insulation' },
+          { id: 'fin_h2', text: 'A/C evaporator coil emergency drain pan float cutoff safety switch installed and tested' },
+          { id: 'fin_h3', text: 'Exterior line-set wall escutcheon plate and aluminum UV protective wrap installed' },
+          { id: 'fin_h4', text: 'Interior A/C closet door return compartment gasket pad & door bottom sweep seal installed' },
+          { id: 'fin_h5', text: 'Exterior condensate & drain pipes elbowed downward and terminated 6" above finished grade' },
+          { id: 'fin_h6', text: 'Stepladder / access ladder available on-site for attic A/C unit inspection' },
+          { id: 'fin_h7', text: 'Thermostat calibrated and heating/cooling operational' }
         ]
       },
       {
@@ -269,15 +301,19 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'Electrician',
         icon: '⚡',
         preTradeNotes: [
+          'CRITICAL: Electrician must securely bolt the underground vertical conduit riser to the exterior wall with heavy-duty anchor bolts and straps before electric company hookup.',
           'Label 100% of breaker circuits clearly in the main panel directory.',
+          'CRITICAL: Post permanent printed Energy Compliance Certificate (REScheck) inside main electrical breaker panel box door.',
           'Test all GFCI & AFCI circuits in kitchen, baths, laundry, garage, and exterior.',
-          'Mount cover plates on all receptacles, light switches, and junction boxes.'
+          'Mount cover plates on all receptacles, switches, and junction boxes.'
         ],
         inspectionChecklist: [
-          { id: 'fin_e1', text: 'Main breaker panel directory fully labeled and REScheck energy certificate posted' },
-          { id: 'fin_e2', text: 'All GFCI & AFCI outlets trip and reset properly with test tool' },
-          { id: 'fin_e3', text: 'Smoke and Carbon Monoxide detectors tested, interconnected, and battery backup active' },
-          { id: 'fin_e4', text: 'Exterior weather-resistant in-use outlet covers installed' }
+          { id: 'fin_e1', text: 'Underground electric meter service riser conduit anchored to exterior wall with heavy-duty bolts' },
+          { id: 'fin_e2', text: 'Main breaker panel directory fully labeled with circuit schedules' },
+          { id: 'fin_e3', text: 'Permanent printed REScheck Energy Compliance Certificate posted inside main panel door' },
+          { id: 'fin_e4', text: 'All GFCI & AFCI outlets trip and reset properly with test tool' },
+          { id: 'fin_e5', text: 'Interconnected smoke and carbon monoxide alarms tested with battery backup active' },
+          { id: 'fin_e6', text: 'Exterior weather-resistant in-use outlet covers installed' }
         ]
       },
       {
@@ -286,12 +322,13 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'Plumber',
         icon: '🚰',
         preTradeNotes: [
-          'Run all fixtures (sinks, tubs, showers, toilets) under pressure for 15+ minutes.',
-          'Check water heater temperature & pressure (T&P) relief valve discharge piping to exterior.',
-          'Verify anti-siphon vacuum breaker devices on all exterior hose bibbs.'
+          'Run all fixtures (sinks, tubs, showers, toilets) under full water pressure with zero leaks.',
+          'CRITICAL: Verify water heater temperature & pressure (T&P) relief valve discharge line is copper/CPVC, pitched down, and terminates to approved exterior location 6" above grade.',
+          'Verify anti-siphon vacuum breaker devices installed on all exterior hose bibbs.',
+          'Confirm main water shutoff valve is tagged and easily accessible.'
         ],
         inspectionChecklist: [
-          { id: 'fin_p1', text: 'Zero leaks under all sinks, vanity supply stops, traps, and toilet bases' },
+          { id: 'fin_p1', text: 'All plumbing fixtures, sinks, faucets, toilets, and shutoff valves verified 100% leak-free' },
           { id: 'fin_p2', text: 'Water heater T&P relief valve discharge line pitched down to exterior / approved drain' },
           { id: 'fin_p3', text: 'Anti-siphon vacuum breakers installed on all exterior hose bibbs' },
           { id: 'fin_p4', text: 'Sewer cleanouts capped, accessible, and flush with finished grade' }
@@ -303,19 +340,23 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
         trade: 'General Builder / Finishes',
         icon: '🔑',
         preTradeNotes: [
-          'Set spring-loaded hinge tension pins on garage-to-house fire door for self-closing and latching.',
+          'CRITICAL: Adjust and set tension pins on spring hinges for fire-rated garage-to-house door so it automatically self-closes and latches completely.',
+          'CRITICAL BUILDER REMINDER: If a stamped or decorative concrete driveway/apron is installed, submit signed City Decorative Driveway Release & Maintenance Responsibility letter to Building Department prior to final C.O.',
           'Inspect stair handrails and guardrails for code height and <4" baluster spacing.',
-          'Confirm attic access hatch has weatherstrip gasket and R-38+ insulation cover.'
+          'Confirm attic access hatch has weatherstrip gasket and R-38+ insulation cover.',
+          'Confirm building address numbers are visible from the street.'
         ],
         inspectionChecklist: [
-          { id: 'fin_c1', text: 'Garage entry door self-closes and latches automatically' },
-          { id: 'fin_c2', text: 'Stair handrails continuous and guardrail baluster spacing under 4 inches' },
-          { id: 'fin_c3', text: 'Attic access opening weatherstripped and insulated' },
-          { id: 'fin_c4', text: 'Window sashes operate smoothly, lock securely, and safety glazing verified in wet areas' }
+          { id: 'fin_c1', text: 'Garage-to-house entry door self-closes and latches automatically with spring hinge pins' },
+          { id: 'fin_c2', text: 'Decorative / stamped concrete driveway responsibility letter submitted to City (if applicable)' },
+          { id: 'fin_c3', text: 'City Certificate of Occupancy (C.O.) green card sign-off prepared and scheduled' },
+          { id: 'fin_c4', text: 'Stair handrails continuous and guardrail baluster spacing under 4 inches' },
+          { id: 'fin_c5', text: 'Attic access opening weatherstripped and insulated' },
+          { id: 'fin_c6', text: 'Window sashes operate smoothly, lock securely, and safety glazing verified in wet areas' }
         ]
       }
     ]
-  },
+  }
 ];
 
 export default function BuilderBrain({ activeProject, selectedFolder }) {

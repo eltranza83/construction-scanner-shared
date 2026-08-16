@@ -1,4 +1,3 @@
-import BuilderBrain from './BuilderBrain';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useBlueprintPinboard } from '../hooks/useBlueprintPinboard';
@@ -153,26 +152,6 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
             {activeIssuesCount}
           </span>
         )}
-      </button>
-      <button
-        onClick={() => onSetViewMode('brain')}
-        style={{
-          padding: '6px 10px',
-          fontSize: '0.72rem',
-          fontWeight: 700,
-          borderRadius: '6px',
-          border: 'none',
-          backgroundColor: viewMode === 'brain' ? 'var(--color-amber-500)' : 'transparent',
-          color: viewMode === 'brain' ? '#000' : 'var(--color-zinc-400)',
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-          whiteSpace: 'nowrap',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px'
-        }}
-      >
-        <span>⚡ Field Brain</span>
       </button>
     </div>
   );
@@ -357,11 +336,6 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           projectInfo={formProjectInfo}
           selectedFolderName={selectedFolder?.name}
           onSendIssuePacket={handleSendIssuePacket}
-        />
-      ) : pinboard.viewMode === 'brain' ? (
-        <BuilderBrain
-          activeProject={activeProject}
-          selectedFolder={selectedFolder}
         />
       ) : pinboard.viewMode === 'albums' ? (
         <BlueprintPhaseAlbums

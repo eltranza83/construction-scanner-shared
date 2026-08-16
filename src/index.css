@@ -1065,7 +1065,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   animation: badgeBouncePop 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
 }
 
-/* Sliding Toggle Segmented Control (Drafts vs History) */
+/* Sliding Toggle Segmented Control (Scan vs Drafts vs History) */
 .sliding-toggle-container {
   display: flex;
   background-color: var(--color-zinc-950);
@@ -1074,7 +1074,7 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   padding: 3px;
   position: relative;
   width: 100%;
-  max-width: 320px;
+  max-width: 380px;
   margin: 0 auto;
   user-select: none;
 }
@@ -1082,8 +1082,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
 .sliding-toggle-btn {
   flex: 1;
   text-align: center;
-  padding: 8px 12px;
-  font-size: 0.8rem;
+  padding: 7px 10px;
+  font-size: 0.76rem;
   font-weight: 700;
   color: var(--color-zinc-400);
   background: none;
@@ -1095,7 +1095,8 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
+  white-space: nowrap;
 }
 
 .sliding-toggle-btn.active {
@@ -1106,12 +1107,24 @@ input[type="date"]::-webkit-calendar-picker-indicator:hover {
   position: absolute;
   top: 3px;
   bottom: 3px;
-  width: calc(50% - 3px);
+  width: calc(33.333% - 2px);
   background-color: var(--color-amber-500);
   border-radius: 17px;
   z-index: 1;
   transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.sliding-toggle-active-bg.pos-0 {
+  transform: translateX(0);
+}
+
+.sliding-toggle-active-bg.pos-1 {
+  transform: translateX(100%);
+}
+
+.sliding-toggle-active-bg.pos-2 {
+  transform: translateX(200%);
 }
 
 .sliding-toggle-active-bg.left {

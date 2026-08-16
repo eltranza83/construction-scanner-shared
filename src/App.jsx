@@ -1,6 +1,6 @@
 import GlobalAIAssistant from './components/GlobalAIAssistant';
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck, Trash2, X } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck, Trash2, X, Zap } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
@@ -17,7 +17,7 @@ const Settings = lazy(() => import('./components/Settings'));
 const InviteScreen = lazy(() => import('./components/InviteScreen'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const BlueprintPinboard = lazy(() => import('./components/BlueprintPinboard'));
-const Inspections = lazy(() => import('./components/Inspections'));
+const BuilderBrain = lazy(() => import('./components/BuilderBrain'));
 
 function LazyScreenFallback() {
   return (
@@ -29,8 +29,8 @@ function LazyScreenFallback() {
 
 export default function App() {
   // App Navigation & UI State
-  const [activeTab, setActiveTab] = useState('scanner');
-  const [invoicesSubTab, setInvoicesSubTab] = useState('staged'); // 'staged' or 'history'
+  const [activeTab, setActiveTab] = useState('invoices');
+  const [invoicesSubTab, setInvoicesSubTab] = useState('scan'); // 'scan', 'staged', or 'history'
   const [showProjectDropdown, setShowProjectDropdown] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
@@ -357,69 +357,25 @@ export default function App() {
             stagedItems={stagedItems}
             projects={projects}
           />
-        ) : activeTab === 'scanner' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <Scanner 
-              onDataExtracted={handleDataExtracted}
-              onError={setError}
-            />
-
-            {/* Google Drive Sign In Banner if not signed in */}
-            {!googleToken && (
-              <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--color-zinc-800)' }}>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
-                  <Folder size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
-                  <div>
-                    <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>Connect Google Drive</h4>
-                    <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-500)', lineHeight: '1.4', marginTop: '2px' }}>
-                      Sign in to save PDFs directly to your Google Drive and log expense items into a Google Sheet automatically.
-                    </p>
-                  </div>
-                </div>
-                <button onClick={handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
-                  <LogIn size={16} /> Sign In with Google
-                </button>
-              </div>
-            )}
-
-            {/* No Projects Setup Warning */}
-            {projects.length === 0 && (
-              <div className="settings-card" style={{ 
-                display: 'flex', 
-                gap: '12px', 
-                alignItems: 'flex-start',
-                border: '1px solid rgba(245, 158, 11, 0.25)', 
-                backgroundColor: 'rgba(245, 158, 11, 0.04)',
-                borderLeft: '4px solid var(--color-amber-500)'
-              }}>
-                <Sparkles size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
-                <div>
-                  <h4 style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.88rem' }}>No Active Project Profiles</h4>
-                  <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)', lineHeight: '1.4', marginTop: '3px' }}>
-                    You don't have any projects set up. Please go to your **Settings** tab to create your first project.
-                  </p>
-                  <button 
-                    onClick={() => setActiveTab('settings')} 
-                    className="btn btn-secondary" 
-                    style={{ width: 'auto', padding: '6px 12px', fontSize: '0.78rem', marginTop: '8px', borderColor: 'var(--color-amber-500)', color: 'var(--color-amber-400)' }}
-                  >
-                    Go to Settings
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
         ) : activeTab === 'invoices' ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
             {/* Sliding Pill Selector Segmented Control */}
             <div className="sliding-toggle-container">
-              <div className={`sliding-toggle-active-bg ${invoicesSubTab === 'staged' ? 'left' : 'right'}`} />
+              <div className={`sliding-toggle-active-bg ${invoicesSubTab === 'scan' ? 'pos-0' : invoicesSubTab === 'staged' ? 'pos-1' : 'pos-2'}`} />
+              <button 
+                type="button"
+                className={`sliding-toggle-btn ${invoicesSubTab === 'scan' ? 'active' : ''}`}
+                onClick={() => setInvoicesSubTab('scan')}
+              >
+                <Camera size={14} />
+                <span>Scan</span>
+              </button>
               <button 
                 type="button"
                 className={`sliding-toggle-btn ${invoicesSubTab === 'staged' ? 'active' : ''}`}
                 onClick={() => setInvoicesSubTab('staged')}
               >
-                Staged ({stagedItems.length})
+                Drafts ({stagedItems.length})
               </button>
               <button 
                 type="button"
@@ -431,7 +387,62 @@ export default function App() {
             </div>
 
             {/* Sliding Sub Tab Panels */}
-            {invoicesSubTab === 'staged' ? (
+            {invoicesSubTab === 'scan' ? (
+              <div key="scan-subtab" className="slide-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                <Scanner 
+                  onDataExtracted={(data) => {
+                    handleDataExtracted(data);
+                    setInvoicesSubTab('staged');
+                  }}
+                  onError={setError}
+                />
+
+                {/* Google Drive Sign In Banner if not signed in */}
+                {!googleToken && (
+                  <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--color-zinc-800)' }}>
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
+                      <Folder size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
+                      <div>
+                        <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>Connect Google Drive</h4>
+                        <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-500)', lineHeight: '1.4', marginTop: '2px' }}>
+                          Sign in to save PDFs directly to your Google Drive and log expense items into a Google Sheet automatically.
+                        </p>
+                      </div>
+                    </div>
+                    <button onClick={handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
+                      <LogIn size={16} /> Sign In with Google
+                    </button>
+                  </div>
+                )}
+
+                {/* No Projects Setup Warning */}
+                {projects.length === 0 && (
+                  <div className="settings-card" style={{ 
+                    display: 'flex', 
+                    gap: '12px', 
+                    alignItems: 'flex-start',
+                    border: '1px solid rgba(245, 158, 11, 0.25)', 
+                    backgroundColor: 'rgba(245, 158, 11, 0.04)',
+                    borderLeft: '4px solid var(--color-amber-500)'
+                  }}>
+                    <Sparkles size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
+                    <div>
+                      <h4 style={{ fontWeight: 700, color: 'var(--color-zinc-100)', fontSize: '0.88rem' }}>No Active Project Profiles</h4>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)', lineHeight: '1.4', marginTop: '3px' }}>
+                        You don't have any projects set up. Please go to your **Settings** tab to create your first project.
+                      </p>
+                      <button 
+                        onClick={() => setActiveTab('settings')} 
+                        className="btn btn-secondary" 
+                        style={{ width: 'auto', padding: '6px 12px', fontSize: '0.78rem', marginTop: '8px', borderColor: 'var(--color-amber-500)', color: 'var(--color-amber-400)' }}
+                      >
+                        Go to Settings
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : invoicesSubTab === 'staged' ? (
               <div key="staged-subtab" className="slide-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                   <h2 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Staged Drafts ({stagedItems.length})</h2>
@@ -597,14 +608,14 @@ export default function App() {
               onShowToast={setSuccess}
             />
           </DashboardErrorBoundary>
-        ) : activeTab === 'xray' ? (
-          <BlueprintPinboard
-            googleToken={googleToken}
+        ) : activeTab === 'brain' ? (
+          <BuilderBrain
             activeProject={activeProject}
             selectedFolder={selectedFolder}
           />
-        ) : activeTab === 'inspections' ? (
-          <Inspections
+        ) : activeTab === 'xray' ? (
+          <BlueprintPinboard
+            googleToken={googleToken}
             activeProject={activeProject}
             selectedFolder={selectedFolder}
           />
@@ -635,21 +646,13 @@ export default function App() {
         selectedFolder={selectedFolder}
       />
 
-      {/* 3. Navigation Footer */}
+      {/* 3. Navigation Footer - 5 Mobile-Optimized Tabs */}
       {!editingItemId && (
         <nav className="app-nav">
-          <button 
-            className={`nav-item ${activeTab === 'scanner' ? 'active' : ''}`}
-            onClick={() => setActiveTab('scanner')}
-          >
-            <Camera size={20} />
-            <span>Scanner</span>
-          </button>
           <button 
             className={`nav-item ${activeTab === 'invoices' ? 'active' : ''}`}
             onClick={() => {
               setActiveTab('invoices');
-              setInvoicesSubTab('staged'); // Default to staged drafts on tab switch
             }}
             style={{ position: 'relative' }}
           >
@@ -664,11 +667,11 @@ export default function App() {
             )}
           </button>
           <button 
-            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => setActiveTab('dashboard')}
+            className={`nav-item ${activeTab === 'brain' ? 'active' : ''}`}
+            onClick={() => setActiveTab('brain')}
           >
-            <TrendingUp size={20} />
-            <span>Dashboard</span>
+            <Zap size={20} />
+            <span>Field Brain</span>
           </button>
           <button 
             className={`nav-item ${activeTab === 'xray' ? 'active' : ''}`}
@@ -676,6 +679,13 @@ export default function App() {
           >
             <MapPin size={20} />
             <span>X-Ray</span>
+          </button>
+          <button 
+            className={`nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => setActiveTab('dashboard')}
+          >
+            <TrendingUp size={20} />
+            <span>Dashboard</span>
           </button>
           <button 
             className={`nav-item ${activeTab === 'settings' ? 'active' : ''}`}
