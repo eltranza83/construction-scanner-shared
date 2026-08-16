@@ -634,23 +634,13 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         if (newItem) setItems((prev) => [newItem, ...prev]);
       }
 
-      // 1. Google Drive Folder Creation Action
-      if (
-        (lower.startsWith('create folder') ||
-          lower.startsWith('create a folder') ||
-          lower.startsWith('create subfolder') ||
-          lower.startsWith('create a subfolder') ||
-          lower.startsWith('create new folder') ||
-          lower.startsWith('create a new folder') ||
-          lower.startsWith('make a folder') ||
-          lower.startsWith('make folder') ||
-          lower.startsWith('add folder') ||
-          lower.startsWith('add a folder')) &&
-        googleToken &&
-        activeProject?.folderId
-      ) {
+      // 1. Google Drive Folder Creation Action (Flexible conversational matching)
+      const isCreateFolderQuery =
+        /(?:create|make|add|crea|crear|haz|hacer)\s+(?:a\s+)?(?:new\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+/i.test(query);
+
+      if (isCreateFolderQuery && googleToken && activeProject?.folderId) {
         const folderName = query
-          .replace(/^(create|make|add)\s+(a\s+)?(new\s+)?(subfolder|folder)\s+(called|named|for)?\s*/i, '')
+          .replace(/^.*?(?:create|make|add|crea|crear|haz|hacer)\s+(?:a\s+)?(?:new\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+(?:for\s+this\s+project\s+)?(?:in\s+google\s+drive\s+)?(?:called|named|llamada|nombrada|para)?\s*/i, '')
           .replace(/^["']|["']$/g, '')
           .trim();
         if (folderName) {
@@ -675,19 +665,12 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       }
 
       // 2. Google Drive Folder Deletion Action
-      if (
-        (lower.startsWith('delete folder') ||
-          lower.startsWith('delete the folder') ||
-          lower.startsWith('remove folder') ||
-          lower.startsWith('remove the folder') ||
-          lower.startsWith('trash folder') ||
-          lower.startsWith('trash the folder')) &&
-        googleToken &&
-        activeProject?.folderId &&
-        driveTree?.subfolders
-      ) {
+      const isDeleteFolderQuery =
+        /(?:delete|remove|trash|borra|borrar|elimina|eliminar)\s+(?:the\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+/i.test(query);
+
+      if (isDeleteFolderQuery && googleToken && activeProject?.folderId && driveTree?.subfolders) {
         const targetName = query
-          .replace(/^(delete|remove|trash)\s+(the\s+)?(subfolder|folder)\s+(called|named)?\s*/i, '')
+          .replace(/^.*?(?:delete|remove|trash|borra|borrar|elimina|eliminar)\s+(?:the\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+(?:called|named|llamada|nombrada)?\s*/i, '')
           .replace(/^["']|["']$/g, '')
           .trim().toLowerCase();
 
@@ -714,13 +697,44 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       }
 
       const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, aiMessages, driveTree);
+
+      let cleanAnswer = answer;
+      const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);
+      if (actionCreateMatch && actionCreateMatch[1] && googleToken && activeProject?.folderId) {
+        const fName = actionCreateMatch[1].trim();
+        await createFolder(googleToken, fName, activeProject.folderId);
+        const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+        if (updatedTree) {
+          setDriveTree(updatedTree);
+          saveProjectDriveTree(projectId, updatedTree);
+        }
+        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:CREATE_FOLDER:[^\]]+\]\]/, '').trim();
+      }
+
+      const actionDeleteMatch = answer.match(/\[\[ACTION:DELETE_FOLDER:([^\]]+)\]\]/);
+      if (actionDeleteMatch && actionDeleteMatch[1] && googleToken && activeProject?.folderId && driveTree?.subfolders) {
+        const fName = actionDeleteMatch[1].trim().toLowerCase();
+        const matchFolder = driveTree.subfolders.find(
+          (f) => f.folderName.toLowerCase().includes(fName) || fName.includes(f.folderName.toLowerCase())
+        );
+        if (matchFolder && matchFolder.folderId) {
+          await trashDriveFileOrFolder(googleToken, matchFolder.folderId);
+          const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+          if (updatedTree) {
+            setDriveTree(updatedTree);
+            saveProjectDriveTree(projectId, updatedTree);
+          }
+        }
+        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:DELETE_FOLDER:[^\]]+\]\]/, '').trim();
+      }
+
       const aiMsg = {
         sender: 'ai',
-        text: answer,
+        text: cleanAnswer,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setAiMessages((prev) => [...prev, aiMsg]);
-      speakText(answer);
+      speakText(cleanAnswer);
     } catch (err) {
       console.error('AI chat error:', err);
     } finally {

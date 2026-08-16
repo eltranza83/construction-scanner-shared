@@ -597,6 +597,15 @@ Understand voice-dictation typos without correcting the user.
 
 7. FULL BILINGUAL ENGLISH & SPANISH SUPPORT:
 Fluently match English or Spanish automatically.
+
+8. GOOGLE DRIVE DIRECT FOLDER ACTIONS:
+You HAVE FULL PERMISSIONS to create and delete folders in the project's Google Drive folder!
+- When the user asks to create/make/add a folder or subfolder in English or Spanish (e.g. "can you create a new sub folder for this project in Google Drive called test folder", "crea una carpeta llamada Planos"), you MUST include this exact tag in your response:
+[[ACTION:CREATE_FOLDER:Folder Name]]
+Along with a short 1-sentence confirmation (e.g. "Created the new subfolder **Folder Name** in your Google Drive project folder!").
+- When the user asks to delete/trash a folder, include:
+[[ACTION:DELETE_FOLDER:Folder Name]]
+Along with a short 1-sentence confirmation.
 `;
 
   // Build multi-turn conversational history
