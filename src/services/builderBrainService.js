@@ -666,12 +666,41 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
       const info = dashData.projectInfo;
       const subs = dashData.subcontractors || [];
 
+      // Check for specific dollar amount or payment query (e.g. $1,000 or "what was it for")
+      const paidPhases = subs.filter((s) => {
+        const spent = s.totalSpent ? parseFloat(String(s.totalSpent).replace(/[^0-9.]/g, '')) : 0;
+        const paid = s.totalPaid ? parseFloat(String(s.totalPaid).replace(/[^0-9.]/g, '')) : 0;
+        return spent > 0 || paid > 0 || (s.payments && s.payments.length > 0);
+      });
+
+      const numMatch = raw.match(/\$?([0-9]+(?:,[0-9]{3})*(?:\.[0-9]{2})?)/);
+      const isThousand = raw.includes('thousand');
+      const queryAmount = numMatch ? parseFloat(numMatch[1].replace(/,/g, '')) : (isThousand ? 1000 : null);
+
+      if (queryAmount !== null || raw.includes('what was') || raw.includes('what were') || raw.includes('what did we pay') || raw.includes('who did we pay') || raw.includes('for what')) {
+        if (paidPhases.length > 0) {
+          const matchingPhases = queryAmount !== null
+            ? paidPhases.filter((s) => {
+                const spent = parseFloat(String(s.totalSpent || s.totalPaid || '0').replace(/[^0-9.]/g, ''));
+                return Math.abs(spent - queryAmount) < 0.01;
+              })
+            : paidPhases;
+
+          const targetPhases = matchingPhases.length > 0 ? matchingPhases : paidPhases;
+          const summary = targetPhases
+            .map((s) => `**${s.phase}** (${s.payee || 'Payee'}, ${s.totalSpent || s.totalPaid || '$0.00'})`)
+            .join(', ');
+
+          return `The ${queryAmount ? '$' + queryAmount.toLocaleString() : 'money'} spent on ${activeProjectName} was for ${summary}.`;
+        }
+      }
+
       // Check if querying a specific phase/trade/contractor
       const tradeKeywords = [
         'paint', 'drywall', 'sheetrock', 'roof', 'tile', 'floor', 'stucco', 'mason',
         'cabinet', 'trim', 'carpent', 'window', 'door', 'flatwork', 'insulat', 'foam',
         'clean', 'dumpster', 'fence', 'landscap', 'plumb', 'elect', 'hvac', 'fram',
-        'found', 'utility', 'permit', 'countertop', 'granite', 'quartz', 'glass'
+        'found', 'utility', 'permit', 'paperwork', 'countertop', 'granite', 'quartz', 'glass'
       ];
 
       const matchedPhase = subs.find((s) => {
@@ -694,7 +723,7 @@ CRITICAL INSTRUCTIONS & RESPONSE RULES:
         if (raw.includes('quote') || raw.includes('estimate') || raw.includes('bid')) {
           return `The original quote for **${matchedPhase.phase}** (${payee}) is **${quote}** (Paid: ${spent}, Remaining balance: ${bal}).`;
         }
-        if (raw.includes('paid') || raw.includes('spent')) {
+        if (raw.includes('paid') || raw.includes('spent') || raw.includes('for')) {
           return `You have paid **${spent}** to date for **${matchedPhase.phase}** (${payee}) with a remaining balance of **${bal}**.`;
         }
         return `**${matchedPhase.phase}** (${payee}): Quote: **${quote}**, Paid: **${spent}**, Remaining Balance: **${bal}**.`;
