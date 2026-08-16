@@ -449,6 +449,44 @@ PHASE & CONTRACTOR EXPENSE BREAKDOWN (${subs.length} Phases Tracked):
   return text;
 }
 
+export function saveProjectDriveTree(projectId, driveTree) {
+  try {
+    if (!projectId || !driveTree) return;
+    localStorage.setItem(`jobscan_cached_drivetree_${projectId}`, JSON.stringify(driveTree));
+  } catch (e) {
+    console.error('Error saving cached drive tree:', e);
+  }
+}
+
+export function loadProjectDriveTree(projectId) {
+  try {
+    if (!projectId) return null;
+    const raw = localStorage.getItem(`jobscan_cached_drivetree_${projectId}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    console.error('Error loading cached drive tree:', e);
+    return null;
+  }
+}
+
+export function formatDriveContext(driveTree) {
+  if (!driveTree) return 'No Google Drive file manifest loaded yet.';
+  let text = 'GOOGLE DRIVE PROJECT FOLDERS & REPOSITORY:\n';
+  if (driveTree.directFiles && driveTree.directFiles.length > 0) {
+    text += `- Root Project Folder Files:\n` + driveTree.directFiles.map((f) => `  * 📄 ${f.name} (ID: ${f.id})`).join('\n') + '\n';
+  }
+  if (driveTree.subfolders && driveTree.subfolders.length > 0) {
+    text += `- Subfolders & Documents:\n`;
+    driveTree.subfolders.forEach((sub) => {
+      text += `  📁 ${sub.folderName}/ (${sub.files.length} files)\n`;
+      if (sub.files.length > 0) {
+        text += sub.files.map((f) => `    - 📄 ${f.name} (ID: ${f.id})`).join('\n') + '\n';
+      }
+    });
+  }
+  return text;
+}
+
 export function loadProjectSiteSetup(projectId) {
   const defaultProtocol = {
     id: 'site_setup_protocol',
@@ -485,7 +523,7 @@ export function loadProjectSiteSetup(projectId) {
   return { protocol, checks };
 }
 
-export async function askGeminiBrain(query, items, activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = []) {
+export async function askGeminiBrain(query, items, activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = [], driveTree = null) {
   // Strict Lot Filtering to prevent cross-lot data leaks
   const cleanLotName = activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '');
   const projectItems = items.filter((i) => {
@@ -500,6 +538,9 @@ export async function askGeminiBrain(query, items, activeProjectName = 'General 
 
   const dashData = dashboardData || (projectId ? loadProjectDashboard(projectId) : null);
   const financialContext = formatDashboardContext(dashData);
+
+  const driveData = driveTree || (projectId ? loadProjectDriveTree(projectId) : null);
+  const driveContext = formatDriveContext(driveData);
 
   const siteSetupData = loadProjectSiteSetup(projectId);
   const siteSetupProtocol = siteSetupData.protocol;
@@ -529,7 +570,10 @@ ${pendingR.map((r) => `  * [${r.lot || activeProjectName}] ${r.title} (Target: $
 3. FINANCIALS, BUDGETS, QUOTES & TRANSACTION INVOICES:
 ${financialContext}
 
-4. CITY INSPECTION STAGES & PROTOCOLS:
+4. GOOGLE DRIVE PROJECT FOLDERS & FILES:
+${driveContext}
+
+5. CITY INSPECTION STAGES & PROTOCOLS:
 ${INSPECTION_STAGES.map((s) => `- ${s.name} (${s.shortName}): ${s.description}`).join('\n')}
 
 BEHAVIOR AND CONVERSATION GUIDELINES:

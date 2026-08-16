@@ -15,10 +15,13 @@ import {
   loadBrainItems,
   saveBrainItems,
   parseFieldNote,
-  askGeminiBrain
+  askGeminiBrain,
+  loadProjectDriveTree,
+  saveProjectDriveTree
 } from '../services/builderBrainService';
+import { fetchProjectDriveTree } from '../services/googleDrive';
 
-export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
+export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
@@ -27,7 +30,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
   const [messages, setMessages] = useState([
     {
       sender: 'ai',
-      text: `👋 Hey Boss! I'm your Adepec Field & Financial AI for "${projectName}". Ask me anything about site watch-outs, inspections, reminders, or dashboard expenses & budgets!`,
+      text: `👋 Hey Boss! I'm your Adepec Field & Financial AI for "${projectName}". Ask me anything about site watch-outs, inspections, reminders, Google Drive files, or dashboard expenses & budgets!`,
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     }
   ]);
@@ -39,7 +42,20 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
   const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(localStorage.getItem('jobscan_gemini_key') || '');
+  const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const chatEndRef = useRef(null);
+
+  // Sync Google Drive folders & files manifest
+  useEffect(() => {
+    if (googleToken && activeProject?.folderId) {
+      fetchProjectDriveTree(googleToken, activeProject.folderId).then((tree) => {
+        if (tree) {
+          setDriveTree(tree);
+          saveProjectDriveTree(projectId, tree);
+        }
+      });
+    }
+  }, [googleToken, activeProject?.folderId, projectId]);
 
   // Load items when project changes
   useEffect(() => {
@@ -128,7 +144,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder }) {
         }
       }
 
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, messages);
+      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, messages, driveTree);
       const aiMsg = {
         sender: 'ai',
         text: answer,

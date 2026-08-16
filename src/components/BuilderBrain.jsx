@@ -39,8 +39,11 @@ import {
   resetGlobalPhases,
   loadGlobalSiteSetupProtocol,
   saveGlobalSiteSetupProtocol,
-  resetGlobalSiteSetupProtocol
+  resetGlobalSiteSetupProtocol,
+  loadProjectDriveTree,
+  saveProjectDriveTree
 } from '../services/builderBrainService';
+import { fetchProjectDriveTree } from '../services/googleDrive';
 
 export const DEFAULT_SITE_SETUP_PROTOCOL = {
   id: 'site_setup_protocol',
@@ -359,7 +362,7 @@ export const DEFAULT_CONSTRUCTION_PHASES = [
   }
 ];
 
-export default function BuilderBrain({ activeProject, selectedFolder }) {
+export default function BuilderBrain({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
@@ -368,6 +371,18 @@ export default function BuilderBrain({ activeProject, selectedFolder }) {
   const [quickInput, setQuickInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
+  const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
+
+  useEffect(() => {
+    if (googleToken && activeProject?.folderId) {
+      fetchProjectDriveTree(googleToken, activeProject.folderId).then((tree) => {
+        if (tree) {
+          setDriveTree(tree);
+          saveProjectDriveTree(projectId, tree);
+        }
+      });
+    }
+  }, [googleToken, activeProject?.folderId, projectId]);
 
   // Site Setup state (Unified 2-Step Protocol)
   const [siteSetupProtocol, setSiteSetupProtocol] = useState(() => loadGlobalSiteSetupProtocol(DEFAULT_SITE_SETUP_PROTOCOL));
@@ -589,7 +604,7 @@ export default function BuilderBrain({ activeProject, selectedFolder }) {
         if (newItem) setItems((prev) => [newItem, ...prev]);
       }
 
-      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, aiMessages);
+      const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, aiMessages, driveTree);
       const aiMsg = {
         sender: 'ai',
         text: answer,

@@ -612,6 +612,7 @@ export default function App() {
           <BuilderBrain
             activeProject={activeProject}
             selectedFolder={selectedFolder}
+            googleToken={googleToken}
           />
         ) : activeTab === 'xray' ? (
           <BlueprintPinboard
@@ -644,6 +645,7 @@ export default function App() {
       <GlobalAIAssistant
         activeProject={activeProject}
         selectedFolder={selectedFolder}
+        googleToken={googleToken}
       />
 
       {/* 3. Navigation Footer - 5 Mobile-Optimized Tabs */}

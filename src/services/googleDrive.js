@@ -534,4 +534,52 @@ export async function listFilesWithDescriptionInFolder(accessToken, folderId) {
   return result.files || [];
 }
 
+/**
+ * Fetches the folder hierarchy and file manifest for a project's Google Drive root folder.
+ */
+export async function fetchProjectDriveTree(accessToken, rootFolderId) {
+  if (!accessToken || !rootFolderId) return null;
+  try {
+    const safeParentId = escapeDriveQueryString(rootFolderId);
+    const rootQuery = `'${safeParentId}' in parents and trashed=false`;
+    const rootUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(rootQuery)}&fields=files(id,name,mimeType,webViewLink)&pageSize=100`;
+    const rootRes = await fetch(rootUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!rootRes.ok) return null;
+    const rootData = await rootRes.json();
+    const rootItems = rootData.files || [];
+
+    const folders = rootItems.filter((i) => i.mimeType === 'application/vnd.google-apps.folder');
+    const directFiles = rootItems.filter((i) => i.mimeType !== 'application/vnd.google-apps.folder');
+
+    const subfolderResults = await Promise.all(
+      folders.slice(0, 10).map(async (folder) => {
+        try {
+          const safeSubId = escapeDriveQueryString(folder.id);
+          const subQuery = `'${safeSubId}' in parents and trashed=false`;
+          const subUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(subQuery)}&fields=files(id,name,mimeType,webViewLink)&pageSize=50`;
+          const subRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+          if (!subRes.ok) return { folderName: folder.name, folderId: folder.id, files: [] };
+          const subData = await subRes.json();
+          return {
+            folderName: folder.name,
+            folderId: folder.id,
+            files: (subData.files || []).map((f) => ({ id: f.id, name: f.name, link: f.webViewLink, mimeType: f.mimeType }))
+          };
+        } catch {
+          return { folderName: folder.name, folderId: folder.id, files: [] };
+        }
+      })
+    );
+
+    return {
+      directFiles: directFiles.map((f) => ({ id: f.id, name: f.name, link: f.webViewLink, mimeType: f.mimeType })),
+      subfolders: subfolderResults
+    };
+  } catch (err) {
+    console.warn('Error fetching project drive tree:', err);
+    return null;
+  }
+}
+
+
 
