@@ -586,6 +586,35 @@ export async function fetchProjectDriveTree(accessToken, rootFolderId) {
  */
 export async function trashDriveFileOrFolder(accessToken, fileOrFolderId) {
   if (!accessToken || !fileOrFolderId) return false;
+
+  // Permanent Safety Guard: Check if item is a Google Sheet or financial ledger
+  try {
+    const metaRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files/${fileOrFolderId}?fields=id,name,mimeType`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (metaRes.ok) {
+      const meta = await metaRes.json();
+      const name = (meta.name || '').toLowerCase();
+      const mime = meta.mimeType || '';
+      if (
+        mime === 'application/vnd.google-apps.spreadsheet' ||
+        mime.includes('spreadsheet') ||
+        mime.includes('excel') ||
+        name.endsWith('.xlsx') ||
+        name.endsWith('.csv') ||
+        name.includes('expense') ||
+        name.includes('payment') ||
+        name.includes('budget') ||
+        name.includes('ledger')
+      ) {
+        console.warn(`PROTECTED FILE: Cannot trash or modify spreadsheet "${meta.name}".`);
+        throw new Error(`Action blocked: Project spreadsheets and financial sheets ("${meta.name}") are permanently protected in read-only mode.`);
+      }
+    }
+  } catch (checkErr) {
+    if (checkErr.message?.includes('Action blocked')) throw checkErr;
+  }
+
   const url = `${GOOGLE_DRIVE_API_BASE}/files/${fileOrFolderId}`;
   const response = await fetch(url, {
     method: 'PATCH',
