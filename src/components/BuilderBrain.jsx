@@ -451,10 +451,13 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     setItems(loaded);
   }, [projectId]);
 
+  const isBrainMounted = useRef(false);
   useEffect(() => {
-    if (items.length > 0) {
-      saveBrainItems(projectId, items);
+    if (!isBrainMounted.current) {
+      isBrainMounted.current = true;
+      return;
     }
+    saveBrainItems(projectId, items);
   }, [items, projectId]);
 
   useEffect(() => {
@@ -608,8 +611,20 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     );
   };
 
-  const handleDelete = (id) => {
-    setItems((prev) => prev.filter((i) => i.id !== id));
+  const handleDelete = (id, title) => {
+    const item = items.find((i) => i.id === id);
+    const itemTitle = title || item?.title || 'this item';
+    const categoryName = item?.category === 'watchout' ? 'Watch-Out' : item?.category === 'subcontractor' ? 'Trade Call' : 'Reminder';
+
+    if (!window.confirm(`⚠️ Confirm Deletion:\n\nAre you sure you want to delete this ${categoryName}?\n\n"${itemTitle}"`)) {
+      return;
+    }
+
+    setItems((prev) => {
+      const updated = prev.filter((i) => i.id !== id);
+      saveBrainItems(projectId, updated);
+      return updated;
+    });
   };
 
   const handleSendAiMessage = async (e) => {
@@ -2710,7 +2725,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                         <CheckCircle2 size={18} />
                       </button>
                       <button
-                        onClick={() => handleDelete(item.id)}
+                        onClick={() => handleDelete(item.id, item.title)}
                         style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}
                         title="Delete"
                       >
