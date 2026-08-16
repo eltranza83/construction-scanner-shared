@@ -441,6 +441,10 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const [showAddSetupAudit, setShowAddSetupAudit] = useState(false);
   const [newSetupAuditInput, setNewSetupAuditInput] = useState('');
 
+  // Accordion Expand/Collapse states for Site Setup (Starts collapsed)
+  const [isSitePreNotesExpanded, setIsSitePreNotesExpanded] = useState(false);
+  const [isSiteAuditExpanded, setIsSiteAuditExpanded] = useState(false);
+
   // 6 Municipal Stages state (Global & Editable)
   const [phases, setPhases] = useState(() => loadGlobalPhases(DEFAULT_CONSTRUCTION_PHASES));
   const [activePhaseId, setActivePhaseId] = useState('plumbing');
@@ -1857,356 +1861,456 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               Site Setup & Lot Mobilization Protocol
             </h3>
 
-            {/* SECTION 1: TELL SUB / SUPPLIERS BEFORE WORK STARTS */}
+            {/* SECTION 1: TELL SUB / SUPPLIERS BEFORE WORK STARTS (ACCORDION) */}
             <div
               style={{
                 backgroundColor: 'var(--color-zinc-950)',
                 padding: '14px',
                 borderRadius: '8px',
                 border: '1px solid var(--color-zinc-800)',
-                marginBottom: '14px'
+                marginBottom: '14px',
+                transition: 'all 0.2s ease'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase' }}>
-                  1. TELL SUPPLIERS / SUBS BEFORE WORK STARTS ({siteSetupProtocol.preTradeNotes.length})
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  {isCustomizingSetup && (
+              {/* Accordion Header */}
+              <div
+                onClick={() => setIsSitePreNotesExpanded((prev) => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  padding: '2px 0',
+                  marginBottom: isSitePreNotesExpanded ? '12px' : '0'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    1. Critical Pre-Work Notes
+                  </span>
+                  <span style={{ fontSize: '0.72rem', backgroundColor: 'rgba(245, 158, 11, 0.15)', color: 'var(--color-amber-400)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '2px 8px', borderRadius: '12px', fontWeight: 700 }}>
+                    {siteSetupProtocol.preTradeNotes.length} {siteSetupProtocol.preTradeNotes.length === 1 ? 'item' : 'items'}
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                    {isSitePreNotesExpanded ? 'Tap to collapse' : 'Tap to expand'}
+                  </span>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'var(--color-amber-400)'
+                    }}
+                  >
+                    {isSitePreNotesExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </div>
+              </div>
+
+              {/* Expanded Content */}
+              {isSitePreNotesExpanded && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', paddingTop: '6px', borderTop: '1px solid var(--color-zinc-850)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '6px', marginBottom: '4px' }}>
+                    {isCustomizingSetup && (
+                      <button
+                        onClick={() => setShowAddSetupPreNote(!showAddSetupPreNote)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid var(--color-zinc-700)',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        <Plus size={12} /> Add Line
+                      </button>
+                    )}
                     <button
-                      onClick={() => setShowAddSetupPreNote(!showAddSetupPreNote)}
+                      onClick={handleSMSSiteSetupPreNotes}
                       style={{
-                        padding: '4px 8px',
+                        padding: '4px 10px',
                         borderRadius: '6px',
-                        backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                        border: '1px solid var(--color-zinc-700)',
-                        color: 'var(--color-zinc-200)',
+                        backgroundColor: 'rgba(197, 160, 89, 0.15)',
+                        border: '1px solid var(--color-amber-500)',
+                        color: 'var(--color-amber-500)',
                         fontSize: '0.72rem',
                         fontWeight: 700,
                         cursor: 'pointer',
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '3px'
+                        gap: '4px'
                       }}
                     >
-                      <Plus size={12} /> Add Line
+                      <MessageSquare size={12} /> Text Specs (SMS)
                     </button>
+                  </div>
+
+                  {/* Add Pre-Note Form */}
+                  {isCustomizingSetup && showAddSetupPreNote && (
+                    <form onSubmit={handleAddSetupPreNote} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                      <input
+                        type="text"
+                        placeholder="Enter new site setup pre-work instruction..."
+                        value={newSetupPreNoteInput}
+                        onChange={(e) => setNewSetupPreNoteInput(e.target.value)}
+                        autoFocus
+                        style={{
+                          flex: 1,
+                          backgroundColor: 'var(--color-zinc-900)',
+                          border: '1px solid var(--color-amber-500)',
+                          borderRadius: '6px',
+                          padding: '6px 10px',
+                          color: 'var(--color-zinc-100)',
+                          fontSize: '0.82rem',
+                          outline: 'none'
+                        }}
+                      />
+                      <button type="submit" style={{ padding: '0 12px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
+                        Add
+                      </button>
+                      <button type="button" onClick={() => setShowAddSetupPreNote(false)} style={{ padding: '0 8px', backgroundColor: 'transparent', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                        Cancel
+                      </button>
+                    </form>
                   )}
-                  <button
-                    onClick={handleSMSSiteSetupPreNotes}
-                    style={{
-                      padding: '4px 10px',
-                      borderRadius: '6px',
-                      backgroundColor: 'rgba(197, 160, 89, 0.15)',
-                      border: '1px solid var(--color-amber-500)',
-                      color: 'var(--color-amber-500)',
-                      fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '4px'
-                    }}
-                  >
-                    <MessageSquare size={12} /> Text Specs (SMS)
-                  </button>
-                </div>
-              </div>
 
-              {/* Add Pre-Note Form */}
-              {isCustomizingSetup && showAddSetupPreNote && (
-                <form onSubmit={handleAddSetupPreNote} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="Enter new site setup pre-work instruction..."
-                    value={newSetupPreNoteInput}
-                    onChange={(e) => setNewSetupPreNoteInput(e.target.value)}
-                    autoFocus
-                    style={{
-                      flex: 1,
-                      backgroundColor: 'var(--color-zinc-900)',
-                      border: '1px solid var(--color-amber-500)',
-                      borderRadius: '6px',
-                      padding: '6px 10px',
-                      color: 'var(--color-zinc-100)',
-                      fontSize: '0.82rem',
-                      outline: 'none'
-                    }}
-                  />
-                  <button type="submit" style={{ padding: '0 12px', backgroundColor: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
-                    Add
-                  </button>
-                  <button type="button" onClick={() => setShowAddSetupPreNote(false)} style={{ padding: '0 8px', backgroundColor: 'transparent', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                    Cancel
-                  </button>
-                </form>
-              )}
-
-              {/* Pre-Note Bullets */}
-              <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px', margin: 0, padding: 0 }}>
-                {siteSetupProtocol.preTradeNotes.map((note, idx) => {
-                  const isEditing = editingSetupPreNoteIdx === idx;
-                  return (
-                    <li
-                      key={idx}
-                      style={{
-                        fontSize: '0.85rem',
-                        color: 'var(--color-zinc-200)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px',
-                        padding: '4px 6px',
-                        borderRadius: '4px',
-                        backgroundColor: isEditing ? 'var(--color-zinc-900)' : 'transparent'
-                      }}
-                    >
-                      {isEditing ? (
-                        <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                          <input
-                            type="text"
-                            value={editingSetupPreNoteText}
-                            onChange={(e) => setEditingSetupPreNoteText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEditSetupPreNote(idx);
-                              if (e.key === 'Escape') setEditingSetupPreNoteIdx(null);
-                            }}
-                            autoFocus
-                            style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
-                          />
-                          <button onClick={() => handleSaveEditSetupPreNote(idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
-                            <Check size={14} />
-                          </button>
-                          <button onClick={() => setEditingSetupPreNoteIdx(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
-                            <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
-                            <span>{note}</span>
-                          </div>
-                          {isCustomizingSetup && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
-                              <button
-                                onClick={() => {
-                                  setEditingSetupPreNoteIdx(idx);
-                                  setEditingSetupPreNoteText(note);
+                  {/* Pre-Note Bullets */}
+                  <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '6px', margin: 0, padding: 0 }}>
+                    {siteSetupProtocol.preTradeNotes.map((note, idx) => {
+                      const isEditing = editingSetupPreNoteIdx === idx;
+                      return (
+                        <li
+                          key={idx}
+                          style={{
+                            fontSize: '0.85rem',
+                            color: 'var(--color-zinc-200)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '4px 6px',
+                            borderRadius: '4px',
+                            backgroundColor: isEditing ? 'var(--color-zinc-900)' : 'transparent'
+                          }}
+                        >
+                          {isEditing ? (
+                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                              <input
+                                type="text"
+                                value={editingSetupPreNoteText}
+                                onChange={(e) => setEditingSetupPreNoteText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveEditSetupPreNote(idx);
+                                  if (e.key === 'Escape') setEditingSetupPreNoteIdx(null);
                                 }}
-                                style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
-                                title="Edit line"
-                              >
-                                <Edit2 size={13} />
+                                autoFocus
+                                style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-amber-500)', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                              />
+                              <button onClick={() => handleSaveEditSetupPreNote(idx)} style={{ background: 'var(--color-amber-500)', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                <Check size={14} />
                               </button>
-                              <button
-                                onClick={() => handleDeleteSetupPreNote(idx, note)}
-                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                                title="Delete line"
-                              >
-                                <Trash2 size={13} />
+                              <button onClick={() => setEditingSetupPreNoteIdx(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                <X size={14} />
                               </button>
                             </div>
+                          ) : (
+                            <>
+                              <div style={{ display: 'flex', alignItems: 'flex-start', gap: '6px', flex: 1 }}>
+                                <span style={{ color: 'var(--color-amber-500)', fontWeight: 800 }}>•</span>
+                                <span>{note}</span>
+                              </div>
+                              {isCustomizingSetup && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSetupPreNoteIdx(idx);
+                                      setEditingSetupPreNoteText(note);
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
+                                    title="Edit line"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSetupPreNote(idx, note)}
+                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                                    title="Delete line"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              )}
+                            </>
                           )}
-                        </>
-                      )}
-                    </li>
-                  );
-                })}
-              </ul>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            {/* SECTION 2: SITE MOBILIZATION READINESS AUDIT */}
+            {/* SECTION 2: SITE MOBILIZATION READINESS AUDIT (ACCORDION) */}
             <div
               style={{
                 backgroundColor: 'var(--color-zinc-950)',
                 padding: '14px',
                 borderRadius: '8px',
-                border: '1px solid var(--color-zinc-800)'
+                border: '1px solid var(--color-zinc-800)',
+                transition: 'all 0.2s ease'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
-                <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase' }}>
-                  2. SITE MOBILIZATION READINESS AUDIT ({siteSetupProtocol.inspectionChecklist.length})
-                </span>
-                {isCustomizingSetup && (
-                  <button
-                    onClick={() => setShowAddSetupAudit(!showAddSetupAudit)}
+              {/* Master Accordion Header */}
+              <div
+                onClick={() => setIsSiteAuditExpanded((prev) => !prev)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  padding: '2px 0',
+                  marginBottom: isSiteAuditExpanded ? '12px' : '0'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                    2. Site Mobilization Readiness Audit
+                  </span>
+                  <span
                     style={{
-                      padding: '4px 8px',
-                      borderRadius: '6px',
-                      backgroundColor: 'rgba(255, 255, 255, 0.06)',
-                      border: '1px solid var(--color-zinc-700)',
-                      color: 'var(--color-zinc-200)',
                       fontSize: '0.72rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '3px'
+                      backgroundColor: siteSetupCompletedCount === siteSetupProtocol.inspectionChecklist.length ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.15)',
+                      color: siteSetupCompletedCount === siteSetupProtocol.inspectionChecklist.length ? '#10b981' : '#34d399',
+                      border: '1px solid rgba(16, 185, 129, 0.3)',
+                      padding: '2px 8px',
+                      borderRadius: '12px',
+                      fontWeight: 800
                     }}
                   >
-                    <Plus size={12} /> Add Item
-                  </button>
-                )}
+                    {siteSetupCompletedCount}/{siteSetupProtocol.inspectionChecklist.length} Passed
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                    {isSiteAuditExpanded ? 'Tap to collapse' : 'Tap to expand'}
+                  </span>
+                  <div
+                    style={{
+                      width: '24px',
+                      height: '24px',
+                      borderRadius: '6px',
+                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#34d399'
+                    }}
+                  >
+                    {isSiteAuditExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                  </div>
+                </div>
               </div>
 
-              {/* Add Audit Item Form */}
-              {isCustomizingSetup && showAddSetupAudit && (
-                <form onSubmit={handleAddSetupAudit} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
-                  <input
-                    type="text"
-                    placeholder="Enter new site setup checklist item..."
-                    value={newSetupAuditInput}
-                    onChange={(e) => setNewSetupAuditInput(e.target.value)}
-                    autoFocus
-                    style={{ flex: 1, backgroundColor: 'var(--color-zinc-900)', border: '1px solid #34d399', borderRadius: '6px', padding: '6px 10px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
-                  />
-                  <button type="submit" style={{ padding: '0 12px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
-                    Add
-                  </button>
-                  <button type="button" onClick={() => setShowAddSetupAudit(false)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
-                    Cancel
-                  </button>
-                </form>
-              )}
+              {/* Expanded Content */}
+              {isSiteAuditExpanded && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '6px', borderTop: '1px solid var(--color-zinc-850)' }}>
+                  {isCustomizingSetup && (
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '4px' }}>
+                      <button
+                        onClick={() => setShowAddSetupAudit(!showAddSetupAudit)}
+                        style={{
+                          padding: '4px 8px',
+                          borderRadius: '6px',
+                          backgroundColor: 'rgba(255, 255, 255, 0.06)',
+                          border: '1px solid var(--color-zinc-700)',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '3px'
+                        }}
+                      >
+                        <Plus size={12} /> Add Item
+                      </button>
+                    </div>
+                  )}
 
-              {/* Checklist Items */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '14px' }}>
-                {siteSetupProtocol.inspectionChecklist.map((chk) => {
-                  const isChecked = siteSetupChecks[chk.id] || false;
-                  const isEditing = editingSetupAuditId === chk.id;
+                  {/* Add Audit Item Form */}
+                  {isCustomizingSetup && showAddSetupAudit && (
+                    <form onSubmit={handleAddSetupAudit} style={{ display: 'flex', gap: '6px', marginBottom: '10px' }}>
+                      <input
+                        type="text"
+                        placeholder="Enter new site setup checklist item..."
+                        value={newSetupAuditInput}
+                        onChange={(e) => setNewSetupAuditInput(e.target.value)}
+                        autoFocus
+                        style={{ flex: 1, backgroundColor: 'var(--color-zinc-900)', border: '1px solid #34d399', borderRadius: '6px', padding: '6px 10px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                      />
+                      <button type="submit" style={{ padding: '0 12px', backgroundColor: '#10b981', color: '#000', border: 'none', borderRadius: '6px', fontWeight: 800, fontSize: '0.75rem', cursor: 'pointer' }}>
+                        Add
+                      </button>
+                      <button type="button" onClick={() => setShowAddSetupAudit(false)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer', fontSize: '0.75rem' }}>
+                        Cancel
+                      </button>
+                    </form>
+                  )}
 
-                  return (
-                    <div
-                      key={chk.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'space-between',
-                        gap: '8px',
-                        padding: '8px 10px',
-                        borderRadius: '6px',
-                        backgroundColor: isChecked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-900)',
-                        border: '1px solid ' + (isChecked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
-                        transition: 'all 0.15s'
-                      }}
-                    >
-                      {isEditing ? (
-                        <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
-                          <input
-                            type="text"
-                            value={editingSetupAuditText}
-                            onChange={(e) => setEditingSetupAuditText(e.target.value)}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') handleSaveEditSetupAudit(chk.id);
-                              if (e.key === 'Escape') setEditingSetupAuditId(null);
-                            }}
-                            autoFocus
-                            style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
-                          />
-                          <button onClick={() => handleSaveEditSetupAudit(chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
-                            <Check size={14} />
-                          </button>
-                          <button onClick={() => setEditingSetupAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ) : (
-                        <>
-                          <div
-                            onClick={() => toggleSiteSetupCheck(chk.id)}
-                            style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
-                          >
-                            <input
-                              type="checkbox"
-                              checked={isChecked}
-                              onChange={() => {}}
-                              style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
-                            />
-                            <span
-                              style={{
-                                fontSize: '0.85rem',
-                                fontWeight: 600,
-                                color: isChecked ? '#34d399' : 'var(--color-zinc-200)',
-                                textDecoration: isChecked ? 'line-through' : 'none'
-                              }}
-                            >
-                              {chk.text}
-                            </span>
-                          </div>
+                  {/* Checklist Items */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {siteSetupProtocol.inspectionChecklist.map((chk) => {
+                      const isChecked = siteSetupChecks[chk.id] || false;
+                      const isEditing = editingSetupAuditId === chk.id;
 
-                          {isCustomizingSetup && (
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
-                              <button
-                                onClick={() => {
-                                  setEditingSetupAuditId(chk.id);
-                                  setEditingSetupAuditText(chk.text);
+                      return (
+                        <div
+                          key={chk.id}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            gap: '8px',
+                            padding: '8px 10px',
+                            borderRadius: '6px',
+                            backgroundColor: isChecked ? 'rgba(16, 185, 129, 0.12)' : 'var(--color-zinc-900)',
+                            border: '1px solid ' + (isChecked ? 'rgba(16, 185, 129, 0.3)' : 'var(--color-zinc-800)'),
+                            transition: 'all 0.15s'
+                          }}
+                        >
+                          {isEditing ? (
+                            <div style={{ display: 'flex', gap: '6px', width: '100%' }}>
+                              <input
+                                type="text"
+                                value={editingSetupAuditText}
+                                onChange={(e) => setEditingSetupAuditText(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') handleSaveEditSetupAudit(chk.id);
+                                  if (e.key === 'Escape') setEditingSetupAuditId(null);
                                 }}
-                                style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
-                                title="Edit item"
-                              >
-                                <Edit2 size={13} />
+                                autoFocus
+                                style={{ flex: 1, backgroundColor: 'var(--color-zinc-950)', border: '1px solid #34d399', borderRadius: '4px', padding: '4px 8px', color: 'var(--color-zinc-100)', fontSize: '0.82rem', outline: 'none' }}
+                              />
+                              <button onClick={() => handleSaveEditSetupAudit(chk.id)} style={{ background: '#10b981', color: '#000', border: 'none', borderRadius: '4px', padding: '4px 8px', cursor: 'pointer' }}>
+                                <Check size={14} />
                               </button>
-                              <button
-                                onClick={() => handleDeleteSetupAudit(chk.id, chk.text)}
-                                style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
-                                title="Delete item"
-                              >
-                                <Trash2 size={13} />
+                              <button onClick={() => setEditingSetupAuditId(null)} style={{ background: 'none', color: 'var(--color-zinc-400)', border: 'none', cursor: 'pointer' }}>
+                                <X size={14} />
                               </button>
                             </div>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                          ) : (
+                            <>
+                              <div
+                                onClick={() => toggleSiteSetupCheck(chk.id)}
+                                style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: 1, cursor: 'pointer' }}
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {}}
+                                  style={{ width: '16px', height: '16px', accentColor: '#10b981', cursor: 'pointer' }}
+                                />
+                                <span
+                                  style={{
+                                    fontSize: '0.85rem',
+                                    fontWeight: 600,
+                                    color: isChecked ? '#34d399' : 'var(--color-zinc-200)',
+                                    textDecoration: isChecked ? 'line-through' : 'none'
+                                  }}
+                                >
+                                  {chk.text}
+                                </span>
+                              </div>
 
-              {/* Actions */}
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                <button
-                  onClick={handleFlagUncheckedSetup}
-                  style={{
-                    flex: 1,
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                    border: '1px solid #ef4444',
-                    color: '#ef4444',
-                    fontWeight: 700,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <AlertTriangle size={14} /> Flag Unchecked as Watch-Outs
-                </button>
-                <button
-                  onClick={handleCompleteSiteSetup}
-                  style={{
-                    flex: 1,
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    backgroundColor: 'var(--color-amber-500)',
-                    border: 'none',
-                    color: '#000',
-                    fontWeight: 800,
-                    fontSize: '0.78rem',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '5px'
-                  }}
-                >
-                  <CheckSquare size={14} /> Site Ready — Proceed to Plumbing
-                </button>
-              </div>
+                              {isCustomizingSetup && (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', opacity: 0.9 }}>
+                                  <button
+                                    onClick={() => {
+                                      setEditingSetupAuditId(chk.id);
+                                      setEditingSetupAuditText(chk.text);
+                                    }}
+                                    style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer', padding: '2px' }}
+                                    title="Edit item"
+                                  >
+                                    <Edit2 size={13} />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDeleteSetupAudit(chk.id, chk.text)}
+                                    style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '2px' }}
+                                    title="Delete item"
+                                  >
+                                    <Trash2 size={13} />
+                                  </button>
+                                </div>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Actions */}
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
+                    <button
+                      onClick={handleFlagUncheckedSetup}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                        border: '1px solid #ef4444',
+                        color: '#ef4444',
+                        fontWeight: 700,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <AlertTriangle size={14} /> Flag Unchecked as Watch-Outs
+                    </button>
+                    <button
+                      onClick={handleCompleteSiteSetup}
+                      style={{
+                        flex: 1,
+                        padding: '10px 12px',
+                        borderRadius: '6px',
+                        backgroundColor: 'var(--color-amber-500)',
+                        border: 'none',
+                        color: '#000',
+                        fontWeight: 800,
+                        fontSize: '0.8rem',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '5px'
+                      }}
+                    >
+                      <CheckSquare size={14} /> Mark Site Setup 100% Ready
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
