@@ -155,23 +155,6 @@ function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount })
         )}
       </button>
       <button
-        onClick={() => onSetViewMode('pre_check')}
-        style={{
-          padding: '6px 10px',
-          fontSize: '0.72rem',
-          fontWeight: 700,
-          borderRadius: '6px',
-          border: 'none',
-          backgroundColor: viewMode === 'pre_check' ? 'var(--color-amber-500)' : 'transparent',
-          color: viewMode === 'pre_check' ? '#000' : 'var(--color-zinc-400)',
-          cursor: 'pointer',
-          transition: 'all 0.15s',
-          whiteSpace: 'nowrap'
-        }}
-      >
-        City Pre-Check
-      </button>
-      <button
         onClick={() => onSetViewMode('brain')}
         style={{
           padding: '6px 10px',
@@ -374,11 +357,6 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           projectInfo={formProjectInfo}
           selectedFolderName={selectedFolder?.name}
           onSendIssuePacket={handleSendIssuePacket}
-        />
-      ) : pinboard.viewMode === 'pre_check' ? (
-        <Inspections
-          activeProject={activeProject}
-          selectedFolder={selectedFolder}
         />
       ) : pinboard.viewMode === 'brain' ? (
         <BuilderBrain
