@@ -216,52 +216,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:DELETE_FOLDER:[^\]]+\]\]/, '').trim();
       }
 
-      // 3. Add Item / Reminder / Watch-Out Action
-      const actionAddItemMatch = answer.match(/\[\[ACTION:ADD_ITEM:([^\]]+)\]\]/);
-      if (actionAddItemMatch && actionAddItemMatch[1]) {
-        try {
-          const itemData = JSON.parse(actionAddItemMatch[1]);
-          const newItem = {
-            id: 'brain_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-            rawInput: query,
-            title: itemData.title || query,
-            category: itemData.category || 'reminder',
-            subcontractor: itemData.subcontractor || null,
-            targetDate: itemData.targetDate || null,
-            notes: itemData.notes || '',
-            lot: activeProject?.name || projectName || 'General Site',
-            status: 'pending',
-            createdAt: new Date().toISOString()
-          };
-          setItems((prev) => {
-            const updated = [newItem, ...prev];
-            saveBrainItems(projectId, updated);
-            return updated;
-          });
-        } catch {
-          const parsed = parseFieldNote(query, projectName);
-          if (parsed) {
-            setItems((prev) => {
-              const updated = [parsed, ...prev];
-              saveBrainItems(projectId, updated);
-              return updated;
-            });
-          }
-        }
-        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_ITEM:[^\]]+\]\]/, '').trim();
-      } else {
-        const isCreateNoteQuery = /(?:remind\s+me|schedule\s+(?:a\s+)?reminder|add\s+(?:a\s+)?reminder|create\s+(?:a\s+)?reminder|recu[eé]rdame|haz\s+(?:un\s+)?recordatorio|crea\s+(?:un\s+)?recordatorio|watch\s*out|watchout)/i.test(query);
-        if (isCreateNoteQuery) {
-          const parsed = parseFieldNote(query, projectName);
-          if (parsed) {
-            setItems((prev) => {
-              const updated = [parsed, ...prev];
-              saveBrainItems(projectId, updated);
-              return updated;
-            });
-          }
-        }
-      }
+
 
       // 4. Add Finish Selection / Paint Spec Action
       const actionAddSpecMatches = [...answer.matchAll(/\[\[ACTION:ADD_SPEC:([^\]]+)\]\]/g)];

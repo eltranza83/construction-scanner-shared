@@ -381,9 +381,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
-  const [items, setItems] = useState([]);
-  const [mainHubTab, setMainHubTab] = useState('daily'); // 'daily' | 'protocols'
-  const [activeSubTab, setActiveSubTab] = useState('all'); // 'all' | 'watchout' | 'subcontractor' | 'reminder' | 'specs' | 'site_setup' | 'phases'
+  const [activeSubTab, setActiveSubTab] = useState('specs'); // 'specs' | 'site_setup' | 'phases'
   const [quickInput, setQuickInput] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isAssistantOpen, setIsAssistantOpen] = useState(false);
@@ -695,52 +693,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:DELETE_FOLDER:[^\]]+\]\]/, '').trim();
       }
 
-      // 3. Add Item / Reminder / Watch-Out Action
-      const actionAddItemMatch = answer.match(/\[\[ACTION:ADD_ITEM:([^\]]+)\]\]/);
-      if (actionAddItemMatch && actionAddItemMatch[1]) {
-        try {
-          const itemData = JSON.parse(actionAddItemMatch[1]);
-          const newItem = {
-            id: 'brain_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-            rawInput: query,
-            title: itemData.title || query,
-            category: itemData.category || 'reminder',
-            subcontractor: itemData.subcontractor || null,
-            targetDate: itemData.targetDate || null,
-            notes: itemData.notes || '',
-            lot: activeProject?.name || projectName || 'General Site',
-            status: 'pending',
-            createdAt: new Date().toISOString()
-          };
-          setItems((prev) => {
-            const updated = [newItem, ...prev];
-            saveBrainItems(projectId, updated);
-            return updated;
-          });
-        } catch {
-          const parsed = parseFieldNote(query, projectName);
-          if (parsed) {
-            setItems((prev) => {
-              const updated = [parsed, ...prev];
-              saveBrainItems(projectId, updated);
-              return updated;
-            });
-          }
-        }
-        cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_ITEM:[^\]]+\]\]/, '').trim();
-      } else {
-        const isCreateNoteQuery = /(?:remind\s+me|schedule\s+(?:a\s+)?reminder|add\s+(?:a\s+)?reminder|create\s+(?:a\s+)?reminder|recu[eé]rdame|haz\s+(?:un\s+)?recordatorio|crea\s+(?:un\s+)?recordatorio|watch\s*out|watchout)/i.test(query);
-        if (isCreateNoteQuery) {
-          const parsed = parseFieldNote(query, projectName);
-          if (parsed) {
-            setItems((prev) => {
-              const updated = [parsed, ...prev];
-              saveBrainItems(projectId, updated);
-              return updated;
-            });
-          }
-        }
-      }
+
 
       // 4. Add Finish Selection / Paint Spec Action
       const actionAddSpecMatches = [...answer.matchAll(/\[\[ACTION:ADD_SPEC:([^\]]+)\]\]/g)];
@@ -1252,58 +1205,17 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
 
     if (unchecked.length === 0) {
-      alert('All items in this inspection checklist are marked PASSED! Zero watch-outs created.');
+      alert(`✅ All items in the ${currentPhase.name} checklist are marked PASSED! Ready for City Inspection.`);
       return;
     }
-    const newWatchouts = unchecked.map(({ item, trade }) => ({
-      id: 'b_watch_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      rawInput: `Pre-Inspection Check: ${item.text}`,
-      title: `Pre-Inspection: ${item.text}`,
-      category: 'watchout',
-      targetDate: null,
-      lot: projectName,
-      subcontractor: trade,
-      priority: 'high',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      notes: `Flagged during ${currentPhase.name} readiness check for ${projectName}.`
-    }));
-    setItems((prev) => [...newWatchouts, ...prev]);
-    alert(`Created ${unchecked.length} High-Priority Watch-Outs for ${projectName}! Check the Watch-Outs tab.`);
+    alert(`⚠️ Notice: ${unchecked.length} items remain incomplete for ${currentPhase.name}. Please verify these items before calling the City Inspector.`);
   };
 
   const handleScheduleInspection = () => {
-    const title = `Schedule City Inspection: ${currentPhase.name} (${projectName})`;
-    const targetDate = new Date(Date.now() + 86400000);
-    const newRem = {
-      id: 'b_rem_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
-      rawInput: title,
-      title: title,
-      category: 'reminder',
-      targetDate: targetDate.toISOString(),
-      lot: projectName,
-      subcontractor: 'City Inspector',
-      priority: 'high',
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      notes: `Pre-inspection checklist passed for ${currentPhase.name}. Ready to schedule inspector visit.`
-    };
-    setItems((prev) => [newRem, ...prev]);
-    alert(`Inspection reminder logged for ${projectName}! Added to Reminders tab.`);
+    alert(`✅ City Inspection Readiness Confirmed for ${currentPhase.name}! All pre-inspection checks verified for ${projectName}.`);
   };
 
-  const pendingWatchouts = items.filter((i) => i.category === 'watchout' && i.status === 'pending');
-  const pendingSubs = items.filter((i) => i.category === 'subcontractor' && i.status === 'pending');
-  const pendingReminders = items.filter((i) => i.category === 'reminder' && i.status === 'pending');
-
   const siteSetupCompletedCount = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]).length;
-
-  const filteredItems = items.filter((item) => {
-    if (activeSubTab === 'watchout') return item.category === 'watchout';
-    if (activeSubTab === 'subcontractor') return item.category === 'subcontractor';
-    if (activeSubTab === 'reminder') return item.category === 'reminder';
-    return true;
-  });
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -1367,341 +1279,91 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         </button>
       </div>
 
-      {/* Quick Voice / Text Capture Input */}
+      {/* 3 MASTER PROJECT HUBS */}
       <div
         style={{
-          backgroundColor: 'var(--color-zinc-900)',
+          display: 'flex',
+          gap: '8px',
+          backgroundColor: 'var(--color-zinc-950)',
+          padding: '4px',
           borderRadius: '10px',
-          border: '1px solid var(--color-zinc-800)',
-          padding: '14px'
+          border: '1px solid var(--color-zinc-800)'
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-          <span style={{ fontSize: '0.8rem', fontWeight: 800, color: 'var(--color-amber-500)', textTransform: 'uppercase' }}>
-            ⚡ Field Quick Capture
-          </span>
-          <button
-            type="button"
-            onClick={handleQuickVoice}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '5px',
-              padding: '4px 10px',
-              backgroundColor: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(197, 160, 89, 0.15)',
-              border: '1px solid ' + (isRecording ? '#ef4444' : 'var(--color-amber-500)'),
-              color: isRecording ? '#ef4444' : 'var(--color-amber-500)',
-              borderRadius: '20px',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer'
-            }}
-          >
-            <Mic size={13} />
-            {isRecording ? 'Listening...' : 'Tap & Speak'}
-          </button>
-        </div>
-
-        <form onSubmit={handleQuickSubmit} style={{ display: 'flex', gap: '8px' }}>
-          <textarea
-            placeholder='Type or speak: "Remind me at 3 PM to call electrician about rough-in"...'
-            value={quickInput}
-            onChange={(e) => setQuickInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleQuickSubmit(e);
-              }
-            }}
-            style={{
-              flex: 1,
-              backgroundColor: 'var(--color-zinc-950)',
-              border: '1px solid var(--color-zinc-800)',
-              borderRadius: '8px',
-              padding: '10px 12px',
-              color: 'var(--color-zinc-100)',
-              fontSize: '0.9rem',
-              fontFamily: 'inherit',
-              resize: 'none',
-              minHeight: '48px',
-              outline: 'none'
-            }}
-          />
-          <button
-            type="submit"
-            style={{
-              padding: '0 16px',
-              backgroundColor: 'var(--color-amber-500)',
-              color: '#000',
-              border: 'none',
-              borderRadius: '8px',
-              fontWeight: 800,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '4px'
-            }}
-          >
-            <Send size={15} /> Save
-          </button>
-        </form>
-      </div>
-
-      {/* OPTION 2: 2 MAIN HUB TABS WITH DEDICATED SUB-FILTERS */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {/* LEVEL 1: MAIN HUB SEGMENTED CONTROL */}
-        <div
+        <button
+          onClick={() => setActiveSubTab('specs')}
           style={{
+            flex: 1.2,
+            padding: '10px 8px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: activeSubTab === 'specs' ? 'var(--color-amber-500)' : 'transparent',
+            color: activeSubTab === 'specs' ? '#000' : 'var(--color-zinc-400)',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
             display: 'flex',
-            gap: '8px',
-            backgroundColor: 'var(--color-zinc-950)',
-            padding: '4px',
-            borderRadius: '10px',
-            border: '1px solid var(--color-zinc-800)'
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+            boxShadow: activeSubTab === 'specs' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
           }}
         >
-          <button
-            onClick={() => {
-              setMainHubTab('daily');
-              if (!['all', 'watchout', 'subcontractor', 'reminder'].includes(activeSubTab)) {
-                setActiveSubTab('all');
-              }
-            }}
-            style={{
-              flex: 1,
-              padding: '10px 8px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: mainHubTab === 'daily' ? 'var(--color-amber-500)' : 'transparent',
-              color: mainHubTab === 'daily' ? '#000' : 'var(--color-zinc-400)',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-              boxShadow: mainHubTab === 'daily' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
-            }}
-          >
-            <Zap size={15} />
-            <span>Daily Field Logs ({items.length})</span>
-          </button>
+          <Palette size={15} />
+          <span>Finishes & Specs ({specs.length})</span>
+        </button>
 
-          <button
-            onClick={() => {
-              setMainHubTab('protocols');
-              if (!['specs', 'site_setup', 'phases'].includes(activeSubTab)) {
-                setActiveSubTab('specs');
-              }
-            }}
-            style={{
-              flex: 1,
-              padding: '10px 8px',
-              borderRadius: '8px',
-              border: 'none',
-              backgroundColor: mainHubTab === 'protocols' ? 'var(--color-amber-500)' : 'transparent',
-              color: mainHubTab === 'protocols' ? '#000' : 'var(--color-zinc-400)',
-              fontSize: '0.82rem',
-              fontWeight: 800,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '6px',
-              transition: 'all 0.2s ease',
-              whiteSpace: 'nowrap',
-              boxShadow: mainHubTab === 'protocols' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
-            }}
-          >
-            <Palette size={15} />
-            <span>Specs & Protocols ({specs.length + siteSetupCompletedCount})</span>
-          </button>
-        </div>
+        <button
+          onClick={() => setActiveSubTab('site_setup')}
+          style={{
+            flex: 1.2,
+            padding: '10px 8px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: activeSubTab === 'site_setup' ? 'var(--color-amber-500)' : 'transparent',
+            color: activeSubTab === 'site_setup' ? '#000' : 'var(--color-zinc-400)',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+            boxShadow: activeSubTab === 'site_setup' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
+          }}
+        >
+          <Flag size={15} />
+          <span>Site Setup ({siteSetupCompletedCount}/{siteSetupProtocol.inspectionChecklist.length})</span>
+        </button>
 
-        {/* LEVEL 2: SUB-FILTERS FOR ACTIVE HUB */}
-        {mainHubTab === 'daily' ? (
-          <div
-            style={{
-              display: 'flex',
-              gap: '6px',
-              backgroundColor: 'var(--color-zinc-900)',
-              padding: '4px',
-              borderRadius: '8px',
-              border: '1px solid var(--color-zinc-800)'
-            }}
-          >
-            <button
-              onClick={() => setActiveSubTab('all')}
-              style={{
-                flex: 1,
-                padding: '8px 4px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'all' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'all' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              All ({items.length})
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('watchout')}
-              style={{
-                flex: 1.2,
-                padding: '8px 4px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'watchout' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'watchout' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <AlertTriangle size={13} />
-              <span>Watch-Outs ({pendingWatchouts.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('subcontractor')}
-              style={{
-                flex: 1.2,
-                padding: '8px 4px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'subcontractor' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'subcontractor' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <Phone size={13} />
-              <span>Trade Calls ({pendingSubs.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('reminder')}
-              style={{
-                flex: 1.2,
-                padding: '8px 4px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'reminder' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'reminder' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <Clock size={13} />
-              <span>Reminders ({pendingReminders.length})</span>
-            </button>
-          </div>
-        ) : (
-          <div
-            style={{
-              display: 'flex',
-              gap: '6px',
-              backgroundColor: 'var(--color-zinc-900)',
-              padding: '4px',
-              borderRadius: '8px',
-              border: '1px solid var(--color-zinc-800)'
-            }}
-          >
-            <button
-              onClick={() => setActiveSubTab('specs')}
-              style={{
-                flex: 1.2,
-                padding: '8px 6px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'specs' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'specs' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <Palette size={13} />
-              <span>Finishes & Specs ({specs.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('site_setup')}
-              style={{
-                flex: 1.2,
-                padding: '8px 6px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'site_setup' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'site_setup' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <Flag size={13} />
-              <span>Site Setup ({siteSetupCompletedCount}/{siteSetupProtocol.inspectionChecklist.length})</span>
-            </button>
-
-            <button
-              onClick={() => setActiveSubTab('phases')}
-              style={{
-                flex: 1.2,
-                padding: '8px 6px',
-                borderRadius: '6px',
-                border: 'none',
-                backgroundColor: activeSubTab === 'phases' ? 'var(--color-zinc-800)' : 'transparent',
-                color: activeSubTab === 'phases' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                fontSize: '0.78rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '4px',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              <CheckSquare size={13} />
-              <span>Phase Inspections</span>
-            </button>
-          </div>
-        )}
+        <button
+          onClick={() => setActiveSubTab('phases')}
+          style={{
+            flex: 1.2,
+            padding: '10px 8px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: activeSubTab === 'phases' ? 'var(--color-amber-500)' : 'transparent',
+            color: activeSubTab === 'phases' ? '#000' : 'var(--color-zinc-400)',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+            boxShadow: activeSubTab === 'phases' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
+          }}
+        >
+          <CheckSquare size={15} />
+          <span>Phase Inspections</span>
+        </button>
       </div>
 
       {/* DEDICATED FINISHES & SPECS VIEW */}
@@ -3331,41 +2993,41 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                   onClick={handleFlagUncheckedWatchouts}
                   style={{
                     flex: 1,
-                    padding: '8px 10px',
+                    padding: '10px 12px',
                     borderRadius: '6px',
                     backgroundColor: 'rgba(239, 68, 68, 0.15)',
                     border: '1px solid #ef4444',
                     color: '#ef4444',
                     fontWeight: 700,
-                    fontSize: '0.78rem',
+                    fontSize: '0.8rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '5px'
+                    gap: '6px'
                   }}
                 >
-                  <AlertTriangle size={14} /> Flag Unchecked as Watch-Outs
+                  <AlertTriangle size={15} /> Review Incomplete Checks
                 </button>
                 <button
                   onClick={handleScheduleInspection}
                   style={{
                     flex: 1,
-                    padding: '8px 10px',
+                    padding: '10px 12px',
                     borderRadius: '6px',
                     backgroundColor: 'var(--color-amber-500)',
                     border: 'none',
                     color: '#000',
                     fontWeight: 800,
-                    fontSize: '0.78rem',
+                    fontSize: '0.8rem',
                     cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: '5px'
+                    gap: '6px'
                   }}
                 >
-                  <Calendar size={14} /> Passed — Schedule City Inspection
+                  <CheckSquare size={15} /> Passed — City Inspection Ready
                 </button>
               </div>
             </div>
@@ -3373,164 +3035,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         </div>
       )}
 
-      {/* Item Cards List (For All, Watchouts, Subs, Reminders) */}
-      {activeSubTab !== 'phases' && activeSubTab !== 'site_setup' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          {filteredItems.length === 0 ? (
-            <div
-              style={{
-                padding: '40px 20px',
-                textAlign: 'center',
-                backgroundColor: 'var(--color-zinc-900)',
-                borderRadius: '8px',
-                border: '1px dashed var(--color-zinc-800)',
-                color: 'var(--color-zinc-400)'
-              }}
-            >
-              <h3>No active items in this view</h3>
-              <p style={{ fontSize: '0.85rem', marginTop: '4px' }}>Use Field Quick Capture above to log a note.</p>
-            </div>
-          ) : (
-            filteredItems.map((item) => {
-              const isCompleted = item.status === 'completed';
-              const isWatchout = item.category === 'watchout';
-              const isSub = item.category === 'subcontractor';
 
-              return (
-                <div
-                  key={item.id}
-                  style={{
-                    backgroundColor: 'var(--color-zinc-900)',
-                    border: '1px solid var(--color-zinc-800)',
-                    borderLeft:
-                      '4px solid ' +
-                      (isWatchout ? '#ef4444' : isSub ? 'var(--color-emerald-500)' : 'var(--color-amber-500)'),
-                    borderRadius: '8px',
-                    padding: '14px',
-                    opacity: isCompleted ? 0.6 : 1
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span
-                        style={{
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          backgroundColor: 'rgba(197, 160, 89, 0.15)',
-                          color: 'var(--color-amber-500)',
-                          fontSize: '0.72rem',
-                          fontWeight: 800
-                        }}
-                      >
-                        {item.lot || projectName}
-                      </span>
-                      {item.subcontractor && (
-                        <span
-                          style={{
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                            color: '#34d399',
-                            fontSize: '0.72rem',
-                            fontWeight: 700
-                          }}
-                        >
-                          {item.subcontractor}
-                        </span>
-                      )}
-                    </div>
-
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <button
-                        onClick={() => handleToggleDone(item.id)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: isCompleted ? '#10b981' : 'var(--color-zinc-500)' }}
-                        title={isCompleted ? 'Mark Pending' : 'Mark Completed'}
-                      >
-                        <CheckCircle2 size={18} />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(item.id, item.title)}
-                        style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444' }}
-                        title="Delete"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      fontSize: '0.95rem',
-                      fontWeight: 700,
-                      color: 'var(--color-zinc-100)',
-                      textDecoration: isCompleted ? 'line-through' : 'none',
-                      marginBottom: '6px'
-                    }}
-                  >
-                    {item.title}
-                  </div>
-
-                  {item.notes && (
-                    <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-400)', margin: '4px 0 8px 0' }}>
-                      📝 {item.notes}
-                    </p>
-                  )}
-
-                  {item.targetDate && (
-                    <div style={{ fontSize: '0.75rem', color: 'var(--color-amber-500)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '6px' }}>
-                      <Clock size={12} />
-                      <span>Target: {new Date(item.targetDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} ({new Date(item.targetDate).toLocaleDateString()})</span>
-                    </div>
-                  )}
-
-                  {isSub && (
-                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px', paddingTop: '8px', borderTop: '1px solid var(--color-zinc-800)' }}>
-                      <a
-                        href="tel:"
-                        style={{
-                          flex: 1,
-                          padding: '6px 0',
-                          borderRadius: '6px',
-                          backgroundColor: 'rgba(16, 185, 129, 0.15)',
-                          color: '#34d399',
-                          textDecoration: 'none',
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        <Phone size={13} /> Call Sub
-                      </a>
-                      <a
-                        href={`sms:?body=${encodeURIComponent(item.title)}`}
-                        style={{
-                          flex: 1,
-                          padding: '6px 0',
-                          borderRadius: '6px',
-                          backgroundColor: 'rgba(197, 160, 89, 0.15)',
-                          color: 'var(--color-amber-500)',
-                          textDecoration: 'none',
-                          fontSize: '0.78rem',
-                          fontWeight: 700,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '4px'
-                        }}
-                      >
-                        <MessageSquare size={13} /> Text Sub
-                      </a>
-                    </div>
-                  )}
-                </div>
-              );
-            })
-          )}
-        </div>
-      )}
 
       {/* Gemini AI Assistant Modal */}
       {isAssistantOpen && (
