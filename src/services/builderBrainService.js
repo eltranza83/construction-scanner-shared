@@ -270,89 +270,20 @@ export function loadBrainItems(projectId = 'default') {
   try {
     const key = `${BRAIN_STORAGE_PREFIX}${projectId}`;
     const raw = localStorage.getItem(key);
-    let items = raw ? JSON.parse(raw) : null;
-
-    // Check if current items only contains default sample items
-    const hasCustomItems = items && Array.isArray(items) && items.some(i => !i.id?.startsWith('b_sample_'));
-
-    if (!hasCustomItems) {
-      // Harvest any user-created items from other project keys in localStorage
-      const harvested = [];
-      const seenIds = new Set();
-
-      for (let i = 0; i < localStorage.length; i++) {
-        const lKey = localStorage.key(i);
-        if (lKey && lKey.startsWith(BRAIN_STORAGE_PREFIX)) {
-          try {
-            const data = JSON.parse(localStorage.getItem(lKey));
-            if (Array.isArray(data)) {
-              for (const item of data) {
-                if (item && item.id && !seenIds.has(item.id) && !item.id.startsWith('b_sample_')) {
-                  seenIds.add(item.id);
-                  harvested.push(item);
-                }
-              }
-            }
-          } catch {
-            // ignore parse error
-          }
+    if (raw !== null) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        // Filter out any stale dummy sample items so they never return once deleted
+        const cleaned = parsed.filter((i) => !i.id?.startsWith('b_sample_'));
+        if (cleaned.length !== parsed.length) {
+          localStorage.setItem(key, JSON.stringify(cleaned));
         }
-      }
-
-      if (harvested.length > 0) {
-        // Merge harvested user items with any existing items
-        const combined = [...harvested, ...(Array.isArray(items) ? items.filter(i => i.id?.startsWith('b_sample_')) : [])];
-        saveBrainItems(projectId, combined);
-        return combined;
+        return cleaned;
       }
     }
-
-    if (!items || !Array.isArray(items) || items.length === 0) {
-      const initial = [
-        {
-          id: 'b_sample_1',
-          rawInput: 'Watch out: Check truss hanger nails before framing inspection',
-          title: 'Check truss hanger nails before framing inspection',
-          category: 'watchout',
-          targetDate: new Date(Date.now() + 3600000 * 2).toISOString(),
-          lot: 'LOT 14',
-          subcontractor: 'Framer',
-          priority: 'high',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          notes: 'Inspector flagged missing hurricane ties on adjacent build last week.',
-        },
-        {
-          id: 'b_sample_2',
-          rawInput: 'Call Dave (Plumber) at 1 PM to confirm drain rough-in completion',
-          title: 'Call Dave (Plumber) to confirm drain rough-in completion',
-          category: 'subcontractor',
-          targetDate: new Date(Date.now() + 3600000 * 4).toISOString(),
-          lot: 'LOT 8',
-          subcontractor: 'Plumber',
-          priority: 'high',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          notes: 'Need rough-in signed off before slab prep.',
-        },
-        {
-          id: 'b_sample_3',
-          rawInput: 'Remind me at 3:30 PM today to order extra 2x6 studs for garage header',
-          title: 'Order extra 2x6 studs for garage header',
-          category: 'reminder',
-          targetDate: new Date(Date.now() + 3600000 * 6).toISOString(),
-          lot: 'LOT 14',
-          subcontractor: 'Supplier',
-          priority: 'medium',
-          status: 'pending',
-          createdAt: new Date().toISOString(),
-          notes: 'Call 84 Lumber or Builder First Source.',
-        },
-      ];
-      localStorage.setItem(key, JSON.stringify(initial));
-      return initial;
-    }
-    return items;
+    // Clean initial state: empty array with zero dummy sample items
+    localStorage.setItem(key, JSON.stringify([]));
+    return [];
   } catch (err) {
     console.error('Error loading Builder Brain data:', err);
     return [];
