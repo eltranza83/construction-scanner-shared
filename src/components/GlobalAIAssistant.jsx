@@ -141,6 +141,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     try {
       const lower = query.toLowerCase();
+      // Client-side quick field item toggle if explicitly requested
       if (lower.includes('mark') && (lower.includes('done') || lower.includes('complete'))) {
         const match = items.find(
           (i) => i.status === 'pending' && (lower.includes(i.title.toLowerCase()) || (i.subcontractor && lower.includes(i.subcontractor.toLowerCase())))
@@ -150,104 +151,47 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           setItems(updated);
           saveBrainItems(projectId, updated);
         }
-      } else if (lower.startsWith('add') || lower.startsWith('remind me at') || lower.startsWith('create watchout')) {
-        const newItem = parseFieldNote(query, projectName);
-        if (newItem) {
-          const updated = [newItem, ...items];
-          setItems(updated);
-          saveBrainItems(projectId, updated);
-        }
-      }
-
-      // 1. Google Drive Folder Creation Action (Flexible conversational matching)
-      const isCreateFolderQuery =
-        /(?:create|make|add|crea|crear|haz|hacer)\s+(?:a\s+)?(?:new\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+/i.test(query);
-
-      if (isCreateFolderQuery && googleToken && activeProject?.folderId) {
-        const folderName = query
-          .replace(/^.*?(?:create|make|add|crea|crear|haz|hacer)\s+(?:a\s+)?(?:new\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+(?:for\s+this\s+project\s+)?(?:in\s+google\s+drive\s+)?(?:called|named|llamada|nombrada|para)?\s*/i, '')
-          .replace(/^["']|["']$/g, '')
-          .trim();
-        if (folderName) {
-          const created = await createFolder(googleToken, folderName, activeProject.folderId);
-          if (created && created.id) {
-            const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
-            if (updatedTree) {
-              setDriveTree(updatedTree);
-              saveProjectDriveTree(projectId, updatedTree);
-            }
-            const confirmMsg = `Created the new subfolder **${folderName}** in your ${projectName} Google Drive folder!`;
-            const aiMsg = {
-              sender: 'ai',
-              text: confirmMsg,
-              timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-            };
-            setMessages((prev) => [...prev, aiMsg]);
-            speakText(confirmMsg);
-            return;
-          }
-        }
-      }
-
-      // 2. Google Drive Folder Deletion Action
-      const isDeleteFolderQuery =
-        /(?:delete|remove|trash|borra|borrar|elimina|eliminar)\s+(?:the\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+/i.test(query);
-
-      if (isDeleteFolderQuery && googleToken && activeProject?.folderId && driveTree?.subfolders) {
-        const targetName = query
-          .replace(/^.*?(?:delete|remove|trash|borra|borrar|elimina|eliminar)\s+(?:the\s+)?(?:subfolder|sub\s*folder|folder|carpeta|subcarpeta)\s+(?:called|named|llamada|nombrada)?\s*/i, '')
-          .replace(/^["']|["']$/g, '')
-          .trim().toLowerCase();
-
-        const match = driveTree.subfolders.find(
-          (f) => f.folderName.toLowerCase().includes(targetName) || targetName.includes(f.folderName.toLowerCase())
-        );
-        if (match && match.folderId) {
-          await trashDriveFileOrFolder(googleToken, match.folderId);
-          const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
-          if (updatedTree) {
-            setDriveTree(updatedTree);
-            saveProjectDriveTree(projectId, updatedTree);
-          }
-          const confirmMsg = `Deleted the folder **${match.folderName}** from your ${projectName} Google Drive.`;
-          const aiMsg = {
-            sender: 'ai',
-            text: confirmMsg,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-          };
-          setMessages((prev) => [...prev, aiMsg]);
-          speakText(confirmMsg);
-          return;
-        }
       }
 
       const answer = await askGeminiBrain(query, items, projectName, apiKey, null, projectId, messages, driveTree);
 
       let cleanAnswer = answer;
       const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);
-      if (actionCreateMatch && actionCreateMatch[1] && googleToken && activeProject?.folderId) {
-        const fName = actionCreateMatch[1].trim();
-        await createFolder(googleToken, fName, activeProject.folderId);
-        const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
-        if (updatedTree) {
-          setDriveTree(updatedTree);
-          saveProjectDriveTree(projectId, updatedTree);
+      if (actionCreateMatch && actionCreateMatch[1]) {
+        let fName = actionCreateMatch[1].replace(/^(and\s+)?(just\s+)?(call\s+it\s+|called\s+|named\s+|llamada\s+)/i, '').replace(/^["']|["']$/g, '').trim();
+        if (googleToken && activeProject?.folderId && fName) {
+          try {
+            await createFolder(googleToken, fName, activeProject.folderId);
+            const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+            if (updatedTree) {
+              setDriveTree(updatedTree);
+              saveProjectDriveTree(projectId, updatedTree);
+            }
+          } catch (driveErr) {
+            console.warn('Drive create folder action warning:', driveErr);
+          }
         }
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:CREATE_FOLDER:[^\]]+\]\]/, '').trim();
       }
 
       const actionDeleteMatch = answer.match(/\[\[ACTION:DELETE_FOLDER:([^\]]+)\]\]/);
-      if (actionDeleteMatch && actionDeleteMatch[1] && googleToken && activeProject?.folderId && driveTree?.subfolders) {
-        const fName = actionDeleteMatch[1].trim().toLowerCase();
-        const matchFolder = driveTree.subfolders.find(
-          (f) => f.folderName.toLowerCase().includes(fName) || fName.includes(f.folderName.toLowerCase())
-        );
-        if (matchFolder && matchFolder.folderId) {
-          await trashDriveFileOrFolder(googleToken, matchFolder.folderId);
-          const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
-          if (updatedTree) {
-            setDriveTree(updatedTree);
-            saveProjectDriveTree(projectId, updatedTree);
+      if (actionDeleteMatch && actionDeleteMatch[1]) {
+        let fName = actionDeleteMatch[1].replace(/^(and\s+)?(just\s+)?(called\s+|named\s+|llamada\s+)/i, '').replace(/^["']|["']$/g, '').trim().toLowerCase();
+        if (googleToken && activeProject?.folderId && driveTree?.subfolders && fName) {
+          const matchFolder = driveTree.subfolders.find(
+            (f) => f.folderName.toLowerCase().includes(fName) || fName.includes(f.folderName.toLowerCase())
+          );
+          if (matchFolder && matchFolder.folderId) {
+            try {
+              await trashDriveFileOrFolder(googleToken, matchFolder.folderId);
+              const updatedTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+              if (updatedTree) {
+                setDriveTree(updatedTree);
+                saveProjectDriveTree(projectId, updatedTree);
+              }
+            } catch (driveErr) {
+              console.warn('Drive trash folder action warning:', driveErr);
+            }
           }
         }
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:DELETE_FOLDER:[^\]]+\]\]/, '').trim();
@@ -262,6 +206,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       speakText(cleanAnswer);
     } catch (err) {
       console.error('Global AI Assistant error:', err);
+      const errMsg = {
+        sender: 'ai',
+        text: `⚠️ I had a temporary issue connecting: ${err.message || 'Please try again.'}`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, errMsg]);
     } finally {
       setIsLoading(false);
     }
