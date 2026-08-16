@@ -649,7 +649,7 @@ Along with a short 1-sentence confirmation.
   // 1. Primary: Query the dedicated Serverless Cloud AI Endpoint (/api/ask-brain)
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 12000);
 
     const apiRes = await fetch('/api/ask-brain', {
       method: 'POST',
@@ -676,11 +676,11 @@ Along with a short 1-sentence confirmation.
   // 2. Direct client fallback if API key is provided
   if (effectiveKey && effectiveKey.trim()) {
     const keyClean = effectiveKey.trim();
-    const modelsToTry = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest'];
+    const modelsToTry = ['gemini-3.1-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.5-flash-lite', 'gemini-3.5-flash'];
     for (const model of modelsToTry) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyClean}`,

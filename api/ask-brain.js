@@ -4,7 +4,7 @@ export async function POST(request) {
   try {
     const body = await request.json().catch(() => ({}));
     const { contents, systemInstruction, prompt, query, apiKey: clientApiKey } = body;
-    const apiKey = process.env.GEMINI_API_KEY || clientApiKey || '';
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';
 
     let formattedContents = [];
     if (Array.isArray(contents) && contents.length > 0) {
@@ -49,10 +49,10 @@ export async function POST(request) {
     }
 
     const modelsToTry = [
-      process.env.GEMINI_MODEL || 'gemini-2.5-flash',
-      'gemini-2.0-flash',
-      'gemini-1.5-flash',
-      'gemini-flash-latest'
+      process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite',
+      'gemini-flash-lite-latest',
+      'gemini-3.5-flash-lite',
+      'gemini-3.5-flash'
     ];
 
     let lastError = null;
