@@ -128,7 +128,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
 
       const utterance = new SpeechSynthesisUtterance(clean);
-      utterance.rate = 0.98;
+      utterance.rate = 1.08; // Crisp, 10% faster conversational cadence
       utterance.pitch = 1.0; // Natural, clean pitch
 
       const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
