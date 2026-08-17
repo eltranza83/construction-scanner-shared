@@ -27,7 +27,9 @@ export default function InviteScreen({ onUnlocked, googleUser, authError, signin
   // Check Firestore if Google User is already authorized
   useEffect(() => {
     const checkAuth = async () => {
-      if (!googleUser || !googleUser.email) return;
+      const auth = getFirebaseAuthInstance();
+      const resolvedEmail = googleUser?.email || auth?.currentUser?.email;
+      if (!resolvedEmail) return;
       
       setCheckingAuth(true);
       setError(null);
@@ -39,18 +41,19 @@ export default function InviteScreen({ onUnlocked, googleUser, authError, signin
       }
       
       try {
-        const emailClean = googleUser.email.toLowerCase();
+        const emailClean = resolvedEmail.toLowerCase();
         const adminSnap = await getDoc(doc(db, 'admins', emailClean));
         if (adminSnap.exists()) {
-          onUnlocked(googleUser.email);
+          onUnlocked(resolvedEmail);
           return;
         }
 
-        const accessDocId = getUserAccessDocId(googleUser);
+        const accessUser = googleUser || (auth?.currentUser ? { email: resolvedEmail, firebaseUid: auth.currentUser.uid } : null);
+        const accessDocId = accessUser ? getUserAccessDocId(accessUser) : null;
         if (accessDocId) {
           const accessSnap = await getDoc(doc(db, 'user_access', accessDocId));
           if (accessSnap.exists()) {
-            onUnlocked(googleUser.email);
+            onUnlocked(resolvedEmail);
             return;
           }
         }

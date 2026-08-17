@@ -4,6 +4,7 @@ export const APP_STORAGE_KEYS = {
   ...STORAGE_KEYS,
   legacyGeminiKey: 'jobscan_gemini_key',
   googleToken: 'jobscan_google_token',
+  googleTokenIssuedAt: 'jobscan_google_token_time',
   googleUser: 'jobscan_google_user',
   folderId: 'jobscan_folder_id',
   folderName: 'jobscan_folder_name',
@@ -56,7 +57,6 @@ export function loadInitialInviteState() {
 
 export function loadStoredAppState() {
   localStorage.removeItem(APP_STORAGE_KEYS.legacyGeminiKey);
-  localStorage.removeItem(APP_STORAGE_KEYS.googleToken);
   const googleClientId = ensureStoredString(APP_STORAGE_KEYS.googleClientId, DEFAULT_GOOGLE_CLIENT_ID);
   const folderId = localStorage.getItem(APP_STORAGE_KEYS.folderId);
   const folderName = localStorage.getItem(APP_STORAGE_KEYS.folderName);
@@ -68,7 +68,7 @@ export function loadStoredAppState() {
 
   return {
     googleClientId,
-    googleToken: getSessionStorage()?.getItem(APP_STORAGE_KEYS.googleToken) || null,
+    googleToken: localStorage.getItem(APP_STORAGE_KEYS.googleToken) || null,
     googleUser: getStoredJson(APP_STORAGE_KEYS.googleUser, null),
     selectedFolder: folderId && folderName ? { id: folderId, name: folderName } : null,
     projects,
@@ -80,10 +80,22 @@ export function loadStoredAppState() {
 }
 
 export function persistGoogleToken(token) {
-  const storage = getSessionStorage();
-  if (!storage) return;
-  if (token) storage.setItem(APP_STORAGE_KEYS.googleToken, token);
-  else storage.removeItem(APP_STORAGE_KEYS.googleToken);
+  if (token) {
+    localStorage.setItem(APP_STORAGE_KEYS.googleToken, token);
+    localStorage.setItem(APP_STORAGE_KEYS.googleTokenIssuedAt, String(Date.now()));
+  } else {
+    localStorage.removeItem(APP_STORAGE_KEYS.googleToken);
+    localStorage.removeItem(APP_STORAGE_KEYS.googleTokenIssuedAt);
+  }
+}
+
+export function isGoogleTokenExpired() {
+  const token = localStorage.getItem(APP_STORAGE_KEYS.googleToken);
+  if (!token) return true;
+  const issuedAt = parseInt(localStorage.getItem(APP_STORAGE_KEYS.googleTokenIssuedAt) || '0', 10);
+  if (!issuedAt) return false;
+  const ageMs = Date.now() - issuedAt;
+  return ageMs > 50 * 60 * 1000;
 }
 
 export function persistGoogleUser(user) {
@@ -91,9 +103,9 @@ export function persistGoogleUser(user) {
 }
 
 export function clearGoogleSession() {
-  getSessionStorage()?.removeItem(APP_STORAGE_KEYS.googleToken);
   [
     APP_STORAGE_KEYS.googleToken,
+    APP_STORAGE_KEYS.googleTokenIssuedAt,
     APP_STORAGE_KEYS.googleUser,
     APP_STORAGE_KEYS.folderId,
     APP_STORAGE_KEYS.folderName,
@@ -105,11 +117,8 @@ export function clearGoogleSession() {
 }
 
 export function clearGoogleIdentity() {
-  getSessionStorage()?.removeItem(APP_STORAGE_KEYS.googleToken);
-  [
-    APP_STORAGE_KEYS.googleToken,
-    APP_STORAGE_KEYS.googleUser,
-  ].forEach((key) => localStorage.removeItem(key));
+  localStorage.removeItem(APP_STORAGE_KEYS.googleToken);
+  localStorage.removeItem(APP_STORAGE_KEYS.googleTokenIssuedAt);
 }
 
 export function persistActiveProject(project) {

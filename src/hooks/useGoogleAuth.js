@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import {
   clearGoogleIdentity,
   clearGoogleSession,
+  isGoogleTokenExpired,
   loadStoredAppState,
   persistGoogleToken,
   persistGoogleUser,
@@ -42,19 +43,29 @@ async function fetchGoogleUserInfo(accessToken) {
 }
 
 async function buildSignedInUser(accessToken, firebaseUser = null) {
-  const info = await fetchGoogleUserInfo(accessToken);
   const auth = getFirebaseAuthInstance();
   if (!firebaseUser && auth?.authStateReady) {
     await auth.authStateReady();
   }
   const resolvedFirebaseUser = firebaseUser || auth?.currentUser;
-  if (!resolvedFirebaseUser) {
-    throw new Error('Firebase account session is not ready. Please sign in again.');
+  try {
+    const info = await fetchGoogleUserInfo(accessToken);
+    return {
+      ...info,
+      firebaseUid: resolvedFirebaseUser?.uid || '',
+    };
+  } catch (err) {
+    console.warn('Could not fetch Google userinfo, using Firebase auth identity:', err);
+    if (resolvedFirebaseUser) {
+      return {
+        email: resolvedFirebaseUser.email,
+        name: resolvedFirebaseUser.displayName || 'User',
+        picture: resolvedFirebaseUser.photoURL || '',
+        firebaseUid: resolvedFirebaseUser.uid,
+      };
+    }
+    throw err;
   }
-  return {
-    ...info,
-    firebaseUid: resolvedFirebaseUser.uid,
-  };
 }
 
 export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
@@ -63,6 +74,38 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
   const [googleUser, setGoogleUser] = useState(() => loadStoredAppState().googleUser);
   const [signingIn, setSigningIn] = useState(false);
 
+  // 1. Firebase Auth listener: Keep user session continuously active from Firebase IndexedDB
+  useEffect(() => {
+    const auth = getFirebaseAuthInstance();
+    if (!auth) return;
+
+    const unsubscribe = auth.onAuthStateChanged((firebaseUser) => {
+      if (firebaseUser) {
+        const existingStoredUser = loadStoredAppState().googleUser;
+        const resolvedUser = {
+          email: firebaseUser.email,
+          name: firebaseUser.displayName || existingStoredUser?.name || 'User',
+          picture: firebaseUser.photoURL || existingStoredUser?.picture || '',
+          firebaseUid: firebaseUser.uid,
+        };
+        setGoogleUser(resolvedUser);
+        persistGoogleUser(resolvedUser);
+
+        // Silent token check on Firebase auth ready
+        if (isGoogleTokenExpired() && window.googleTokenClient) {
+          try {
+            window.googleTokenClient.requestAccessToken({ prompt: '' });
+          } catch (e) {
+            console.warn('Background token request deferred:', e);
+          }
+        }
+      }
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Initialize Google Identity Services (GIS) token client
   useEffect(() => {
     const initClient = () => {
       if (!googleClientId || !window.google?.accounts?.oauth2 || window.googleTokenClient) return;
@@ -82,27 +125,28 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
                 setGoogleUser(info);
                 persistGoogleUser(info);
               } catch (err) {
-                console.error('Quiet Google/Firebase user update failed:', err);
-                setGoogleToken(null);
-                setGoogleUser(null);
-                clearGoogleIdentity();
+                console.warn('Quiet user profile update note:', err);
               }
             } else if (tokenResponse.error) {
-              console.warn('Google authentication failed or was cancelled:', tokenResponse);
+              console.warn('Silent Google token request response:', tokenResponse.error);
+              // Non-destructive: Clear expired token so callers know to request fresh token, but keep user logged in
               setGoogleToken(null);
-              setGoogleUser(null);
               clearGoogleIdentity();
-
-              if (tokenResponse.error === 'user_logged_out' || tokenResponse.error === 'immediate_failed') {
-                setError?.('Google Drive session expired. Please sign in again.');
-              } else {
-                setError?.(`Google Sign-In failed: ${tokenResponse.error}`);
-              }
             }
           }
         });
         window.googleTokenClient = client;
         console.log('Google token client pre-initialized successfully.');
+
+        // If user is already authenticated and token is expired/missing, request silent token immediately
+        const currentUser = loadStoredAppState().googleUser;
+        if (currentUser && isGoogleTokenExpired()) {
+          try {
+            client.requestAccessToken({ prompt: '' });
+          } catch (silentErr) {
+            console.warn('Initial background token request skipped:', silentErr);
+          }
+        }
       } catch (err) {
         console.error('Failed to pre-initialize GIS token client:', err);
       }
@@ -137,7 +181,6 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     } catch (err) {
       console.error('Failed to sign in with Google/Firebase:', err);
       setGoogleToken(null);
-      setGoogleUser(null);
       clearGoogleIdentity();
       setError?.(getFriendlyAuthError(err));
     } finally {
@@ -159,8 +202,8 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     setTimeout(() => setSuccess?.(null), 3000);
   };
 
-  const handleSessionExpired = () => {
-    console.warn('Session expired. Attempting silent token refresh...');
+  const handleSessionExpired = useCallback(() => {
+    console.warn('Google Drive token expired. Triggering silent background refresh...');
 
     try {
       if (window.googleTokenClient) {
@@ -171,11 +214,10 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
       console.error('Silent token refresh failed:', err);
     }
 
+    // Clear only the expired token; NEVER wipe user identity or kick from app
     setGoogleToken(null);
-    setGoogleUser(null);
     clearGoogleIdentity();
-    setError?.('Google Drive session expired. Please sign in again.');
-  };
+  }, []);
 
   return {
     googleClientId,
