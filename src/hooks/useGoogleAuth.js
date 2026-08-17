@@ -90,15 +90,6 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
         };
         setGoogleUser(resolvedUser);
         persistGoogleUser(resolvedUser);
-
-        // Silent token check on Firebase auth ready
-        if (isGoogleTokenExpired() && window.googleTokenClient) {
-          try {
-            window.googleTokenClient.requestAccessToken({ prompt: '' });
-          } catch (e) {
-            console.warn('Background token request deferred:', e);
-          }
-        }
       }
     });
 
@@ -128,25 +119,17 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
                 console.warn('Quiet user profile update note:', err);
               }
             } else if (tokenResponse.error) {
-              console.warn('Silent Google token request response:', tokenResponse.error);
-              // Non-destructive: Clear expired token so callers know to request fresh token, but keep user logged in
-              setGoogleToken(null);
-              clearGoogleIdentity();
+              console.warn('Silent Google token request note:', tokenResponse.error);
+              // CRITICAL: NEVER wipe existing stored token on silent background error
+              const currentStoredToken = localStorage.getItem(APP_STORAGE_KEYS.googleToken);
+              if (!currentStoredToken) {
+                setGoogleToken(null);
+              }
             }
           }
         });
         window.googleTokenClient = client;
         console.log('Google token client pre-initialized successfully.');
-
-        // If user is already authenticated and token is expired/missing, request silent token immediately
-        const currentUser = loadStoredAppState().googleUser;
-        if (currentUser && isGoogleTokenExpired()) {
-          try {
-            client.requestAccessToken({ prompt: '' });
-          } catch (silentErr) {
-            console.warn('Initial background token request skipped:', silentErr);
-          }
-        }
       } catch (err) {
         console.error('Failed to pre-initialize GIS token client:', err);
       }
