@@ -325,7 +325,7 @@ export default function Scanner({ onDataExtracted, onError }) {
     }
   };
 
-  // Cleanup camera stream on unmount
+  // Cleanup camera stream and blob URLs on unmount
   useEffect(() => {
     return () => {
       if (cameraStream) {
@@ -333,6 +333,14 @@ export default function Scanner({ onDataExtracted, onError }) {
       }
     };
   }, [cameraStream]);
+
+  useEffect(() => {
+    return () => {
+      if (croppingImageSrc && croppingImageSrc.startsWith('blob:')) {
+        URL.revokeObjectURL(croppingImageSrc);
+      }
+    };
+  }, [croppingImageSrc]);
 
   const startCamera = async () => {
     if (onError) onError(null);

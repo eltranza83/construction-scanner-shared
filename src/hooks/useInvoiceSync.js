@@ -164,6 +164,11 @@ export function useInvoiceSync({
         } else {
           window.open(fileURL, '_blank');
         }
+        setTimeout(() => {
+          try {
+            URL.revokeObjectURL(fileURL);
+          } catch (_) {}
+        }, 60000);
         return;
       } catch (err) {
         console.error('Failed to view PDF via API, falling back to web link:', err);

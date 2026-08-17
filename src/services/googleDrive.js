@@ -15,16 +15,38 @@ function assertDriveFolderParent(parentId, action) {
   }
 }
 
+export async function authenticatedDriveFetch(accessToken, url, options = {}) {
+  if (!accessToken) {
+    const error = new Error('Google Drive session not connected.');
+    error.status = 401;
+    throw error;
+  }
+
+  const headers = {
+    ...(options.headers || {}),
+    Authorization: `Bearer ${accessToken}`,
+  };
+
+  const response = await fetch(url, {
+    ...options,
+    headers,
+  });
+
+  if (response.status === 401) {
+    const error = new Error('Google Drive session expired.');
+    error.status = 401;
+    throw error;
+  }
+
+  return response;
+}
+
 export function getDriveFileMediaUrl(fileId) {
   return `${GOOGLE_DRIVE_API_BASE}/files/${fileId}?alt=media`;
 }
 
 export async function fetchDriveFileBlob(accessToken, fileId) {
-  const response = await fetch(getDriveFileMediaUrl(fileId), {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
+  const response = await authenticatedDriveFetch(accessToken, getDriveFileMediaUrl(fileId));
 
   if (response.status === 401) {
     const error = new Error('Google Drive session expired while retrieving file content.');
