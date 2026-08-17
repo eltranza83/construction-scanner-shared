@@ -115,7 +115,21 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [isRecording, setIsRecording] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [availableVoices, setAvailableVoices] = useState([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => localStorage.getItem('jobscan_ai_voice_uri') || '');
+  const [selectedVoiceConfig, setSelectedVoiceConfig] = useState(() => {
+    try {
+      const raw = localStorage.getItem('jobscan_ai_voice_config');
+      return raw ? JSON.parse(raw) : null;
+    } catch (_) {
+      return null;
+    }
+  });
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => {
+    const raw = localStorage.getItem('jobscan_ai_voice_config');
+    if (raw) {
+      try { return JSON.parse(raw).uri || ''; } catch (_) {}
+    }
+    return localStorage.getItem('jobscan_ai_voice_uri') || '';
+  });
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
@@ -180,19 +194,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     };
   }, [googleToken, activeProject?.folderId, projectId]);
 
-
-
-  const getBestBritishMaleVoice = (voices, explicitURI) => {
+  const getBestBritishMaleVoice = (voices) => {
     if (!voices || voices.length === 0) return null;
-    const requested = explicitURI || localStorage.getItem('jobscan_ai_voice_uri');
-    if (requested) {
-      const chosen = voices.find((v) => v.voiceURI === requested || v.name === requested);
-      if (chosen) return chosen;
-    }
-    const femaleNames = ['Susan', 'Hazel', 'Victoria', 'Zira', 'Samantha', 'Karen', 'Serena', 'Kate', 'Stephanie', 'Martha', 'Female', 'en-gb-x-gba', 'en-gb-x-gbd', 'en-gb-x-gbf', 'en-us-x-sfg'];
+    const femaleNames = ['Susan', 'Hazel', 'Victoria', 'Zira', 'Samantha', 'Karen', 'Serena', 'Kate', 'Stephanie', 'Martha', 'Female', 'en-gb-x-gba', 'en-gb-x-gbd', 'en-gb-x-gbf', 'en-us-x-sfg', 'en-au'];
 
     // Platform Priority 1: Windows (Microsoft George / Natural)
-    const msGeorge = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('George') || v.name.includes('Ryan')));
+    const msGeorge = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB' || v.lang === 'en_GB') && (v.name.includes('George') || v.name.includes('Ryan')));
     if (msGeorge) return msGeorge;
 
     // Platform Priority 2: Apple iOS / iPadOS / macOS (Daniel, Oliver, Arthur, Aaron)
@@ -201,19 +208,19 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     );
     if (appleMale) return appleMale;
 
-    // Platform Priority 3: Google Android / Chrome (Google UK English Male, en-gb-x-rjs, en-gb-x-gbb)
+    // Platform Priority 3: Google Android (Google UK English Male, en-gb-x-rjs, en-gb-x-gbb)
     const googleUkMale = voices.find(
-      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('UK English Male') || v.name.includes('rjs') || v.name.includes('gbb') || v.name.includes('gbc'))
+      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB' || v.lang === 'en_GB') && (v.name.includes('UK English Male') || v.name.includes('rjs') || v.name.includes('gbb') || v.name.includes('gbc'))
     );
     if (googleUkMale) return googleUkMale;
 
-    // Platform Priority 4: Any UK voice with 'Male'
-    const anyUkMale = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && v.name.toLowerCase().includes('male'));
-    if (anyUkMale) return anyUkMale;
+    // Platform Priority 4: Android standard English (United Kingdom) / en-GB
+    const androidUk = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB' || v.lang === 'en_GB' || v.name.includes('United Kingdom')));
+    if (androidUk) return androidUk;
 
     // Platform Priority 5: Any non-blacklisted en-GB voice
     const safeUk = voices.find(
-      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && !femaleNames.some((f) => v.name.includes(f))
+      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB' || v.lang === 'en_GB') && !femaleNames.some((f) => v.name.includes(f))
     );
     if (safeUk) return safeUk;
 
@@ -223,16 +230,15 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     );
     if (generalMale) return generalMale;
 
-    return voices.find((v) => v.lang.startsWith('en-GB')) || voices.find((v) => v.lang.startsWith('en')) || voices[0];
+    // Platform Priority 7: Fallback to en-US (to prevent en-AU Australia default on Android)
+    const usVoice = voices.find((v) => v.lang.startsWith('en-US') || v.lang === 'en-US' || v.lang === 'en_US');
+    if (usVoice) return usVoice;
+
+    return voices.find((v) => v.lang.startsWith('en')) || voices[0];
   };
 
-  const getBestSpanishMaleVoice = (voices, explicitURI) => {
+  const getBestSpanishMaleVoice = (voices) => {
     if (!voices || voices.length === 0) return null;
-    const requested = explicitURI || localStorage.getItem('jobscan_ai_voice_uri');
-    if (requested) {
-      const chosen = voices.find((v) => (v.voiceURI === requested || v.name === requested) && v.lang.startsWith('es'));
-      if (chosen) return chosen;
-    }
     const femaleNames = ['Sabina', 'Dalia', 'Paulina', 'Helena', 'Laura', 'Monica', 'Female', 'es-es-x-eea'];
     const maleNames = ['Jorge', 'Raul', 'Pablo', 'Carlos', 'Alvaro', 'Enrique', 'Male', 'rjs'];
     const maleEs = voices.find((v) => v.lang.startsWith('es') && maleNames.some((m) => v.name.includes(m)));
@@ -242,20 +248,53 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     return voices.find((v) => v.lang.startsWith('es')) || null;
   };
 
+  const resolveVoice = (voices, config, isSpanish) => {
+    if (!Array.isArray(voices) || voices.length === 0) return null;
+
+    if (isSpanish) {
+      if (config && (config.lang?.startsWith('es') || config.name?.toLowerCase().includes('spanish'))) {
+        const match = voices.find(v => (config.uri && v.voiceURI === config.uri) || (config.name && v.name === config.name));
+        if (match) return match;
+      }
+      return getBestSpanishMaleVoice(voices);
+    }
+
+    if (config) {
+      if (config.uri) {
+        const matchUri = voices.find(v => v.voiceURI === config.uri);
+        if (matchUri) return matchUri;
+      }
+      if (config.name) {
+        const matchName = voices.find(v => v.name === config.name);
+        if (matchName) return matchName;
+      }
+      if (config.lang) {
+        const matchLang = voices.find(v => v.lang.replace('_', '-').toLowerCase() === config.lang.replace('_', '-').toLowerCase());
+        if (matchLang) return matchLang;
+      }
+    }
+
+    return getBestBritishMaleVoice(voices);
+  };
+
   // Load natural voices (English + Spanish) with J.A.R.V.I.S. British English priority
   useEffect(() => {
     const loadVoices = () => {
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'));
         setAvailableVoices(voices);
-        const storedVoice = localStorage.getItem('jobscan_ai_voice_uri');
-        if (storedVoice && voices.some((v) => v.voiceURI === storedVoice || v.name === storedVoice)) {
-          setSelectedVoiceURI(storedVoice);
-        } else {
-          const bestDefault = getBestBritishMaleVoice(voices, null);
-          if (bestDefault) {
-            setSelectedVoiceURI(bestDefault.voiceURI);
-          }
+        
+        let activeConfig = selectedVoiceConfig;
+        if (!activeConfig) {
+          try {
+            const raw = localStorage.getItem('jobscan_ai_voice_config');
+            if (raw) activeConfig = JSON.parse(raw);
+          } catch (_) {}
+        }
+
+        const resolved = resolveVoice(voices, activeConfig, false);
+        if (resolved) {
+          setSelectedVoiceURI(resolved.voiceURI || resolved.name);
         }
       }
     };
@@ -278,17 +317,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       let clean = String(text);
 
       // 3-Tier Universal List Trimmer: Truncate immediately before ANY list begins
-      // Tier 1: Newline list (e.g. "\n1." or "\n•" or "\n-")
       const newlineIdx = clean.search(/\n\s*(?:1[\.\)]|[-•*])\s+/);
       if (newlineIdx > 3) {
         clean = clean.substring(0, newlineIdx);
       } else {
-        // Tier 2: Colon list (e.g. ": 1." or ":\n1." or ": •")
         const colonIdx = clean.search(/:\s*(?:1[\.\)]|[-•*])\s+/);
         if (colonIdx > 3) {
           clean = clean.substring(0, colonIdx);
         } else {
-          // Tier 3: Standalone number 1 (e.g. " 1. [Title]")
           const anyNumIdx = clean.search(/\b1[\.\)]\s+[A-Za-z0-9]/);
           if (anyNumIdx > 3) {
             clean = clean.substring(0, anyNumIdx);
@@ -297,32 +333,43 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       clean = clean.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
-      // Strip raw file extensions and underscores from voice readout so it doesn't sound robotic
       clean = clean.replace(/\.pdf\b/gi, '').replace(/\.txt\b/gi, '').replace(/\.docx?\b/gi, '').replace(/[_\-]+/g, ' ');
-      // Strip commas before and after 'Sir' / 'Señor' so speech synthesis doesn't insert an awkward dramatic pause
       clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
 
       const utterance = new SpeechSynthesisUtterance(clean.trim());
       utterance.rate = 1.20; // Brisk, energetic executive cadence
       utterance.pitch = 1.0; // Natural, clean pitch
 
-      // Retrieve live voices directly from browser engine (crucial for mobile iOS & Android)
+      // Retrieve live voices directly from browser engine (crucial for mobile Android & iOS)
       const liveVoices = (window.speechSynthesis.getVoices && window.speechSynthesis.getVoices().length > 0)
         ? window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'))
         : availableVoices;
 
+      let currentConfig = selectedVoiceConfig;
+      if (!currentConfig) {
+        try {
+          const raw = localStorage.getItem('jobscan_ai_voice_config');
+          if (raw) currentConfig = JSON.parse(raw);
+        } catch (_) {}
+      }
+
       const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
 
       if (isSpanish || aiLanguage === 'es') {
-        utterance.lang = 'es-US';
-        const spanishVoice = getBestSpanishMaleVoice(liveVoices, selectedVoiceURI);
-        if (spanishVoice) utterance.voice = spanishVoice;
+        const spanishVoice = resolveVoice(liveVoices, currentConfig, true);
+        if (spanishVoice) {
+          utterance.voice = spanishVoice;
+          utterance.lang = spanishVoice.lang || 'es-US';
+        } else {
+          utterance.lang = 'es-US';
+        }
       } else {
-        utterance.lang = 'en-GB';
-        const britishVoice = getBestBritishMaleVoice(liveVoices, selectedVoiceURI);
+        const britishVoice = resolveVoice(liveVoices, currentConfig, false);
         if (britishVoice) {
           utterance.voice = britishVoice;
           utterance.lang = britishVoice.lang || 'en-GB';
+        } else {
+          utterance.lang = 'en-GB';
         }
       }
       window.speechSynthesis.speak(utterance);
@@ -770,22 +817,25 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                     onChange={(e) => {
                       const val = e.target.value;
                       setSelectedVoiceURI(val);
-                      localStorage.setItem('jobscan_ai_voice_uri', val);
-                      try {
-                        window.speechSynthesis.cancel();
-                        const chosen = availableVoices.find((v) => v.voiceURI === val || v.name === val);
-                        if (chosen) {
+                      const chosen = availableVoices.find((v) => v.voiceURI === val || v.name === val);
+                      if (chosen) {
+                        const cfg = { uri: chosen.voiceURI || '', name: chosen.name || '', lang: chosen.lang || 'en-GB' };
+                        setSelectedVoiceConfig(cfg);
+                        localStorage.setItem('jobscan_ai_voice_config', JSON.stringify(cfg));
+                        localStorage.setItem('jobscan_ai_voice_uri', chosen.voiceURI || chosen.name || '');
+                        try {
+                          window.speechSynthesis.cancel();
                           const testUtt = new SpeechSynthesisUtterance('Voice updated. J.A.R.V.I.S. online.');
                           testUtt.voice = chosen;
                           testUtt.lang = chosen.lang || 'en-GB';
                           testUtt.rate = 1.2;
                           window.speechSynthesis.speak(testUtt);
-                        }
-                      } catch (_) {}
+                        } catch (_) {}
+                      }
                     }}
                     style={{
                       width: '100%',
-                      padding: '6px 8px',
+                      padding: '8px 10px',
                       borderRadius: '6px',
                       backgroundColor: 'var(--color-zinc-900)',
                       border: '1px solid var(--color-zinc-800)',
@@ -800,6 +850,46 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                       </option>
                     ))}
                   </select>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const chosen = availableVoices.find((v) => v.voiceURI === selectedVoiceURI || v.name === selectedVoiceURI) || resolveVoice(availableVoices, selectedVoiceConfig, false);
+                      if (chosen) {
+                        const cfg = { uri: chosen.voiceURI || '', name: chosen.name || '', lang: chosen.lang || 'en-GB' };
+                        setSelectedVoiceConfig(cfg);
+                        setSelectedVoiceURI(chosen.voiceURI || chosen.name);
+                        localStorage.setItem('jobscan_ai_voice_config', JSON.stringify(cfg));
+                        localStorage.setItem('jobscan_ai_voice_uri', chosen.voiceURI || chosen.name);
+                        try {
+                          window.speechSynthesis.cancel();
+                          const testUtt = new SpeechSynthesisUtterance('J.A.R.V.I.S. voice confirmed and locked in.');
+                          testUtt.voice = chosen;
+                          testUtt.lang = chosen.lang || 'en-GB';
+                          testUtt.rate = 1.2;
+                          window.speechSynthesis.speak(testUtt);
+                        } catch (_) {}
+                      }
+                    }}
+                    style={{
+                      width: '100%',
+                      marginTop: '8px',
+                      padding: '7px 12px',
+                      borderRadius: '6px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      color: 'var(--color-amber-400)',
+                      border: '1px solid var(--color-amber-500)',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px'
+                    }}
+                  >
+                    🔊 Save & Test Voice
+                  </button>
                 </div>
               </div>
             )}
