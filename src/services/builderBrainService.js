@@ -493,12 +493,10 @@ Categories must be one of: "Paint", "Tile & Grout", "Countertops & Flooring", "F
 Along with a concise confirmation (e.g. "Recorded **Pure White (SW 7005)** for the walls in the Finish Schedule & Google Sheet, Sir!").
 
 14. INTERACTIVE DOCUMENT & RECEIPT VIEWER ACTION:
-When the user asks to "fetch", "pull up", "view", "open", or "show" a receipt, invoice, closing settlement, or file from Google Drive (or whenever discussing a specific Drive document in your folders):
-Always emit an interactive view file action tag with the matching file ID and file name from the Google Drive Repository:
+- Emit the interactive view file action tag ONLY when the user EXPLICITLY commands you to view, open, show, fetch, or pull up a specific document (e.g. "pull up the fence invoice", "let me see the closing document", "open the receipt"):
 [[ACTION:VIEW_FILE:{"fileId":"FILE_ID","fileName":"FileName.pdf","folderName":"FolderName"}]]
-For example, for the closing settlement document:
-[[ACTION:VIEW_FILE:{"fileId":"1BXTj91sCsFykTpN_EQrHS1oA4Ifnd7jL","fileName":"Lot_3_Closing_Cost_Allocation.pdf","folderName":"Closing Settlement"}]]
-This provides the user with an interactive full-screen preview card right in the chat!
+- NEVER emit this tag when the user is simply asking what files or folders exist, or asking general questions about a folder.
+- When listing or discussing files, speak conversationally in plain English (e.g. "two fence material invoices and one lumber invoice") rather than reading raw robotic filenames or file extensions (.pdf, .txt).
 `;
 
   // Build multi-turn conversational history

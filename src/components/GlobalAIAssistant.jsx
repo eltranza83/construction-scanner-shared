@@ -252,7 +252,9 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     if (!speechEnabled || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      let clean = text.replace(/[*_#🚨⏰👷📍•]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
+      let clean = text.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
+      // Strip raw file extensions and underscores from voice readout so it doesn't sound robotic
+      clean = clean.replace(/\.pdf\b/gi, '').replace(/\.txt\b/gi, '').replace(/\.docx?\b/gi, '').replace(/[_\-]+/g, ' ');
       // Strip commas before and after 'Sir' / 'Señor' so speech synthesis doesn't insert an awkward dramatic pause
       clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
 
@@ -400,8 +402,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:VIEW_FILE:[^\]]+\]\]/g, '').trim();
       }
 
-      // If user explicitly asked to fetch/pull up/view/open a specific file that was resolved, provide preview card
-      if (targetFile && targetFile.id && viewFiles.length === 0 && (query.toLowerCase().includes('fetch') || query.toLowerCase().includes('pull up') || query.toLowerCase().includes('view') || query.toLowerCase().includes('open') || query.toLowerCase().includes('see') || query.toLowerCase().includes('show me') || query.toLowerCase().includes('look up') || query.toLowerCase().includes('read') || query.toLowerCase().includes('invoice') || query.toLowerCase().includes('receipt'))) {
+      // Only attach a preview card when the user EXPLICITLY asks to view, open, pull up, fetch, or show a specific file
+      const isExplicitViewCommand =
+        /^(can you\s+)?(show|open|pull up|fetch|view|display|let me see)\b/i.test(query.trim()) ||
+        /\b(pull it up|open it|show it|view it|let me view it|view this file|open this file|show this file|let me see it)\b/i.test(query.trim());
+
+      if (targetFile && targetFile.id && viewFiles.length === 0 && isExplicitViewCommand) {
         viewFiles.push({
           fileId: targetFile.id,
           fileName: targetFile.name,
