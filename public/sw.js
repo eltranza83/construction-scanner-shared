@@ -1,4 +1,4 @@
-const CACHE_NAME = 'jobscan-cache-v106';
+const CACHE_NAME = 'jobscan-cache-v107';
 const ASSETS = [
   '/logo.svg',
   '/manifest.json'

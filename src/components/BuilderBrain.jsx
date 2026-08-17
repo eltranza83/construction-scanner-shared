@@ -18,7 +18,8 @@ import {
   Printer,
   ChevronDown,
   ChevronUp,
-  Settings
+  Settings,
+  MessageSquare
 } from 'lucide-react';
 import {
   loadProjectSpecs,
