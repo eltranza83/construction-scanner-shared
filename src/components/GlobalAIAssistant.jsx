@@ -265,16 +265,27 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   }, [messages, isLoading]);
 
   const speakText = (text) => {
-    if (!speechEnabled || !('speechSynthesis' in window)) return;
+    if (!speechEnabled || !('speechSynthesis' in window) || !text) return;
     try {
       window.speechSynthesis.cancel();
-      // Universal List Cutoff: If the response contains ANY numbered list (e.g. "1. ", ": 1.", "\n1.") or bullet list ("- ", "• "),
-      // truncate speech immediately before the list begins so J.A.R.V.I.S. speaks only the executive summary.
-      const listMatch = clean.match(/(?:(?:\n|^|:\s*|\.\s*)(?:1[\.\)]\s+|[-•*]\s+))/);
-      if (listMatch && listMatch.index !== undefined) {
-        const introText = clean.substring(0, listMatch.index).trim();
-        if (introText.length > 3) {
-          clean = introText;
+      let clean = String(text);
+
+      // 3-Tier Universal List Trimmer: Truncate immediately before ANY list begins
+      // Tier 1: Newline list (e.g. "\n1." or "\n•" or "\n-")
+      const newlineIdx = clean.search(/\n\s*(?:1[\.\)]|[-•*])\s+/);
+      if (newlineIdx > 3) {
+        clean = clean.substring(0, newlineIdx);
+      } else {
+        // Tier 2: Colon list (e.g. ": 1." or ":\n1." or ": •")
+        const colonIdx = clean.search(/:\s*(?:1[\.\)]|[-•*])\s+/);
+        if (colonIdx > 3) {
+          clean = clean.substring(0, colonIdx);
+        } else {
+          // Tier 3: Standalone number 1 (e.g. " 1. [Title]")
+          const anyNumIdx = clean.search(/\b1[\.\)]\s+[A-Za-z0-9]/);
+          if (anyNumIdx > 3) {
+            clean = clean.substring(0, anyNumIdx);
+          }
         }
       }
 
