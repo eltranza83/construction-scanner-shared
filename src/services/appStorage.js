@@ -50,6 +50,9 @@ export function ensureStoredString(key, fallback = '') {
 }
 
 export function loadInitialInviteState() {
+  if (localStorage.getItem(APP_STORAGE_KEYS.invited) === 'true') {
+    return true;
+  }
   const user = getStoredJson(APP_STORAGE_KEYS.googleUser, null);
   if (!user?.email) return false;
   return localStorage.getItem(APP_STORAGE_KEYS.authorizedEmail) === user.email;

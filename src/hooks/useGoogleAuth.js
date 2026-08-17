@@ -163,8 +163,6 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
       setTimeout(() => setSuccess?.(null), 3000);
     } catch (err) {
       console.error('Failed to sign in with Google/Firebase:', err);
-      setGoogleToken(null);
-      clearGoogleIdentity();
       setError?.(getFriendlyAuthError(err));
     } finally {
       setSigningIn(false);
@@ -191,15 +189,10 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     try {
       if (window.googleTokenClient) {
         window.googleTokenClient.requestAccessToken({ prompt: '' });
-        return;
       }
     } catch (err) {
       console.error('Silent token refresh failed:', err);
     }
-
-    // Clear only the expired token; NEVER wipe user identity or kick from app
-    setGoogleToken(null);
-    clearGoogleIdentity();
   }, []);
 
   return {
