@@ -277,6 +277,23 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_SPEC:[^\]]+\]\]/g, '').trim();
       }
 
+      // Smart Turn Pacer: Prevent repetitive "Sir" / "Señor" across consecutive responses
+      const aiHistory = messages.filter((m) => m.sender === 'ai');
+      const lastAiMsg = aiHistory.length > 0 ? aiHistory[aiHistory.length - 1].text : '';
+      const recentUsedSir = /\b(sir|señor)\b/i.test(lastAiMsg);
+
+      if (recentUsedSir) {
+        // Remove Sir/Señor if the previous answer already used it
+        cleanAnswer = cleanAnswer
+          .replace(/,\s*(sir\b|señor\b)\.?/gi, '.')
+          .replace(/\b(sir|señor)\s*[,.]?\s*/gi, '')
+          .replace(/\s{2,}/g, ' ')
+          .trim();
+      } else {
+        // Smooth out awkward trailing tags on factual answers
+        cleanAnswer = cleanAnswer.replace(/,\s*(sir\b|señor\b)\.?$/i, '.').trim();
+      }
+
       const aiMsg = {
         sender: 'ai',
         text: cleanAnswer,
