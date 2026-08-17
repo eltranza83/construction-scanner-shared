@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle, ShieldAlert, LogIn } from 'lucide-react';
 import { doc, runTransaction, getDoc } from 'firebase/firestore/lite';
-import { getFirebaseDb } from '../services/firebase';
+import { getFirebaseDb, getFirebaseAuthInstance } from '../services/firebase';
 import { APP_STORAGE_KEYS, setStoredBoolean } from '../services/appStorage';
 import { buildUserAccessRecord, getUserAccessDocId } from '../services/inviteAccess';
+import { isBuiltInAdmin } from '../config/appConfig';
 
 export default function InviteScreen({ onUnlocked, googleUser, authError, signingIn, onGoogleSignIn, onSignOut }) {
   const [inviteCode, setInviteCode] = useState('');
@@ -30,6 +31,11 @@ export default function InviteScreen({ onUnlocked, googleUser, authError, signin
       const auth = getFirebaseAuthInstance();
       const resolvedEmail = googleUser?.email || auth?.currentUser?.email;
       if (!resolvedEmail) return;
+
+      if (isBuiltInAdmin(resolvedEmail)) {
+        onUnlocked(resolvedEmail);
+        return;
+      }
       
       setCheckingAuth(true);
       setError(null);

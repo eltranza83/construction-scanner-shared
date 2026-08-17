@@ -6,6 +6,8 @@ import {
 } from '../services/appStorage';
 import { getFirebaseAuthInstance } from '../services/firebase';
 
+import { isBuiltInAdmin } from '../config/appConfig';
+
 export function useInviteGate() {
   const [isInvited, setIsInvited] = useState(loadInitialInviteState);
 
@@ -15,6 +17,10 @@ export function useInviteGate() {
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user?.email) {
+        if (isBuiltInAdmin(user.email)) {
+          unlockInvite(user.email);
+          return;
+        }
         const storedEmail = localStorage.getItem(APP_STORAGE_KEYS.authorizedEmail);
         const storedInvited = localStorage.getItem(APP_STORAGE_KEYS.invited) === 'true';
         if (storedInvited || (storedEmail && storedEmail.toLowerCase() === user.email.toLowerCase())) {

@@ -20,6 +20,18 @@ export const DEFAULT_GOOGLE_CLIENT_ID =
   '523814311929-lku3c1m2rq4qpmbf1earpgnm1beuvq8m.apps.googleusercontent.com';
 
 
+export const DEFAULT_ADMIN_EMAILS = [
+  'adepecgroup@gmail.com',
+  'acepeda83@gmail.com',
+  'eltranza83@gmail.com'
+];
+
+export function isBuiltInAdmin(email) {
+  if (!email) return false;
+  const clean = String(email).trim().toLowerCase();
+  return DEFAULT_ADMIN_EMAILS.includes(clean);
+}
+
 export function getStoredConfigValue(storageKey, fallback) {
   return localStorage.getItem(storageKey) || fallback;
 }

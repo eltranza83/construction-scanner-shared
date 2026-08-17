@@ -1,4 +1,4 @@
-import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS } from '../config/appConfig.js';
+import { DEFAULT_GOOGLE_CLIENT_ID, STORAGE_KEYS, isBuiltInAdmin } from '../config/appConfig.js';
 
 export const APP_STORAGE_KEYS = {
   ...STORAGE_KEYS,
@@ -54,6 +54,9 @@ export function loadInitialInviteState() {
     return true;
   }
   const user = getStoredJson(APP_STORAGE_KEYS.googleUser, null);
+  if (user?.email && isBuiltInAdmin(user.email)) {
+    return true;
+  }
   if (!user?.email) return false;
   return localStorage.getItem(APP_STORAGE_KEYS.authorizedEmail) === user.email;
 }

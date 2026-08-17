@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { collection, deleteDoc, doc, getDoc, getDocs, setDoc } from 'firebase/firestore/lite';
 import { getFirebaseAuthInstance, getFirebaseDb } from '../services/firebase';
+import { isBuiltInAdmin } from '../config/appConfig';
 
 export function useSettingsAdmin({ setError, setSuccess }) {
   const [isAdminUnlocked, setIsAdminUnlocked] = useState(false);
@@ -38,7 +39,19 @@ export function useSettingsAdmin({ setError, setSuccess }) {
     const auth = getFirebaseAuthInstance();
 
     const verifyAdmin = async (user) => {
-      if (!db || !user?.email) {
+      if (!user?.email) {
+        setIsAdminUnlocked(false);
+        return;
+      }
+
+      if (isBuiltInAdmin(user.email)) {
+        setIsAdminUnlocked(true);
+        setError(null);
+        await fetchInvitesList();
+        return;
+      }
+
+      if (!db) {
         setIsAdminUnlocked(false);
         return;
       }
