@@ -32,9 +32,9 @@ import {
   fetchDriveFileAsObjectUrl
 } from '../services/googleDrive';
 
-const findReferencedDriveFile = (query, driveTree) => {
+const findReferencedDriveFile = (query, driveTree, messages = []) => {
   if (!driveTree || !query) return null;
-  const q = query.toLowerCase();
+  const q = query.toLowerCase().trim();
   const allFiles = [];
   if (driveTree.directFiles) {
     driveTree.directFiles.forEach((f) => allFiles.push({ ...f, folderName: 'root' }));
@@ -45,6 +45,22 @@ const findReferencedDriveFile = (query, driveTree) => {
         sub.files.forEach((f) => allFiles.push({ ...f, folderName: sub.folderName }));
       }
     });
+  }
+
+  // 0. Check numbered index requests (e.g. "number 2", "file 1", "show #3", "bring up 2")
+  const numMatch = q.match(/(?:number|file|item|#)\s*(\d+)/i) || q.match(/^(?:bring up|show|open|view|pull up|fetch)\s+(\d+)$/i);
+  if (numMatch && Array.isArray(messages)) {
+    const targetIndex = parseInt(numMatch[1], 10);
+    // Find the most recent AI message with a numbered list
+    const lastListMsg = [...messages].reverse().find((m) => m.sender === 'ai' && /\d+\.\s+/m.test(m.text));
+    if (lastListMsg && targetIndex > 0) {
+      const listLines = lastListMsg.text.split('\n').filter((l) => /^\s*\d+\.\s+/.test(l));
+      if (listLines[targetIndex - 1]) {
+        const itemLine = listLines[targetIndex - 1].replace(/^\s*\d+\.\s+[`'"]?/, '').replace(/[`'"]?$/, '').trim();
+        const matched = allFiles.find((f) => itemLine.toLowerCase().includes(f.name.toLowerCase()) || f.name.toLowerCase().includes(itemLine.toLowerCase()));
+        if (matched) return matched;
+      }
+    }
   }
 
   // 1. Check direct file name matching
@@ -60,7 +76,7 @@ const findReferencedDriveFile = (query, driveTree) => {
   if (driveTree.subfolders) {
     for (const sub of driveTree.subfolders) {
       const subLow = sub.folderName.toLowerCase();
-      if (q.includes(subLow) || (subLow.includes('closing') && q.includes('closing')) || (subLow.includes('invoice') && q.includes('invoice'))) {
+      if (q.includes(subLow) || (subLow.includes('closing') && q.includes('closing'))) {
         if (sub.files && sub.files.length > 0) {
           const pdf = sub.files.find((f) => f.name.toLowerCase().endsWith('.pdf') || f.mimeType === 'application/pdf');
           return pdf ? { ...pdf, folderName: sub.folderName } : { ...sub.files[0], folderName: sub.folderName };
@@ -252,13 +268,20 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     if (!speechEnabled || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      let clean = text.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
+      let clean = text;
+
+      // If the response is a numbered file list or bullet list of items, stop speaking before reading all list items
+      if (/\n\s*(1[\.\)]|[-•])\s+/m.test(clean) && /(here is the list|here's the list|here are the files|files in there|here they are|aquí está la lista|aqui esta la lista)/i.test(clean)) {
+        clean = clean.split(/\n\s*(1[\.\)]|[-•])\s+/m)[0];
+      }
+
+      clean = clean.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
       // Strip raw file extensions and underscores from voice readout so it doesn't sound robotic
       clean = clean.replace(/\.pdf\b/gi, '').replace(/\.txt\b/gi, '').replace(/\.docx?\b/gi, '').replace(/[_\-]+/g, ' ');
       // Strip commas before and after 'Sir' / 'Señor' so speech synthesis doesn't insert an awkward dramatic pause
       clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
 
-      const utterance = new SpeechSynthesisUtterance(clean);
+      const utterance = new SpeechSynthesisUtterance(clean.trim());
       utterance.rate = 1.20; // Brisk, energetic executive cadence
       utterance.pitch = 1.0; // Natural, clean pitch
 
@@ -294,7 +317,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     try {
       let fileAttachment = null;
-      const targetFile = findReferencedDriveFile(query, driveTree);
+      const targetFile = findReferencedDriveFile(query, driveTree, messages);
       if (targetFile && targetFile.id && googleToken) {
         try {
           fileAttachment = await fetchDriveFileBase64(googleToken, targetFile.id);

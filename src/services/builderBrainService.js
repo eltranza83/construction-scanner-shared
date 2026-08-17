@@ -492,11 +492,18 @@ If multiple items are given in a single prompt, you can output multiple [[ACTION
 Categories must be one of: "Paint", "Tile & Grout", "Countertops & Flooring", "Fixtures & Hardware", "Exterior", "Appliances & Custom", or "General".
 Along with a concise confirmation (e.g. "Recorded **Pure White (SW 7005)** for the walls in the Finish Schedule & Google Sheet, Sir!").
 
-14. INTERACTIVE DOCUMENT & RECEIPT VIEWER ACTION:
-- Emit the interactive view file action tag ONLY when the user EXPLICITLY commands you to view, open, show, fetch, or pull up a specific document (e.g. "pull up the fence invoice", "let me see the closing document", "open the receipt"):
-[[ACTION:VIEW_FILE:{"fileId":"FILE_ID","fileName":"FileName.pdf","folderName":"FolderName"}]]
-- NEVER emit this tag when the user is simply asking what files or folders exist, or asking general questions about a folder.
-- When listing or discussing files, speak conversationally in plain English (e.g. "two fence material invoices and one lumber invoice") rather than reading raw robotic filenames or file extensions (.pdf, .txt).
+14. FOLDER FILE LISTINGS & QUICK NUMBER SELECTION:
+- When the user asks what files or documents exist in a folder (e.g. "what files do we have in closing settlement", "check the invoice folder", "what about our processed invoices"):
+  * Always format the response with a short executive intro:
+    "Yes sir, I looked at the [FolderName] folder and we have [N] files in there, here's the list:"
+  * Followed by a clean numbered list of the files:
+    1. Filename_1.pdf
+    2. Filename_2.pdf
+  * NEVER emit [[ACTION:VIEW_FILE:...]] tags when simply listing folder contents.
+- When the user asks to view, open, or fetch a specific file or a number from the list (e.g. "bring up number 2", "open file 1", "show #3", "pull up the fence invoice"):
+  * Match the exact file from the previously listed numbers or name and emit the interactive view tag:
+    [[ACTION:VIEW_FILE:{"fileId":"FILE_ID","fileName":"FileName.pdf","folderName":"FolderName"}]]
+  * And confirm concisely (e.g. "Here is file #2, Sir:").
 `;
 
   // Build multi-turn conversational history
