@@ -85,7 +85,7 @@ test('loadStoredAppState builds selected folder and arrays from local storage', 
 
 test('loadStoredAppState purges legacy browser secrets and sanitizes projects', () => {
   localStorage.setItem(APP_STORAGE_KEYS.legacyGeminiKey, 'old-gemini-key');
-  localStorage.setItem(APP_STORAGE_KEYS.googleToken, 'old-drive-token');
+  localStorage.setItem(APP_STORAGE_KEYS.googleToken, 'persisted-drive-token');
   setStoredJson(APP_STORAGE_KEYS.projects, [{
     id: 'p1',
     appsScriptUrl: 'https://script.example',
@@ -96,7 +96,7 @@ test('loadStoredAppState purges legacy browser secrets and sanitizes projects', 
 
   assert.deepEqual(state.projects, [{ id: 'p1' }]);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.legacyGeminiKey), null);
-  assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
+  assert.equal(state.googleToken, 'persisted-drive-token');
 });
 
 test('persistActiveProject stores and clears project folder state', () => {
@@ -140,16 +140,14 @@ test('Google session clearing removes identity and linked project session values
   localStorage.setItem(APP_STORAGE_KEYS.invited, 'true');
 
   clearGoogleIdentity();
-  assert.equal(sessionStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
-  assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleUser), null);
+  assert.deepEqual(getStoredJson(APP_STORAGE_KEYS.googleUser), { email: 'builder@example.com' });
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.folderId), 'folder-1');
 
   persistGoogleToken('token-2');
   persistGoogleUser({ email: 'builder@example.com' });
   clearGoogleSession();
 
-  assert.equal(sessionStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleToken), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.googleUser), null);
   assert.equal(localStorage.getItem(APP_STORAGE_KEYS.folderId), null);

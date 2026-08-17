@@ -102,9 +102,11 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
       if (!googleClientId || !window.google?.accounts?.oauth2 || window.googleTokenClient) return;
 
       try {
+        const storedUser = loadStoredAppState().googleUser;
         const client = window.google.accounts.oauth2.initTokenClient({
           client_id: googleClientId,
           scope: GOOGLE_SCOPE,
+          hint: storedUser?.email || '',
           callback: async (tokenResponse) => {
             if (tokenResponse.access_token) {
               setGoogleToken(tokenResponse.access_token);
@@ -149,6 +151,24 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     }
   }, [googleClientId, setError]);
 
+  const requestDriveAccessToken = useCallback((options = {}) => {
+    const user = loadStoredAppState().googleUser;
+    const emailHint = user?.email || '';
+    if (!window.googleTokenClient) {
+      console.warn('Google token client not initialized yet.');
+      return;
+    }
+
+    try {
+      window.googleTokenClient.requestAccessToken({
+        hint: emailHint,
+        ...(options.interactive === false ? { prompt: 'none' } : { prompt: '' }),
+      });
+    } catch (err) {
+      console.error('Failed to request Google Drive token:', err);
+    }
+  }, []);
+
   const signIn = async () => {
     setError?.(null);
     setSigningIn(true);
@@ -183,12 +203,17 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     setTimeout(() => setSuccess?.(null), 3000);
   };
 
-  const handleSessionExpired = useCallback(() => {
-    console.warn('Google Drive token expired. Triggering silent background refresh...');
+  const handleSessionExpired = useCallback((options = {}) => {
+    const user = loadStoredAppState().googleUser;
+    const emailHint = user?.email || '';
+    console.warn('Google Drive token expired. Triggering silent background refresh with hint:', emailHint);
 
     try {
       if (window.googleTokenClient) {
-        window.googleTokenClient.requestAccessToken({ prompt: '' });
+        window.googleTokenClient.requestAccessToken({
+          hint: emailHint,
+          ...(options.interactive === true ? { prompt: '' } : { prompt: 'none' })
+        });
       }
     } catch (err) {
       console.error('Silent token refresh failed:', err);
@@ -205,5 +230,6 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     signIn,
     signOut,
     handleSessionExpired,
+    requestDriveAccessToken,
   };
 }

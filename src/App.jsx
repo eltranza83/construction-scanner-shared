@@ -48,7 +48,8 @@ export default function App() {
     signingIn,
     signIn: handleGoogleSignIn,
     signOut: googleSignOut,
-    handleSessionExpired
+    handleSessionExpired,
+    requestDriveAccessToken
   } = useGoogleAuth({
     setError,
     setSuccess,
@@ -605,6 +606,7 @@ export default function App() {
               activeProject={activeProject}
               selectedFolder={selectedFolder}
               onSessionExpired={handleSessionExpired}
+              onRequestConnect={requestDriveAccessToken}
               onShowToast={setSuccess}
             />
           </DashboardErrorBoundary>

@@ -17,8 +17,9 @@ import DashboardPhotoGallery from './DashboardPhotoGallery';
 import DashboardTradeSections from './DashboardTradeSections';
 import { auditSpreadsheetHealth } from '../services/spreadsheetHealth';
 
-export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired, onShowToast }) {
-  const [data, setData] = useState(null);
+export default function Dashboard({ googleToken, activeProject, selectedFolder, onSessionExpired, onRequestConnect, onShowToast }) {
+  const [data, setData] = useState(() => loadCachedDashboard(localStorage, activeProject?.id));
+  const [isCached, setIsCached] = useState(() => Boolean(loadCachedDashboard(localStorage, activeProject?.id)));
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [sheetWarnings, setSheetWarnings] = useState([]);
@@ -175,16 +176,23 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
   };
 
   // Fetch dashboard data
-  const loadDashboardData = async (_forceRefresh = false) => {
+  const loadDashboardData = async (forceInteractive = false) => {
+    const cached = loadCachedDashboard(localStorage, activeProject?.id);
+
     if (!googleToken) {
-      setError('Please connect your Google account in Settings to load the dashboard.');
+      if (cached) {
+        setData(cached);
+        setIsCached(true);
+        setError(null);
+      } else {
+        setError('Please connect your Google account in Settings to load the dashboard.');
+      }
+      if (forceInteractive && onRequestConnect) {
+        onRequestConnect({ interactive: true });
+      }
       return;
     }
 
-    // We need the tracking spreadsheet ID. Currently, it is stored or we find it in active project.
-    // In our system, the spreadsheet ID is defined in the script.
-    // For a fully dynamic client dashboard, we can search for the 'JobScan_Expense_Log' spreadsheet in the selectedFolder.
-    // Let's first look in localStorage for a cached sheetId for this project, or search for it.
     setLoading(true);
     setError(null);
 
@@ -199,6 +207,7 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         persistDashboardSpreadsheetId(localStorage, activeProject.id, spreadsheetId);
       }
       setData(parsedData);
+      setIsCached(false);
       const healthAudit = auditSpreadsheetHealth(parsedData);
       setSheetWarnings(healthAudit.warnings);
 
@@ -208,10 +217,17 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     } catch (err) {
       console.error(err);
       if (isAuthError(err)) {
-        if (onSessionExpired) {
-          onSessionExpired();
-          return;
+        if (cached) {
+          setData(cached);
+          setIsCached(true);
+          setError(null);
         }
+        if (forceInteractive && onRequestConnect) {
+          onRequestConnect({ interactive: true });
+        } else if (onSessionExpired) {
+          onSessionExpired({ interactive: false });
+        }
+        return;
       }
       
       const rawError = getDriveErrorMessage(err, 'load dashboard data');
@@ -222,10 +238,10 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
         : rawError;
 
       // Try to load cached data offline
-      const cached = loadCachedDashboard(localStorage, activeProject?.id);
       if (cached) {
         setData(cached);
-        setError(`Could not refresh live Google Sheet. Displaying cached report from last load. (${customError})`);
+        setIsCached(true);
+        setError(`Could not refresh live Google Sheet. Displaying cached report. (${customError})`);
       } else {
         setData(null);
         setError(customError);
@@ -237,18 +253,19 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
 
   // Load on mount or active project change
   useEffect(() => {
-    // Reset previous project state immediately when switching active projects
-    setData(null);
+    const cached = loadCachedDashboard(localStorage, activeProject?.id);
+    if (cached) {
+      setData(cached);
+      setIsCached(true);
+    } else {
+      setData(null);
+      setIsCached(false);
+    }
     setError(null);
     setSheetWarnings([]);
     setSelectedSub(null);
 
     if (activeProject && selectedFolder) {
-      // Load cached first for instant responsiveness if present
-      const cached = loadCachedDashboard(localStorage, activeProject.id);
-      if (cached) {
-        setData(cached);
-      }
       loadDashboardData();
     } else if (activeProject && !selectedFolder) {
       setError(`No Google Drive folder linked to project "${activeProject.name}". Go to Settings to link a Drive folder.`);
@@ -315,20 +332,6 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(num);
   };
 
-  if (!googleToken) {
-    return (
-      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-zinc-400)' }}>
-        <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <AlertCircle size={32} style={{ color: 'var(--color-amber-500)', margin: '0 auto' }} />
-          <h3 style={{ fontWeight: 700, color: '#fff' }}>Google Drive Connection Required</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)', lineHeight: '1.4' }}>
-            The dashboard reads financial data directly from your Google spreadsheet in real-time. Please connect your Google account in Settings to view this page.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
   if (!activeProject) {
     return (
       <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-zinc-400)' }}>
@@ -343,13 +346,49 @@ export default function Dashboard({ googleToken, activeProject, selectedFolder, 
     );
   }
 
+  if (!data && !googleToken) {
+    return (
+      <div style={{ padding: '24px', textAlign: 'center', color: 'var(--color-zinc-400)' }}>
+        <div className="settings-card" style={{ border: '1px solid var(--color-zinc-800)', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          <AlertCircle size={32} style={{ color: 'var(--color-amber-500)', margin: '0 auto' }} />
+          <h3 style={{ fontWeight: 700, color: '#fff' }}>Google Drive Connection Required</h3>
+          <p style={{ fontSize: '0.85rem', color: 'var(--color-zinc-500)', lineHeight: '1.4' }}>
+            The dashboard reads financial data directly from your Google spreadsheet in real-time. Connect your Google account to view this page.
+          </p>
+          <button
+            onClick={() => onRequestConnect?.({ interactive: true })}
+            className="btn btn-primary"
+            style={{ width: 'auto', margin: '6px auto 0', padding: '8px 16px', fontSize: '0.85rem' }}
+          >
+            Connect Google Drive
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
 
       {/* Header Info */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
-          <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>Financial Dashboard</h2>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>Financial Dashboard</h2>
+            {isCached && (
+              <span style={{ 
+                fontSize: '0.7rem', 
+                padding: '2px 8px', 
+                borderRadius: '12px', 
+                backgroundColor: 'rgba(245, 158, 11, 0.12)', 
+                color: 'var(--color-amber-400)', 
+                border: '1px solid rgba(245, 158, 11, 0.25)',
+                fontWeight: 600
+              }}>
+                Saved Snapshot
+              </span>
+            )}
+          </div>
           {data?.projectInfo?.address && (
             <p style={{ fontSize: '0.78rem', color: 'var(--color-zinc-500)', marginTop: '2px' }}>
               {data.projectInfo.address.toLowerCase().startsWith('n/a')
