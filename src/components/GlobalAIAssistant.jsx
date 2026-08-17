@@ -115,7 +115,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [isRecording, setIsRecording] = useState(false);
   const [speechEnabled, setSpeechEnabled] = useState(true);
   const [availableVoices, setAvailableVoices] = useState([]);
-  const [selectedVoiceURI, setSelectedVoiceURI] = useState('');
+  const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => localStorage.getItem('jobscan_ai_voice_uri') || '');
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
@@ -184,8 +184,9 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
   const getBestBritishMaleVoice = (voices, explicitURI) => {
     if (!voices || voices.length === 0) return null;
-    if (explicitURI) {
-      const chosen = voices.find((v) => v.voiceURI === explicitURI);
+    const requested = explicitURI || localStorage.getItem('jobscan_ai_voice_uri');
+    if (requested) {
+      const chosen = voices.find((v) => v.voiceURI === requested || v.name === requested);
       if (chosen) return chosen;
     }
     const femaleNames = ['Susan', 'Hazel', 'Victoria', 'Zira', 'Samantha', 'Karen', 'Serena', 'Kate', 'Stephanie', 'Martha', 'Female', 'en-gb-x-gba', 'en-gb-x-gbd', 'en-gb-x-gbf', 'en-us-x-sfg'];
@@ -227,8 +228,9 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
   const getBestSpanishMaleVoice = (voices, explicitURI) => {
     if (!voices || voices.length === 0) return null;
-    if (explicitURI) {
-      const chosen = voices.find((v) => v.voiceURI === explicitURI && v.lang.startsWith('es'));
+    const requested = explicitURI || localStorage.getItem('jobscan_ai_voice_uri');
+    if (requested) {
+      const chosen = voices.find((v) => (v.voiceURI === requested || v.name === requested) && v.lang.startsWith('es'));
       if (chosen) return chosen;
     }
     const femaleNames = ['Sabina', 'Dalia', 'Paulina', 'Helena', 'Laura', 'Monica', 'Female', 'es-es-x-eea'];
@@ -246,9 +248,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       if ('speechSynthesis' in window) {
         const voices = window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'));
         setAvailableVoices(voices);
-        const bestDefault = getBestBritishMaleVoice(voices, null);
-        if (bestDefault && !selectedVoiceURI) {
-          setSelectedVoiceURI(bestDefault.voiceURI);
+        const storedVoice = localStorage.getItem('jobscan_ai_voice_uri');
+        if (storedVoice && voices.some((v) => v.voiceURI === storedVoice || v.name === storedVoice)) {
+          setSelectedVoiceURI(storedVoice);
+        } else {
+          const bestDefault = getBestBritishMaleVoice(voices, null);
+          if (bestDefault) {
+            setSelectedVoiceURI(bestDefault.voiceURI);
+          }
         }
       }
     };
@@ -760,7 +767,22 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                   </label>
                   <select
                     value={selectedVoiceURI}
-                    onChange={(e) => setSelectedVoiceURI(e.target.value)}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedVoiceURI(val);
+                      localStorage.setItem('jobscan_ai_voice_uri', val);
+                      try {
+                        window.speechSynthesis.cancel();
+                        const chosen = availableVoices.find((v) => v.voiceURI === val || v.name === val);
+                        if (chosen) {
+                          const testUtt = new SpeechSynthesisUtterance('Voice updated. J.A.R.V.I.S. online.');
+                          testUtt.voice = chosen;
+                          testUtt.lang = chosen.lang || 'en-GB';
+                          testUtt.rate = 1.2;
+                          window.speechSynthesis.speak(testUtt);
+                        }
+                      } catch (_) {}
+                    }}
                     style={{
                       width: '100%',
                       padding: '6px 8px',
@@ -773,7 +795,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                     }}
                   >
                     {availableVoices.map((v) => (
-                      <option key={v.voiceURI} value={v.voiceURI}>
+                      <option key={v.voiceURI || v.name} value={v.voiceURI || v.name}>
                         {v.name} ({v.lang}) {v.name.includes('Natural') || v.name.includes('Google') || v.lang.includes('GB') ? '✨ Recommended' : ''}
                       </option>
                     ))}
