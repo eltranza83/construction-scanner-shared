@@ -45,6 +45,20 @@ export async function fetchDriveFileAsObjectUrl(accessToken, fileId) {
   return URL.createObjectURL(blob);
 }
 
+export async function fetchDriveFileBase64(accessToken, fileId) {
+  const blob = await fetchDriveFileBlob(accessToken, fileId);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result || '';
+      const base64Data = result.includes(',') ? result.split(',')[1] : result;
+      resolve({ base64: base64Data, mimeType: blob.type || 'application/pdf' });
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
 /**
  * Creates a file metadata resource and then uploads the media content.
  * This two-step process is highly reliable client-side and avoids multipart assembly.

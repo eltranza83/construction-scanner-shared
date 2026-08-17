@@ -19,7 +19,53 @@ import {
   loadProjectDriveTree,
   saveProjectDriveTree
 } from '../services/builderBrainService';
-import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder, syncFinishSpecsToDrive } from '../services/googleDrive';
+import { fetchProjectDriveTree, createFolder, trashDriveFileOrFolder, syncFinishSpecsToDrive, fetchDriveFileBase64 } from '../services/googleDrive';
+
+const findReferencedDriveFile = (query, driveTree) => {
+  if (!driveTree || !query) return null;
+  const q = query.toLowerCase();
+  const allFiles = [];
+  if (driveTree.directFiles) {
+    driveTree.directFiles.forEach((f) => allFiles.push({ ...f, folderName: 'root' }));
+  }
+  if (driveTree.subfolders) {
+    driveTree.subfolders.forEach((sub) => {
+      if (sub.files) {
+        sub.files.forEach((f) => allFiles.push({ ...f, folderName: sub.folderName }));
+      }
+    });
+  }
+
+  // 1. Check direct file name matching
+  for (const f of allFiles) {
+    const fNameLow = f.name.toLowerCase();
+    const fClean = fNameLow.replace(/\.[a-z0-9]+$/i, '').replace(/[_\-\s]+/g, ' ');
+    if (q.includes(fNameLow) || (fClean.length > 5 && q.includes(fClean))) {
+      return f;
+    }
+  }
+
+  // 2. Check subfolder name matching (e.g. "closing settlement", "processed invoices", "x-ray photos")
+  if (driveTree.subfolders) {
+    for (const sub of driveTree.subfolders) {
+      const subLow = sub.folderName.toLowerCase();
+      if (q.includes(subLow) || (subLow.includes('closing') && q.includes('closing')) || (subLow.includes('invoice') && q.includes('invoice'))) {
+        if (sub.files && sub.files.length > 0) {
+          const pdf = sub.files.find((f) => f.name.toLowerCase().endsWith('.pdf') || f.mimeType === 'application/pdf');
+          return pdf ? { ...pdf, folderName: sub.folderName } : { ...sub.files[0], folderName: sub.folderName };
+        }
+      }
+    }
+  }
+
+  // 3. Keyword matching (e.g. "closing cost", "settlement statement", "allocation")
+  if (q.includes('closing') || q.includes('settlement') || q.includes('allocation')) {
+    const closingPdf = allFiles.find((f) => f.name.toLowerCase().includes('closing') || f.name.toLowerCase().includes('allocation') || f.folderName.toLowerCase().includes('closing'));
+    if (closingPdf) return closingPdf;
+  }
+
+  return null;
+};
 
 export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
@@ -199,7 +245,17 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     setIsLoading(true);
 
     try {
-      const answer = await askGeminiBrain(query, [], projectName, apiKey, null, projectId, messages, driveTree);
+      let fileAttachment = null;
+      const targetFile = findReferencedDriveFile(query, driveTree);
+      if (targetFile && targetFile.id && googleToken) {
+        try {
+          fileAttachment = await fetchDriveFileBase64(googleToken, targetFile.id);
+        } catch (fileErr) {
+          console.warn('Drive file fetch attachment warning:', fileErr);
+        }
+      }
+
+      const answer = await askGeminiBrain(query, [], projectName, apiKey, null, projectId, messages, driveTree, fileAttachment);
 
       let cleanAnswer = answer;
       const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);

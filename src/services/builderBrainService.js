@@ -353,7 +353,7 @@ export function loadProjectSiteSetup(projectId) {
   return { protocol, checks };
 }
 
-export async function askGeminiBrain(query, items = [], activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = [], driveTree = null) {
+export async function askGeminiBrain(query, items = [], activeProjectName = 'General Site', apiKey = null, dashboardData = null, projectId = null, chatHistory = [], driveTree = null, fileAttachment = null) {
   const safeItems = Array.isArray(items) ? items : [];
   // Strict Lot Filtering to prevent cross-lot data leaks
   const cleanLotName = activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -441,25 +441,22 @@ When the user asks about ANY trade, contractor, balance, quote, payment, or expe
 - If a phase or contractor is in the PHASE & CONTRACTOR EXPENSE BREAKDOWN, immediately state their exact numbers on the very first try (Quote, Total Paid, and Remaining Balance, e.g. "For the Electrical & Lighting phase, the total quote is $15,000.00, with $5,000.00 paid to Kike Vallejo, leaving a remaining balance of $10,000.00.").
 - NEVER say there is no invoice or record without checking both the trade/phase category AND the payee name.
 
-2. DIRECT FACTUAL ANSWERS:
+2. GOOGLE DRIVE DOCUMENT READING & DEEP FILE UNDERSTANDING:
+- When a document (PDF, invoice, image, receipt, closing settlement) is attached to the query, read and analyze its internal pages, tables, line items, buyer/seller settlement statements, loan details, escrow allocations, and payment breakdowns directly with high fidelity!
+- If the user asks about a document in Google Drive (like "Closing Settlement", "Lot_3_Closing_Cost_Allocation.pdf", or any invoice), summarize its key contents, numbers, and purpose directly. Never give a disclaimer that you cannot open PDFs.
+
+3. DIRECT FACTUAL ANSWERS:
 Answer questions immediately with precise project facts, figures, and trade details. Never give evasive generic answers.
 
-3. CONVERSATIONAL PRONOUNS & FOLLOW-UPS:
+4. CONVERSATIONAL PRONOUNS & FOLLOW-UPS:
 Always use recent chat messages to resolve pronouns. If the previous message discussed "4 subfolders" and the user asks "can you tell me what they are what they're called" or "list them", immediately list the exact names of those 4 subfolders!
 
-4. GREETINGS ONLY ON INITIAL OPENING:
+5. GREETINGS ONLY ON INITIAL OPENING:
 Deliver a time-of-day greeting ("${timeGreeting} Sir" / "${spanishTimeGreeting} Señor") ONLY if the user solely sent an opening greeting without asking a question. In ongoing dialogue and follow-up questions, NEVER repeat the greeting—answer the question directly!
 
-5. DEFAULT CONCISENESS (1-2 SHORT SENTENCES):
+6. DEFAULT CONCISENESS (1-2 SHORT SENTENCES):
 Deliver the exact answer, list of names, vendor, date, or number requested in 1 to 2 direct sentences.
 
-6. ON-DEMAND DETAIL MODE:
-Provide comprehensive lists or deep breakdowns only when explicitly requested ("give me all details", "full breakdown", "itemized list").
-
-7. SPEECH RECOGNITION TOLERANCE:
-Understand voice-dictation typos without correcting the user.
-
-8. FULL BILINGUAL ENGLISH & SPANISH SUPPORT:
 Fluently match English or Spanish automatically.
 
 9. GOOGLE DRIVE DIRECT FOLDER ACTIONS:
@@ -508,9 +505,18 @@ Along with a concise confirmation (e.g. "Recorded **Pure White (SW 7005)** for t
       });
     });
   }
+  const userParts = [{ text: query }];
+  if (fileAttachment && fileAttachment.base64) {
+    userParts.unshift({
+      inlineData: {
+        mimeType: fileAttachment.mimeType || 'application/pdf',
+        data: fileAttachment.base64
+      }
+    });
+  }
   rawContents.push({
     role: 'user',
-    parts: [{ text: query }]
+    parts: userParts
   });
 
   // Ensure first turn is 'user' and roles alternate
