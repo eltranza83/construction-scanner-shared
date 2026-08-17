@@ -268,11 +268,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     if (!speechEnabled || !('speechSynthesis' in window)) return;
     try {
       window.speechSynthesis.cancel();
-      let clean = text;
-
-      // If the response is a numbered file list or bullet list of items, stop speaking before reading all list items
-      if (/\n\s*(1[\.\)]|[-•])\s+/m.test(clean) && /(here is the list|here's the list|here are the files|files in there|here they are|aquí está la lista|aqui esta la lista)/i.test(clean)) {
-        clean = clean.split(/\n\s*(1[\.\)]|[-•])\s+/m)[0];
+      // Universal List Cutoff: If the response contains ANY numbered list (e.g. "1. ", ": 1.", "\n1.") or bullet list ("- ", "• "),
+      // truncate speech immediately before the list begins so J.A.R.V.I.S. speaks only the executive summary.
+      const listMatch = clean.match(/(?:(?:\n|^|:\s*|\.\s*)(?:1[\.\)]\s+|[-•*]\s+))/);
+      if (listMatch && listMatch.index !== undefined) {
+        const introText = clean.substring(0, listMatch.index).trim();
+        if (introText.length > 3) {
+          clean = introText;
+        }
       }
 
       clean = clean.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
@@ -466,6 +469,9 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           .replace(/\s{2,}/g, ' ')
           .trim();
       }
+
+      // Format inline lists with clean linebreaks
+      cleanAnswer = cleanAnswer.replace(/:\s*1\.\s+/g, ':\n\n1. ');
 
       const aiMsg = {
         sender: 'ai',
