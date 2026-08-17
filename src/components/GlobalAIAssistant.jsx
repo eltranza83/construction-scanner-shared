@@ -188,21 +188,21 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       const chosen = voices.find((v) => v.voiceURI === explicitURI);
       if (chosen) return chosen;
     }
-    const femaleNames = ['Susan', 'Hazel', 'Victoria', 'Zira', 'Samantha', 'Karen', 'Serena', 'Kate', 'Stephanie', 'Martha', 'Female', 'en-gb-x-gba', 'en-gb-x-gbd', 'en-gb-x-gbf'];
+    const femaleNames = ['Susan', 'Hazel', 'Victoria', 'Zira', 'Samantha', 'Karen', 'Serena', 'Kate', 'Stephanie', 'Martha', 'Female', 'en-gb-x-gba', 'en-gb-x-gbd', 'en-gb-x-gbf', 'en-us-x-sfg'];
 
     // Platform Priority 1: Windows (Microsoft George / Natural)
-    const msGeorge = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && v.name.includes('George'));
+    const msGeorge = voices.find((v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('George') || v.name.includes('Ryan')));
     if (msGeorge) return msGeorge;
 
-    // Platform Priority 2: Apple iOS/macOS (Daniel, Oliver, Arthur)
+    // Platform Priority 2: Apple iOS / iPadOS / macOS (Daniel, Oliver, Arthur, Aaron)
     const appleMale = voices.find(
-      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('Daniel') || v.name.includes('Oliver') || v.name.includes('Arthur'))
+      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB' || v.lang.startsWith('en')) && (v.name.includes('Daniel') || v.name.includes('Oliver') || v.name.includes('Arthur') || v.name.includes('Aaron') || v.name.includes('Gordon'))
     );
     if (appleMale) return appleMale;
 
     // Platform Priority 3: Google Android / Chrome (Google UK English Male, en-gb-x-rjs, en-gb-x-gbb)
     const googleUkMale = voices.find(
-      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('UK English Male') || v.name.includes('rjs') || v.name.includes('gbb'))
+      (v) => (v.lang.startsWith('en-GB') || v.lang === 'en-GB') && (v.name.includes('UK English Male') || v.name.includes('rjs') || v.name.includes('gbb') || v.name.includes('gbc'))
     );
     if (googleUkMale) return googleUkMale;
 
@@ -218,7 +218,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     // Platform Priority 6: Any general English male voice
     const generalMale = voices.find(
-      (v) => v.lang.startsWith('en') && (v.name.includes('George') || v.name.includes('Daniel') || v.name.includes('Oliver') || v.name.includes('Arthur') || v.name.includes('David') || v.name.includes('Guy'))
+      (v) => v.lang.startsWith('en') && (v.name.includes('George') || v.name.includes('Daniel') || v.name.includes('Oliver') || v.name.includes('Arthur') || v.name.includes('David') || v.name.includes('Guy') || v.name.includes('Male'))
     );
     if (generalMale) return generalMale;
 
@@ -299,16 +299,24 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       utterance.rate = 1.20; // Brisk, energetic executive cadence
       utterance.pitch = 1.0; // Natural, clean pitch
 
+      // Retrieve live voices directly from browser engine (crucial for mobile iOS & Android)
+      const liveVoices = (window.speechSynthesis.getVoices && window.speechSynthesis.getVoices().length > 0)
+        ? window.speechSynthesis.getVoices().filter((v) => v.lang.startsWith('en') || v.lang.startsWith('es'))
+        : availableVoices;
+
       const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
 
       if (isSpanish || aiLanguage === 'es') {
         utterance.lang = 'es-US';
-        const spanishVoice = getBestSpanishMaleVoice(availableVoices, selectedVoiceURI);
+        const spanishVoice = getBestSpanishMaleVoice(liveVoices, selectedVoiceURI);
         if (spanishVoice) utterance.voice = spanishVoice;
       } else {
         utterance.lang = 'en-GB';
-        const britishVoice = getBestBritishMaleVoice(availableVoices, selectedVoiceURI);
-        if (britishVoice) utterance.voice = britishVoice;
+        const britishVoice = getBestBritishMaleVoice(liveVoices, selectedVoiceURI);
+        if (britishVoice) {
+          utterance.voice = britishVoice;
+          utterance.lang = britishVoice.lang || 'en-GB';
+        }
       }
       window.speechSynthesis.speak(utterance);
     } catch (e) {
