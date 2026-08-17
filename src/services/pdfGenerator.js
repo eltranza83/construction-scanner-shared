@@ -347,7 +347,7 @@ export async function generateIssuePacketPDF({
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(7);
   pdf.setTextColor(...ADEPEC_GOLD);
-  pdf.text('ADEPEC HOMES', margin, pageHeight - 5);
+  pdf.text('SITETACTIX BY ADEPEC HOMES', margin, pageHeight - 5);
   pdf.setTextColor(212, 212, 216);
   pdf.text(`${packetProject.lotNumber || packetProject.projectDisplayName || 'Project'} - ${issue?.id || 'issue'}`, pageWidth - margin, pageHeight - 5, { align: 'right' });
 

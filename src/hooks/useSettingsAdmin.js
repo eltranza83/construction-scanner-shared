@@ -117,10 +117,10 @@ export function useSettingsAdmin({ setError, setSuccess }) {
 
   const handleShareInvite = async (code) => {
     const inviteLink = `${window.location.origin}?code=${code}`;
-    const message = `Adepec Homes Construction Scanner invite:\n\n${inviteLink}`;
+    const message = `SiteTactix by Adepec Homes invite:\n\n${inviteLink}`;
     try {
       if (navigator.share) {
-        await navigator.share({ title: 'Adepec Homes Scanner Invite', text: message, url: inviteLink });
+        await navigator.share({ title: 'SiteTactix by Adepec Homes Invite', text: message, url: inviteLink });
       } else {
         await navigator.clipboard.writeText(message);
         setSuccess('Invite details copied to clipboard.');

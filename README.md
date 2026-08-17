@@ -1,6 +1,6 @@
-# Adepec Homes Construction Scanner
+# SiteTactix by Adepec Homes
 
-Private, invite-only scanner for extracting construction invoices and receipts, splitting allocations, uploading PDFs to Google Drive, and routing costs into project spreadsheets.
+Jobsite Intelligence & Field Operations platform for interactive blueprint pinboarding, AI document extraction, punch list tracking, and cloud sync for custom home building.
 
 ## Local development
 

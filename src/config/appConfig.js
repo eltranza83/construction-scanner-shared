@@ -1,10 +1,10 @@
 export const STORAGE_KEYS = {
-  firebaseApiKey: 'jobscan_firebase_api_key',
-  firebaseProjectId: 'jobscan_firebase_project_id',
-  firebaseAppId: 'jobscan_firebase_app_id',
-  googleClientId: 'jobscan_google_client_id',
-  geminiApiKey: 'jobscan_gemini_api_key',
-  appsScriptUrl: 'jobscan_apps_script_url',
+  firebaseApiKey: 'sitetactix_firebase_api_key',
+  firebaseProjectId: 'sitetactix_firebase_project_id',
+  firebaseAppId: 'sitetactix_firebase_app_id',
+  googleClientId: 'sitetactix_google_client_id',
+  geminiApiKey: 'sitetactix_gemini_api_key',
+  appsScriptUrl: 'sitetactix_apps_script_url',
 };
 
 const ENV = import.meta.env || {};
@@ -33,7 +33,11 @@ export function isBuiltInAdmin(email) {
 }
 
 export function getStoredConfigValue(storageKey, fallback) {
-  return localStorage.getItem(storageKey) || fallback;
+  const currentVal = localStorage.getItem(storageKey);
+  if (currentVal) return currentVal;
+  // Fallback to legacy key if exists
+  const legacyKey = storageKey.replace('sitetactix_', 'jobscan_');
+  return localStorage.getItem(legacyKey) || fallback;
 }
 
 export function getAccountAppsScriptUrlKey(email) {

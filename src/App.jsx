@@ -181,6 +181,27 @@ export default function App() {
             <div className="header-logo-homes">
               HOMES
             </div>
+            <div style={{ 
+              fontSize: '0.62rem', 
+              fontWeight: 700, 
+              letterSpacing: '0.18em', 
+              color: 'var(--color-zinc-300)',
+              textTransform: 'uppercase',
+              fontFamily: 'var(--font-serif)',
+              marginTop: '4px',
+              textAlign: 'center',
+              width: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '6px'
+            }}>
+              <span style={{ color: 'var(--color-amber-500)', opacity: 0.8, fontSize: '0.5rem' }}>✦</span>
+              <span style={{ letterSpacing: '0.18em' }}>
+                SITET<span style={{ color: 'var(--color-amber-500)', fontWeight: 800, textShadow: '0 0 10px rgba(197, 160, 89, 0.7)' }}>A</span>CT<span style={{ color: 'var(--color-amber-500)', fontWeight: 800, textShadow: '0 0 10px rgba(197, 160, 89, 0.7)' }}>I</span>X
+              </span>
+              <span style={{ color: 'var(--color-amber-500)', opacity: 0.8, fontSize: '0.5rem' }}>✦</span>
+            </div>
           </div>
         </div>
 
