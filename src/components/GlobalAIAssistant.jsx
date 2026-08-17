@@ -277,21 +277,33 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_SPEC:[^\]]+\]\]/g, '').trim();
       }
 
-      // Smart Turn Pacer: Prevent repetitive "Sir" / "Señor" across consecutive responses
-      const aiHistory = messages.filter((m) => m.sender === 'ai');
-      const lastAiMsg = aiHistory.length > 0 ? aiHistory[aiHistory.length - 1].text : '';
-      const recentUsedSir = /\b(sir|señor)\b/i.test(lastAiMsg);
+      // Smart Turn Pacer: Strict 4-to-5 question cadence for "Sir" / "Señor"
+      const totalUserQuestions = messages.filter((m) => m.sender === 'user').length + 1;
+      const isGreetingTurn = totalUserQuestions === 1 && /^(hello|hi|hey|good morning|good afternoon|good evening|buenos|buenas)/i.test(query.trim());
+      const isHonorificTurn = isGreetingTurn || (totalUserQuestions % 4 === 0);
 
-      if (recentUsedSir) {
-        // Remove Sir/Señor if the previous answer already used it
+      const hasSirAlready = /\b(sir|señor)\b/i.test(cleanAnswer);
+
+      if (isHonorificTurn) {
+        // Ensure polite natural Sir/Señor on this turn if model didn't include it
+        if (!hasSirAlready) {
+          const isEs = /[áéíóúüñ¿¡]/i.test(cleanAnswer) || aiLanguage === 'es';
+          if (isGreetingTurn) {
+            const hr = new Date().getHours();
+            const timeGreeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
+            const spanishGreeting = hr < 12 ? 'Buenos días' : hr < 19 ? 'Buenas tardes' : 'Buenas noches';
+            cleanAnswer = isEs ? `${spanishGreeting} Señor. ${cleanAnswer}` : `${timeGreeting} Sir. ${cleanAnswer}`;
+          } else {
+            cleanAnswer = isEs ? `Por supuesto, Señor: ${cleanAnswer}` : `Certainly, Sir: ${cleanAnswer}`;
+          }
+        }
+      } else {
+        // Strip out any repetitive Sir/Señor on intermediate questions (turns 1, 2, 3, 5, 6, 7...)
         cleanAnswer = cleanAnswer
           .replace(/,\s*(sir\b|señor\b)\.?/gi, '.')
           .replace(/\b(sir|señor)\s*[,.]?\s*/gi, '')
           .replace(/\s{2,}/g, ' ')
           .trim();
-      } else {
-        // Smooth out awkward trailing tags on factual answers
-        cleanAnswer = cleanAnswer.replace(/,\s*(sir\b|señor\b)\.?$/i, '.').trim();
       }
 
       const aiMsg = {
