@@ -424,6 +424,10 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       clean = clean
+        .replace(/\(Folder ID:[^\)]+\)/gi, '')
+        .replace(/\(File ID:[^\)]+\)/gi, '')
+        .replace(/\b(?:Folder|File)\s+ID:\s*[`'"]?[a-zA-Z0-9_\-]+[`'"]?/gi, '')
+        .replace(/\b[a-zA-Z0-9_\-]{24,}\b/g, '')
         .replace(/[*_#🚨⏰👷📍•`]/g, '')
         .replace(/[\[\]]/g, '')
         .replace(/\n+/g, '. ')
@@ -433,6 +437,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         .replace(/[_\-]+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
+
 
       const utterance = new SpeechSynthesisUtterance(clean);
       utterance.rate = 1.15; // Natural, clear executive cadence
