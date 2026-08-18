@@ -57,10 +57,10 @@ export async function POST(request) {
 
     if (!forceNoTools) {
       payload.tools = [
-        { functionDeclarations: AI_TOOL_DECLARATIONS },
-        { googleSearch: {} }
+        { functionDeclarations: AI_TOOL_DECLARATIONS }
       ];
     }
+
 
     if (systemInstruction) {
       payload.systemInstruction = typeof systemInstruction === 'string'
