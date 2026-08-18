@@ -619,10 +619,15 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       // Check if user or context requested viewing / opening a file
+      const isExplicitViewCommand =
+        /^(can you\s+)?(show|open|pull up|fetch|view|display|let me see)\b/i.test(query.trim()) ||
+        /\b(pull it up|open it|show it|view it|let me view it|view this file|open this file|show this file|let me see it)\b/i.test(query.trim());
+
       const isViewIntent =
         isExplicitViewCommand ||
         /\b(open it|show it|pull it up|view it|let me view it|see it|open that|show that|bring it up|open the file|show the file|open document|show document)\b/i.test(query.trim()) ||
         /^(yes|yeah|sure|yep|ok|okay|please|go ahead|proceed)\b/i.test(query.trim());
+
 
       if (targetFile && targetFile.id && !targetFile.isAmbiguous && viewFiles.length === 0 && isViewIntent) {
         viewFiles.push({
