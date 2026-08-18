@@ -91,13 +91,31 @@ export function resetGlobalPhases(defaultPhases = []) {
   }
 }
 
+export const DEFAULT_SITE_SETUP_PROTOCOL = {
+  id: 'site_setup',
+  name: 'Site Setup & Lot Mobilization',
+  trade: 'Site Prep & Utilities',
+  icon: '🚩',
+  preTradeNotes: [
+    'Set temporary hose bibb with anti-siphon vacuum breaker on water meter line.',
+    'Erect permit board with visible Lot # and city building permit in clear weatherproof pouch.',
+    'Install erosion control barrier / silt fencing along lot boundaries to prevent dirt runoff.',
+    'Ensure port-a-potty / temporary toilet is delivered and visible at front of lot.',
+    'Verify city utility water meter is requested, set, and active prior to temp plumbing connections.'
+  ],
+  inspectionChecklist: [
+    { id: 'ss_water_meter', text: 'City Water Meter Set & Installed' },
+    { id: 'ss_vacuum_breaker', text: 'Temporary Hose Faucet with Vacuum Breaker (Backflow Preventer)' },
+    { id: 'ss_permit_board', text: 'Lot Number & City Building Permit Board Posted On-Site' },
+    { id: 'ss_erosion_control', text: 'Erosion Control Barrier / Silt Fencing' },
+    { id: 'ss_port_a_potty', text: 'Port-A-Potty / Temporary Toilet Delivered On-Site' }
+  ]
+};
+
 function getSiteSetupProtocol() {
-  const defaultProtocol = {
-    lotPrepList: [],
-    inspectionChecklist: []
-  };
-  return loadGlobalSiteSetupProtocol(defaultProtocol);
+  return loadGlobalSiteSetupProtocol(DEFAULT_SITE_SETUP_PROTOCOL);
 }
+
 
 export function loadStoredReminders() {
   try {
