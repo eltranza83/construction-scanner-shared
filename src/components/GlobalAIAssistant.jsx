@@ -135,24 +135,30 @@ export function formatMessageDisplay(text) {
   if (!text || typeof text !== 'string') return '';
   let clean = text;
 
-  // Convert raw ISO dates (YYYY-MM-DD) to friendly dates (e.g. August 1st, 2026)
+  // 1. Strip redundant duplicate parenthesized dates (e.g. "July 22, 2026 (2026-07-22)" -> "July 22, 2026")
+  clean = clean.replace(/\s*\(\d{4}-\d{2}-\d{2}\)/g, '');
+
+  // 2. Convert raw ISO dates (YYYY-MM-DD) to friendly dates (e.g. August 1, 2026)
   clean = clean.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_match, y, m, d) => {
     const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
     const mIdx = parseInt(m, 10) - 1;
     const dayNum = parseInt(d, 10);
     if (months[mIdx]) {
-      const suffix = (dayNum === 1 || dayNum === 21 || dayNum === 31) ? 'st' : (dayNum === 2 || dayNum === 22) ? 'nd' : (dayNum === 3 || dayNum === 23) ? 'rd' : 'th';
-      return `${months[mIdx]} ${dayNum}${suffix}, ${y}`;
+      return `${months[mIdx]} ${dayNum}, ${y}`;
     }
     return `${y}-${m}-${d}`;
   });
 
-  // Convert nested asterisks like "* **Label:**" or "* Label:" to clean bullet points "• Label:"
-  clean = clean.replace(/^\s*\*\s+\*\*([^*]+)\*\*/gm, '• **$1**');
-  clean = clean.replace(/^\s*\*\s+/gm, '• ');
+  // 3. Convert markdown bullet lists to clean bullet points
+  clean = clean.replace(/^\s*[*•-]\s+/gm, '• ');
+
+  // 4. Strip all markdown bold/italic asterisks completely (e.g. **Text** -> Text, *Text* -> Text)
+  clean = clean.replace(/\*{1,3}([^*]+)\*{1,3}/g, '$1');
+  clean = clean.replace(/\*/g, '');
 
   return clean;
 }
+
 
 
 
@@ -447,7 +453,10 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         clean = keptLines.join('. ');
       }
 
-      // Natural Spoken Date Formatter: replace 2026-08-01 with "August 1st, 2026"
+      // 1. Strip redundant duplicate parenthesized dates (e.g. "(2026-07-22)")
+      clean = clean.replace(/\s*\(\d{4}-\d{2}-\d{2}\)/g, '');
+
+      // 2. Natural Spoken Date Formatter: replace 2026-08-01 with "August 1st, 2026"
       clean = clean.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_match, y, m, d) => {
         const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
         const mIdx = parseInt(m, 10) - 1;
@@ -465,7 +474,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         .replace(/\b(?:Folder|File)\s+ID:\s*[`'"]?[a-zA-Z0-9_\-]+[`'"]?/gi, '')
         .replace(/\b[a-zA-Z0-9_\-]{24,}\b/g, '')
         .replace(/[*_#🚨⏰👷📍•`]/g, '')
-        .replace(/[\[\]]/g, '')
+        .replace(/[\[\]\(\)]/g, ' ')
         .replace(/\n+/g, '. ')
         .replace(/\.pdf\b/gi, '')
         .replace(/\.txt\b/gi, '')
@@ -473,6 +482,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         .replace(/[_\-]+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
+
 
 
 
