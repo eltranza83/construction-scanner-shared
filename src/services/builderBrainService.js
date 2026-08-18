@@ -116,6 +116,23 @@ function getSiteSetupProtocol() {
   return loadGlobalSiteSetupProtocol(DEFAULT_SITE_SETUP_PROTOCOL);
 }
 
+export function formatNaturalDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return dateStr || 'N/A';
+  const match = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (match) {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const month = parseInt(match[2], 10) - 1;
+    const day = parseInt(match[3], 10);
+    const year = match[1];
+    if (months[month]) {
+      const suffix = (day === 1 || day === 21 || day === 31) ? 'st' : (day === 2 || day === 22) ? 'nd' : (day === 3 || day === 23) ? 'rd' : 'th';
+      return `${months[month]} ${day}${suffix}, ${year}`;
+    }
+  }
+  return dateStr;
+}
+
+
 
 export function loadStoredReminders() {
   try {
@@ -227,7 +244,8 @@ function buildGroundingSystemInstruction(context) {
       const quote = s.originalQuote || s.quote || '$0.00';
       const paid = s.totalSpent || s.totalPaid || '$0.00';
       const bal = s.remainingBalance || '$0.00';
-      const payments = (s.payments || []).map(p => `    - Payment: ${p.amount || p.laborCost || p.materialCost || '$0.00'} to ${p.vendor || payee} on ${p.date || 'N/A'} (Check #${p.checkNumber || 'N/A'}${p.description ? `, ${p.description}` : ''})`).join('\n');
+      const payments = (s.payments || []).map(p => `    - Payment: ${p.amount || p.laborCost || p.materialCost || '$0.00'} to ${p.vendor || payee} on ${formatNaturalDate(p.date)} (Check #${p.checkNumber || 'N/A'}${p.description ? `, ${p.description}` : ''})`).join('\n');
+
       return `* Phase: "${name}" | Payee: "${payee}" | Quote: ${quote} | Paid: ${paid} | Remaining Balance: ${bal}${payments ? '\n' + payments : ''}`;
     }).join('\n');
   }
@@ -353,9 +371,12 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
      * "Google Drive Index" (for folder names, uploaded files, file metadata)
      * "Extracted Document Text" (when document contents are explicitly provided in prompt)
 
-4. CLEAN FOLDER & FILE NAMES (NO RAW IDS IN RESPONSES):
+4. CLEAN FORMATTING & NATURAL DATES (NO RAW ASTERISKS / NO RAW IDS):
+   - Use clean, simple lists (e.g. "1. Total Quote: $15,000" or "• Total Quote: $15,000") without double asterisks or nested asterisk bullets like `* **Quote:**`.
+   - Always output dates in natural conversational English (e.g. "August 1st, 2026") or Spanish (e.g. "1 de agosto de 2026"). NEVER output raw numeric dates like "2026-08-01".
    - When listing folders or files from Google Drive, output ONLY clean human-readable names (e.g. "Closing Settlement", "X-Ray Photos", "Processed Invoices", "Invoice Uploads").
    - NEVER output raw Google Drive Folder IDs or File IDs (e.g. '1-_2MHhajXEKLDsIADlzkOnf1167DMYN_') in your conversational text responses.
+
 
 5. OPENING DOCUMENTS & PRONOUN CONFIRMATIONS:
    - When the user asks to see, open, pull up, or show a document or receipt, or says 'open it', 'yeah go ahead', 'show it to me', 'pull it up':

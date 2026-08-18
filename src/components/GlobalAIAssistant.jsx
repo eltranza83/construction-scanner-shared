@@ -131,6 +131,30 @@ const findReferencedDriveFile = (query, driveTree, messages = []) => {
   return null;
 };
 
+export function formatMessageDisplay(text) {
+  if (!text || typeof text !== 'string') return '';
+  let clean = text;
+
+  // Convert raw ISO dates (YYYY-MM-DD) to friendly dates (e.g. August 1st, 2026)
+  clean = clean.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_match, y, m, d) => {
+    const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const mIdx = parseInt(m, 10) - 1;
+    const dayNum = parseInt(d, 10);
+    if (months[mIdx]) {
+      const suffix = (dayNum === 1 || dayNum === 21 || dayNum === 31) ? 'st' : (dayNum === 2 || dayNum === 22) ? 'nd' : (dayNum === 3 || dayNum === 23) ? 'rd' : 'th';
+      return `${months[mIdx]} ${dayNum}${suffix}, ${y}`;
+    }
+    return `${y}-${m}-${d}`;
+  });
+
+  // Convert nested asterisks like "* **Label:**" or "* Label:" to clean bullet points "• Label:"
+  clean = clean.replace(/^\s*\*\s+\*\*([^*]+)\*\*/gm, '• **$1**');
+  clean = clean.replace(/^\s*\*\s+/gm, '• ');
+
+  return clean;
+}
+
+
 
 export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
@@ -423,6 +447,18 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         clean = keptLines.join('. ');
       }
 
+      // Natural Spoken Date Formatter: replace 2026-08-01 with "August 1st, 2026"
+      clean = clean.replace(/\b(\d{4})-(\d{2})-(\d{2})\b/g, (_match, y, m, d) => {
+        const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+        const mIdx = parseInt(m, 10) - 1;
+        const dayNum = parseInt(d, 10);
+        if (months[mIdx]) {
+          const suffix = (dayNum === 1 || dayNum === 21 || dayNum === 31) ? 'st' : (dayNum === 2 || dayNum === 22) ? 'nd' : (dayNum === 3 || dayNum === 23) ? 'rd' : 'th';
+          return `${months[mIdx]} ${dayNum}${suffix}, ${y}`;
+        }
+        return `${y} ${m} ${d}`;
+      });
+
       clean = clean
         .replace(/\(Folder ID:[^\)]+\)/gi, '')
         .replace(/\(File ID:[^\)]+\)/gi, '')
@@ -437,6 +473,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         .replace(/[_\-]+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
+
 
 
       const utterance = new SpeechSynthesisUtterance(clean);
@@ -1200,7 +1237,8 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                         boxShadow: '0 2px 4px rgba(0, 0, 0, 0.2)'
                       }}
                     >
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
+                      <div style={{ whiteSpace: 'pre-wrap' }}>{isUser ? m.text : formatMessageDisplay(m.text)}</div>
+
 
                       {/* Developer Diagnostics Telemetry Panel */}
                       {devMode && m.telemetry && (
