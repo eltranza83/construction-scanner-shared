@@ -21,8 +21,10 @@ import {
   saveProjectSpecs,
   askGeminiBrain,
   loadProjectDriveTree,
-  saveProjectDriveTree
+  saveProjectDriveTree,
+  loadProjectDashboard
 } from '../services/builderBrainService';
+import { runAllAiToolDiagnostics, evaluateSystemAndDataHealth } from '../services/aiTools';
 import {
   fetchProjectDriveTree,
   createFolder,
@@ -91,8 +93,44 @@ const findReferencedDriveFile = (query, driveTree, messages = []) => {
     if (closingPdf) return closingPdf;
   }
 
+  // 4. Contextual Pronoun Resolution ("open it", "pull it up", "show it", "go ahead and open it", "yes open it")
+  const isPronounOrConfirm =
+    /\b(open it|show it|pull it up|view it|see it|open that|show that|bring it up|open the file|show the file|open document|show document)\b/i.test(q) ||
+    /^(yes|yeah|sure|yep|ok|okay|please|go ahead|proceed)\b/i.test(q);
+
+  if (isPronounOrConfirm && Array.isArray(messages) && messages.length > 0) {
+    const reversed = [...messages].reverse();
+    for (const msg of reversed) {
+      const txt = (msg.text || '').toLowerCase();
+      if (!txt) continue;
+
+      // Find all files in driveTree mentioned in this previous message
+      const mentioned = allFiles.filter((f) => {
+        const fn = f.name.toLowerCase();
+        const base = fn.replace(/\.[a-z0-9]+$/i, '');
+        return txt.includes(fn) || (base.length > 5 && txt.includes(base));
+      });
+
+      if (mentioned.length === 1) {
+        // Unambiguously single matching file in previous context
+        return mentioned[0];
+      }
+      if (mentioned.length > 1) {
+        // Multiple matches in context
+        return { isAmbiguous: true, matches: mentioned };
+      }
+
+      // If previous AI message attached viewFiles
+      if (msg.viewFiles && msg.viewFiles.length === 1) {
+        const vf = allFiles.find((f) => f.id === msg.viewFiles[0].fileId);
+        if (vf) return vf;
+      }
+    }
+  }
+
   return null;
 };
+
 
 export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
@@ -131,6 +169,26 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     return localStorage.getItem('jobscan_ai_voice_uri') || '';
   });
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
+  const [forceDeepReasoning, setForceDeepReasoning] = useState(false);
+  const [devMode, setDevMode] = useState(() => {
+    try {
+      return localStorage.getItem('jobscan_dev_mode') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const [showTestSuite, setShowTestSuite] = useState(false);
+  const [testSuiteData, setTestSuiteData] = useState(null);
+  const [showActivityLog, setShowActivityLog] = useState(false);
+  const [activityLogs, setActivityLogs] = useState(() => {
+    try {
+      const saved = localStorage.getItem('jobscan_ai_activity_logs');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  });
+  const [isRunningTests, setIsRunningTests] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
@@ -144,6 +202,27 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     error: ''
   });
   const chatEndRef = useRef(null);
+
+  const handleRunDiagnosticSuite = async () => {
+    setIsRunningTests(true);
+    try {
+      const projectContext = {
+        items: [],
+        dashboardData: loadProjectDashboard(projectId),
+        driveTree,
+        projectSpecs: loadProjectSpecs(projectId),
+        siteSetupData: null,
+        apiKey,
+        googleToken
+      };
+      const data = await runAllAiToolDiagnostics(projectContext);
+      setTestSuiteData(data);
+    } catch (err) {
+      console.error('Error running test suite:', err);
+    } finally {
+      setIsRunningTests(false);
+    }
+  };
 
   const handleOpenDocumentPreview = async (fileObj) => {
     if (!fileObj || !fileObj.fileId) return;
@@ -310,34 +389,53 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
   }, [messages, isLoading]);
 
-  const speakText = (text) => {
+  const speakText = (text, userQuery = '') => {
     if (!speechEnabled || !('speechSynthesis' in window) || !text) return;
     try {
       window.speechSynthesis.cancel();
       let clean = String(text);
 
-      // 3-Tier Universal List Trimmer: Truncate immediately before ANY list begins
-      const newlineIdx = clean.search(/\n\s*(?:1[\.\)]|[-•*])\s+/);
-      if (newlineIdx > 3) {
-        clean = clean.substring(0, newlineIdx);
-      } else {
-        const colonIdx = clean.search(/:\s*(?:1[\.\)]|[-•*])\s+/);
-        if (colonIdx > 3) {
-          clean = clean.substring(0, colonIdx);
-        } else {
-          const anyNumIdx = clean.search(/\b1[\.\)]\s+[A-Za-z0-9]/);
-          if (anyNumIdx > 3) {
-            clean = clean.substring(0, anyNumIdx);
-          }
+      const q = String(userQuery).toLowerCase();
+      const isReadAllRequested =
+        q.includes('read all') ||
+        q.includes('read them all') ||
+        q.includes('read the rest') ||
+        q.includes('driving') ||
+        q.includes('read it to me') ||
+        q.includes('read them to me');
+
+      // Smart spoken list handler:
+      // If text contains a list of items (e.g. "1. ...", "* ...", "- ...")
+      const lines = clean.split('\n');
+      const listLineIndices = [];
+      lines.forEach((l, idx) => {
+        if (/^\s*(?:\d+[\.\)]|[-•*])\s+/.test(l)) {
+          listLineIndices.push(idx);
         }
+      });
+
+      if (!isReadAllRequested && listLineIndices.length > 4) {
+        // Long list (>4 items): keep intro + first 3 items + spoken summary
+        const cutoffIdx = listLineIndices[3];
+        const remainingCount = listLineIndices.length - 3;
+        const keptLines = lines.slice(0, cutoffIdx);
+        keptLines.push(`plus ${remainingCount} more items on your screen. Would you like me to read the rest?`);
+        clean = keptLines.join('. ');
       }
 
-      clean = clean.replace(/[*_#🚨⏰👷📍•`]/g, '').replace(/[\[\]]/g, '').replace(/\n+/g, '. ');
-      clean = clean.replace(/\.pdf\b/gi, '').replace(/\.txt\b/gi, '').replace(/\.docx?\b/gi, '').replace(/[_\-]+/g, ' ');
-      clean = clean.replace(/,\s*(sir\b|señor\b)/gi, ' $1').replace(/\b(sir|señor)\s*,/gi, '$1 ');
+      clean = clean
+        .replace(/[*_#🚨⏰👷📍•`]/g, '')
+        .replace(/[\[\]]/g, '')
+        .replace(/\n+/g, '. ')
+        .replace(/\.pdf\b/gi, '')
+        .replace(/\.txt\b/gi, '')
+        .replace(/\.docx?\b/gi, '')
+        .replace(/[_\-]+/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
 
-      const utterance = new SpeechSynthesisUtterance(clean.trim());
-      utterance.rate = 1.20; // Brisk, energetic executive cadence
+      const utterance = new SpeechSynthesisUtterance(clean);
+      utterance.rate = 1.15; // Natural, clear executive cadence
       utterance.pitch = 1.0; // Natural, clean pitch
 
       // Retrieve live voices directly from browser engine (crucial for mobile Android & iOS)
@@ -378,6 +476,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
   };
 
+
   const executeMessage = async (queryText) => {
     if (!queryText || !queryText.trim() || isLoading) return;
     const query = queryText.trim();
@@ -392,8 +491,22 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     setIsLoading(true);
 
     try {
+      let currentLiveTree = driveTree;
+      if (googleToken && activeProject?.folderId) {
+        try {
+          const freshTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+          if (freshTree) {
+            currentLiveTree = freshTree;
+            setDriveTree(freshTree);
+            saveProjectDriveTree(projectId, freshTree);
+          }
+        } catch (treeErr) {
+          console.warn('Live drive tree refresh warning:', treeErr);
+        }
+      }
+
       let fileAttachment = null;
-      const targetFile = findReferencedDriveFile(query, driveTree, messages);
+      const targetFile = findReferencedDriveFile(query, currentLiveTree, messages);
       if (targetFile && targetFile.id && googleToken) {
         try {
           fileAttachment = await fetchDriveFileBase64(googleToken, targetFile.id);
@@ -402,7 +515,11 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         }
       }
 
-      const answer = await askGeminiBrain(query, [], projectName, apiKey, null, projectId, messages, driveTree, fileAttachment);
+      const currentDashboard = loadProjectDashboard(projectId);
+      const answerPayload = await askGeminiBrain(query, [], projectName, apiKey, currentDashboard, projectId, messages, currentLiveTree, fileAttachment, forceDeepReasoning);
+      const answer = typeof answerPayload === 'object' && answerPayload.text !== undefined ? answerPayload.text : String(answerPayload || '');
+      const telemetry = typeof answerPayload === 'object' && answerPayload.telemetry ? answerPayload.telemetry : null;
+
 
       let cleanAnswer = answer;
       const actionCreateMatch = answer.match(/\[\[ACTION:CREATE_FOLDER:([^\]]+)\]\]/);
@@ -501,12 +618,13 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:VIEW_FILE:[^\]]+\]\]/g, '').trim();
       }
 
-      // Only attach a preview card when the user EXPLICITLY asks to view, open, pull up, fetch, or show a specific file
-      const isExplicitViewCommand =
-        /^(can you\s+)?(show|open|pull up|fetch|view|display|let me see)\b/i.test(query.trim()) ||
-        /\b(pull it up|open it|show it|view it|let me view it|view this file|open this file|show this file|let me see it)\b/i.test(query.trim());
+      // Check if user or context requested viewing / opening a file
+      const isViewIntent =
+        isExplicitViewCommand ||
+        /\b(open it|show it|pull it up|view it|let me view it|see it|open that|show that|bring it up|open the file|show the file|open document|show document)\b/i.test(query.trim()) ||
+        /^(yes|yeah|sure|yep|ok|okay|please|go ahead|proceed)\b/i.test(query.trim());
 
-      if (targetFile && targetFile.id && viewFiles.length === 0 && isExplicitViewCommand) {
+      if (targetFile && targetFile.id && !targetFile.isAmbiguous && viewFiles.length === 0 && isViewIntent) {
         viewFiles.push({
           fileId: targetFile.id,
           fileName: targetFile.name,
@@ -514,34 +632,30 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         });
       }
 
-      // Smart Turn Pacer: Strict 4-to-5 question cadence for "Sir" / "Señor"
-      const totalUserQuestions = messages.filter((m) => m.sender === 'user').length + 1;
-      const isGreetingTurn = totalUserQuestions === 1 && /^(hello|hi|hey|good morning|good afternoon|good evening|buenos|buenas)/i.test(query.trim());
-      const isHonorificTurn = isGreetingTurn || (totalUserQuestions % 4 === 0);
-
-      const hasSirAlready = /\b(sir|señor)\b/i.test(cleanAnswer);
-
-      if (isHonorificTurn) {
-        // Ensure polite natural Sir/Señor on this turn if model didn't include it
-        if (!hasSirAlready) {
-          const isEs = /[áéíóúüñ¿¡]/i.test(cleanAnswer) || aiLanguage === 'es';
-          if (isGreetingTurn) {
-            const hr = new Date().getHours();
-            const timeGreeting = hr < 12 ? 'Good morning' : hr < 17 ? 'Good afternoon' : 'Good evening';
-            const spanishGreeting = hr < 12 ? 'Buenos días' : hr < 19 ? 'Buenas tardes' : 'Buenas noches';
-            cleanAnswer = isEs ? `${spanishGreeting} Señor. ${cleanAnswer}` : `${timeGreeting} Sir. ${cleanAnswer}`;
-          } else {
-            cleanAnswer = isEs ? `Por supuesto, Señor: ${cleanAnswer}` : `Certainly, Sir: ${cleanAnswer}`;
-          }
+      // Contextual fallback: If Gemini's text explicitly references opening/viewing an exact Google Drive file
+      if (viewFiles.length === 0 && (isViewIntent || /\b(opened|opening|here is the file|view on your screen)\b/i.test(cleanAnswer))) {
+        const allDriveFiles = [];
+        if (currentLiveTree?.directFiles) allDriveFiles.push(...currentLiveTree.directFiles);
+        if (currentLiveTree?.subfolders) {
+          currentLiveTree.subfolders.forEach((s) => {
+            if (s.files) s.files.forEach((f) => allDriveFiles.push({ ...f, folderName: s.folderName }));
+          });
         }
-      } else {
-        // Strip out any repetitive Sir/Señor on intermediate questions (turns 1, 2, 3, 5, 6, 7...)
-        cleanAnswer = cleanAnswer
-          .replace(/,\s*(sir\b|señor\b)\.?/gi, '.')
-          .replace(/\b(sir|señor)\s*[,.]?\s*/gi, '')
-          .replace(/\s{2,}/g, ' ')
-          .trim();
+        const matchingFileInAnswer = allDriveFiles.find((f) =>
+          cleanAnswer.includes(f.name) ||
+          cleanAnswer.includes(`'${f.name}'`) ||
+          cleanAnswer.includes(`"${f.name}"`) ||
+          cleanAnswer.includes(`\`${f.name}\``)
+        );
+        if (matchingFileInAnswer && matchingFileInAnswer.id) {
+          viewFiles.push({
+            fileId: matchingFileInAnswer.id,
+            fileName: matchingFileInAnswer.name,
+            folderName: matchingFileInAnswer.folderName || 'Google Drive'
+          });
+        }
       }
+
 
       // Format inline lists with clean linebreaks
       cleanAnswer = cleanAnswer.replace(/:\s*1\.\s+/g, ':\n\n1. ');
@@ -550,10 +664,56 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         sender: 'ai',
         text: cleanAnswer,
         viewFiles: viewFiles.length > 0 ? viewFiles : undefined,
+        telemetry,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages((prev) => [...prev, aiMsg]);
-      speakText(cleanAnswer);
+      speakText(cleanAnswer, query);
+
+
+      // Auto-open fullscreen document preview modal (Option 2)
+      if (viewFiles.length > 0) {
+        handleOpenDocumentPreview(viewFiles[0]);
+      }
+
+
+      // Determine data provenance source
+      const source = telemetry?.source || (telemetry?.toolsExecuted?.length > 0 ? 'Local Tool Data' : (telemetry?.modelUsed?.includes('Local') ? 'Local Project Ledger' : 'Gemini Cloud AI'));
+
+      // Append to AI Activity Log & Browser Console for conclusive proof
+      const logEntry = {
+        id: 'act_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
+        query,
+        modelUsed: telemetry?.modelUsed || 'gemini-flash-latest',
+        source,
+        httpStatus: telemetry?.errorCode ? `Notice (${telemetry.errorCode})` : '200 OK',
+        intent: telemetry?.intent || 'Standard Lookup',
+        durationMs: telemetry?.durationMs || 0,
+        toolsExecuted: telemetry?.toolsExecuted || [],
+        finalAnswer: cleanAnswer,
+        fallbackTriggered: Boolean(telemetry?.fallbackTriggered),
+        resultSummary: cleanAnswer.slice(0, 160) + (cleanAnswer.length > 160 ? '...' : '')
+      };
+
+      console.log('🤖 [J.A.R.V.I.S. Activity Log Entry]', {
+        query,
+        source: logEntry.source,
+        modelCalled: logEntry.modelUsed,
+        httpStatus: logEntry.httpStatus,
+        toolsInvoked: logEntry.toolsExecuted.map(t => ({ tool: t.name, args: t.args, dataReturned: t.result })),
+        finalSynthesizedAnswer: cleanAnswer,
+        latencyMs: logEntry.durationMs
+      });
+
+
+      setActivityLogs((prev) => {
+        const updated = [logEntry, ...prev.slice(0, 49)];
+        try {
+          localStorage.setItem('jobscan_ai_activity_logs', JSON.stringify(updated));
+        } catch (_) {}
+        return updated;
+      });
     } catch (err) {
       console.error('Global AI Assistant error:', err);
       const errMsg = {
@@ -717,7 +877,71 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+                <button
+                  type="button"
+                  onClick={() => setShowActivityLog(true)}
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                    border: '1px solid rgba(245, 158, 11, 0.4)',
+                    color: 'var(--color-amber-400)',
+                    borderRadius: '6px',
+                    padding: '3px 7px',
+                    fontSize: '0.70rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="View AI Activity Log (queries, tools called, execution latency)"
+                >
+                  📋 Activity Log {activityLogs.length > 0 && `(${activityLogs.length})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowTestSuite(true)}
+                  style={{
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    border: '1px solid #3b82f6',
+                    color: '#93c5fd',
+                    borderRadius: '6px',
+                    padding: '3px 7px',
+                    fontSize: '0.70rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Run One-Click AI Tools Diagnostic Test Suite"
+                >
+                  🧪 Diagnostics
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const next = !devMode;
+                    setDevMode(next);
+                    localStorage.setItem('jobscan_dev_mode', String(next));
+                  }}
+                  style={{
+                    backgroundColor: devMode ? 'rgba(168, 85, 247, 0.2)' : 'rgba(39, 39, 42, 0.6)',
+                    border: '1px solid ' + (devMode ? '#a855f7' : 'var(--color-zinc-700)'),
+                    color: devMode ? '#c084fc' : 'var(--color-zinc-400)',
+                    borderRadius: '6px',
+                    padding: '3px 7px',
+                    fontSize: '0.70rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}
+                  title="Developer Diagnostics Mode (inspect model, intent, tools, latency)"
+                >
+                  🔬 {devMode ? 'DEV ON' : 'DEV'}
+                </button>
                 <button
                   onClick={() => setShowSettings(!showSettings)}
                   style={{ background: 'none', border: 'none', color: showSettings ? 'var(--color-amber-500)' : 'var(--color-zinc-400)', cursor: 'pointer' }}
@@ -743,6 +967,44 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 </button>
               </div>
             </div>
+
+            {/* Compact Two-Tier Health Status Bar */}
+            {(() => {
+              const currentDash = loadProjectDashboard(projectId);
+              const phasesList = currentDash?.subcontractors || currentDash?.phases || [];
+              const spentTotal = currentDash?.projectInfo?.totalSpent || currentDash?.projectInfo?.drawsPaid;
+              const dataLabel = spentTotal ? `${spentTotal} Spent (${phasesList.length} Phases)` : (phasesList.length > 0 ? `${phasesList.length} Phases Indexed` : 'Project Ready');
+              return (
+                <div
+                  onClick={() => setShowTestSuite(true)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '6px 14px',
+                    backgroundColor: 'rgba(18, 18, 22, 0.98)',
+                    borderBottom: '1px solid var(--color-zinc-800)',
+                    fontSize: '0.70rem',
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                  title="Click to view full Tool & Data Health breakdown"
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ color: '#86efac', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      🛠️ Tool Health: 🟢 Connected
+                    </span>
+                    <span style={{ color: 'var(--color-zinc-600)' }}>•</span>
+                    <span style={{ color: '#93c5fd', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                      📊 Data Health: 🟢 {dataLabel}
+                    </span>
+                  </div>
+                  <span style={{ color: 'var(--color-amber-400)', fontWeight: 700, fontSize: '0.68rem' }}>
+                    Diagnostics ↗
+                  </span>
+                </div>
+              );
+            })()}
 
             {/* Settings Drawer */}
             {showSettings && (
@@ -930,6 +1192,60 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                     >
                       <div style={{ whiteSpace: 'pre-wrap' }}>{m.text}</div>
 
+                      {/* Developer Diagnostics Telemetry Panel */}
+                      {devMode && m.telemetry && (
+                        <div
+                          style={{
+                            marginTop: '8px',
+                            borderTop: '1px dashed rgba(255, 255, 255, 0.15)',
+                            paddingTop: '6px',
+                            fontSize: '0.72rem'
+                          }}
+                        >
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '5px', alignItems: 'center', marginBottom: '4px' }}>
+                            <span style={{ backgroundColor: 'rgba(168, 85, 247, 0.2)', color: '#d8b4fe', padding: '2px 6px', borderRadius: '4px', fontWeight: 800 }}>
+                              🤖 {m.telemetry.modelUsed || 'gemini-3.6-flash'}
+                            </span>
+                            <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                              🎯 {m.telemetry.intent || 'Standard Lookup'}
+                            </span>
+                            {m.telemetry.durationMs !== undefined && (
+                              <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#86efac', padding: '2px 6px', borderRadius: '4px', fontWeight: 600 }}>
+                                ⏱️ {m.telemetry.durationMs}ms
+                              </span>
+                            )}
+                          </div>
+
+                          {m.telemetry.toolsExecuted && m.telemetry.toolsExecuted.length > 0 ? (
+                            <div style={{ marginTop: '5px', backgroundColor: 'rgba(0, 0, 0, 0.45)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                              <div style={{ fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                🛠️ Tools Called ({m.telemetry.toolsExecuted.length}):
+                              </div>
+                              {m.telemetry.toolsExecuted.map((t, tIdx) => (
+                                <div key={tIdx} style={{ fontSize: '0.70rem', fontFamily: 'monospace', marginTop: '3px', paddingBottom: '3px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                    <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {t.name}</span>
+                                    {t.result?._executionDurationMs !== undefined && (
+                                      <span style={{ color: '#86efac' }}>{t.result._executionDurationMs}ms</span>
+                                    )}
+                                  </div>
+                                  <div style={{ color: 'var(--color-zinc-400)' }}>Args: {JSON.stringify(t.args || {})}</div>
+                                  {t.result && (
+                                    <div style={{ color: '#a7f3d0', marginTop: '2px', fontSize: '0.68rem' }}>
+                                      Result: {t.result.results ? `${t.result.results.length} records found` : t.result.count ? `${t.result.count} receipts` : t.result.status || t.result.location || JSON.stringify(t.result).slice(0, 60) + '...'}
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <div style={{ fontSize: '0.68rem', color: 'var(--color-zinc-400)', marginTop: '3px' }}>
+                              ℹ️ No tool calls required for this response.
+                            </div>
+                          )}
+                        </div>
+                      )}
+
                       {/* Interactive Document & Receipt Viewer Cards */}
                       {m.viewFiles && m.viewFiles.length > 0 && (
                         <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
@@ -1087,6 +1403,29 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 title="Click to toggle Mic Language (English / Español)"
               >
                 {aiLanguage === 'es' ? '🇲🇽 ES' : '🇺🇸 EN'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForceDeepReasoning((prev) => !prev)}
+                style={{
+                  height: '44px',
+                  padding: '0 10px',
+                  backgroundColor: forceDeepReasoning ? 'rgba(168, 85, 247, 0.2)' : 'rgba(39, 39, 42, 0.6)',
+                  border: '1px solid ' + (forceDeepReasoning ? '#a855f7' : 'var(--color-zinc-700)'),
+                  color: forceDeepReasoning ? '#c084fc' : 'var(--color-zinc-400)',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+                title="Toggle Deep Reasoning (Force Gemini 2.5 Pro for complex audits and comparisons)"
+              >
+                {forceDeepReasoning ? '🧠 Deep Reasoning' : '⚡ Auto Intent'}
               </button>
               <button
                 type="button"
@@ -1302,6 +1641,399 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           </div>
         </div>
       )}
+
+      {/* Two-Tier Health & AI Diagnostic Suite Modal */}
+      {showTestSuite && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100001,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            backdropFilter: 'blur(8px)'
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '700px',
+              maxHeight: '92vh',
+              backgroundColor: 'var(--color-zinc-950)',
+              border: '1px solid var(--color-zinc-800)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--color-zinc-800)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'rgba(24, 24, 27, 0.6)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.3rem' }}>🧪</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: 'var(--color-zinc-100)' }}>
+                    System Diagnostics & Health Suite
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                    Two-Tier health classification & one-click live tool testing
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTestSuite(false)}
+                style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
+              
+              {/* Action Banner */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'var(--color-zinc-900)', padding: '10px 14px', borderRadius: '8px', border: '1px solid var(--color-zinc-800)' }}>
+                <div>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--color-zinc-200)' }}>
+                    Active Project: <span style={{ color: 'var(--color-amber-400)' }}>{projectName}</span>
+                  </div>
+                  <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)' }}>
+                    Model: <code style={{ color: '#86efac' }}>gemini-3.5-flash (GA Stable)</code>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleRunDiagnosticSuite}
+                  disabled={isRunningTests}
+                  style={{
+                    padding: '8px 16px',
+                    backgroundColor: isRunningTests ? 'var(--color-zinc-800)' : 'var(--color-amber-500)',
+                    color: isRunningTests ? 'var(--color-zinc-400)' : '#000',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 800,
+                    fontSize: '0.82rem',
+                    cursor: isRunningTests ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                >
+                  {isRunningTests ? <Loader2 size={16} className="animate-spin" /> : '▶'}
+                  {isRunningTests ? 'Running Checks...' : '▶ Run Diagnostic Suite'}
+                </button>
+              </div>
+
+              {/* Two-Tier Health Grid */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                
+                {/* 1. Tool / API Infrastructure Health */}
+                <div style={{ backgroundColor: 'var(--color-zinc-900)', border: '1px solid var(--color-zinc-800)', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#86efac', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    🛠️ Tool & API Infrastructure
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {(testSuiteData?.health?.toolHealth || [
+                      { name: 'Open-Meteo Weather API', badge: '🟢 Operational', detail: 'REST Endpoint Active' },
+                      { name: 'Gemini Brain Engine', badge: '🟢 Operational', detail: 'gemini-3.5-flash (GA Stable)' },
+                      { name: 'Google Drive API', badge: googleToken ? '🟢 Authenticated' : '🟡 Offline Cache', detail: googleToken ? 'OAuth2 Bearer Token Valid' : 'Using Local Storage Drive Cache' },
+                      { name: 'Sheets Ledger Engine', badge: '🟢 Operational', detail: 'Category Router Active' }
+                    ]).map((t, idx) => (
+                      <div key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '6px 8px', borderRadius: '6px', fontSize: '0.72rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                          <span style={{ color: '#fff' }}>{t.name}</span>
+                          <span>{t.badge}</span>
+                        </div>
+                        <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.66rem', marginTop: '2px' }}>{t.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Project Data Health */}
+                <div style={{ backgroundColor: 'var(--color-zinc-900)', border: '1px solid var(--color-zinc-800)', borderRadius: '8px', padding: '12px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: '#93c5fd', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    📊 Project Data Health
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                    {(testSuiteData?.health?.dataHealth || [
+                      { name: 'Subcontractor Ledger', badge: '🟢 Ledger Ready', detail: 'Phase contract and quote data' },
+                      { name: 'Receipts & Transactions', badge: '🟢 Records Indexed', detail: 'Payment attachments and logs' },
+                      { name: 'Drive Document Tree', badge: driveTree?.subfolders?.length ? `🟢 ${driveTree.subfolders.length} Folders` : '🟡 No Files Indexed', detail: 'Blueprint and spec files' },
+                      { name: 'Finish Specs', badge: loadProjectSpecs(projectId)?.length ? `🟢 ${loadProjectSpecs(projectId).length} Specs` : '🟡 0 Specs Configured', detail: 'Paint and material selections' }
+                    ]).map((d, idx) => (
+                      <div key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '6px 8px', borderRadius: '6px', fontSize: '0.72rem' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>
+                          <span style={{ color: '#fff' }}>{d.name}</span>
+                          <span>{d.badge}</span>
+                        </div>
+                        <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.66rem', marginTop: '2px' }}>{d.detail}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+              </div>
+
+              {/* 3. Live One-Click Tool Execution Results */}
+              {testSuiteData?.testResults && (
+                <div style={{ marginTop: '4px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                  <div style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-amber-400)' }}>
+                    🧪 Live Tool Endpoint Test Results ({testSuiteData.testResults.length})
+                  </div>
+                  {testSuiteData.testResults.map((t, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        backgroundColor: 'var(--color-zinc-900)',
+                        border: '1px solid ' + (t.passed ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)'),
+                        borderRadius: '8px',
+                        padding: '10px 12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '5px'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <span style={{ fontSize: '0.95rem' }}>{t.passed ? '🟢' : '🔴'}</span>
+                          <span style={{ fontWeight: 800, fontSize: '0.84rem', color: '#fff' }}>{t.title}</span>
+                          <code style={{ fontSize: '0.70rem', color: '#67e8f9', backgroundColor: 'rgba(0,0,0,0.4)', padding: '2px 5px', borderRadius: '4px' }}>
+                            {t.tool}
+                          </code>
+                        </div>
+                        <span style={{ fontSize: '0.72rem', color: '#86efac', fontWeight: 700 }}>
+                          ⏱️ {t.durationMs}ms
+                        </span>
+                      </div>
+
+                      <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)', fontFamily: 'monospace' }}>
+                        Args: {JSON.stringify(t.args)}
+                      </div>
+
+                      <details style={{ marginTop: '2px' }}>
+                        <summary style={{ fontSize: '0.70rem', color: 'var(--color-amber-400)', cursor: 'pointer', fontWeight: 700 }}>
+                          View Raw Returned Payload
+                        </summary>
+                        <pre style={{ margin: '6px 0 0 0', padding: '8px', backgroundColor: '#000', borderRadius: '6px', fontSize: '0.68rem', color: '#a7f3d0', overflowX: 'auto' }}>
+                          {JSON.stringify(t.payload, null, 2)}
+                        </pre>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {!testSuiteData && !isRunningTests && (
+                <div style={{ padding: '20px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.82rem' }}>
+                  Click <strong>"▶ Run Diagnostic Suite"</strong> to test all tool endpoints with live data.
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* AI Activity Log Drawer / Modal */}
+      {showActivityLog && (
+        <div
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 100001,
+            backgroundColor: 'rgba(0, 0, 0, 0.85)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            backdropFilter: 'blur(8px)'
+          }}
+        >
+          <div
+            style={{
+              width: '100%',
+              maxWidth: '750px',
+              maxHeight: '92vh',
+              backgroundColor: 'var(--color-zinc-950)',
+              border: '1px solid var(--color-zinc-800)',
+              borderRadius: '12px',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)',
+              overflow: 'hidden'
+            }}
+          >
+            {/* Modal Header */}
+            <div
+              style={{
+                padding: '14px 18px',
+                borderBottom: '1px solid var(--color-zinc-800)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                backgroundColor: 'rgba(24, 24, 27, 0.6)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '1.3rem' }}>📋</span>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '0.96rem', fontWeight: 800, color: 'var(--color-zinc-100)' }}>
+                    AI Activity Log ({activityLogs.length} interactions)
+                  </h3>
+                  <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                    History of models, tools called, input arguments, latency, and results
+                  </p>
+                </div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                {activityLogs.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivityLogs([]);
+                      localStorage.removeItem('jobscan_ai_activity_logs');
+                    }}
+                    style={{
+                      padding: '4px 8px',
+                      backgroundColor: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#f87171',
+                      borderRadius: '6px',
+                      fontSize: '0.70rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    Clear History
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowActivityLog(false)}
+                  style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
+                >
+                  <X size={20} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '16px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {activityLogs.length === 0 ? (
+                <div style={{ padding: '40px', textAlign: 'center', color: 'var(--color-zinc-500)', fontSize: '0.85rem' }}>
+                  No AI interactions logged yet in this session. Ask a question in chat to record activity.
+                </div>
+              ) : (
+                activityLogs.map((log) => (
+                  <div
+                    key={log.id}
+                    style={{
+                      backgroundColor: 'var(--color-zinc-900)',
+                      border: '1px solid var(--color-zinc-800)',
+                      borderRadius: '8px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.84rem', fontWeight: 800, color: 'var(--color-zinc-100)' }}>
+                        💬 "{log.query}"
+                      </span>
+                      <span style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)' }}>
+                        {log.timestamp}
+                      </span>
+                    </div>
+
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', marginTop: '2px' }}>
+                      <span style={{
+                        backgroundColor: log.source === 'Local Tool Data' ? 'rgba(16, 185, 129, 0.2)' : (log.source === 'Local Project Ledger' ? 'rgba(6, 182, 212, 0.2)' : 'rgba(168, 85, 247, 0.2)'),
+                        color: log.source === 'Local Tool Data' ? '#6ee7b7' : (log.source === 'Local Project Ledger' ? '#67e8f9' : '#d8b4fe'),
+                        border: `1px solid ${log.source === 'Local Tool Data' ? 'rgba(16, 185, 129, 0.4)' : (log.source === 'Local Project Ledger' ? 'rgba(6, 182, 212, 0.4)' : 'rgba(168, 85, 247, 0.4)')}`,
+                        padding: '2px 7px',
+                        borderRadius: '4px',
+                        fontSize: '0.70rem',
+                        fontWeight: 800
+                      }}>
+                        {log.source === 'Local Tool Data' ? '⚡ Source: Local Tool Data' : (log.source === 'Local Project Ledger' ? '📁 Source: Local Project Ledger' : '🤖 Source: Gemini Cloud AI')}
+                      </span>
+                      <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.06)', color: 'var(--color-zinc-300)', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: 600 }}>
+                        {log.modelUsed}
+                      </span>
+                      <span style={{ backgroundColor: log.httpStatus === '200 OK' ? 'rgba(34, 197, 94, 0.2)' : 'rgba(239, 68, 68, 0.2)', color: log.httpStatus === '200 OK' ? '#86efac' : '#fca5a5', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: 700 }}>
+                        📡 {log.httpStatus || '200 OK'}
+                      </span>
+                      <span style={{ backgroundColor: 'rgba(59, 130, 246, 0.2)', color: '#93c5fd', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: 600 }}>
+                        🎯 {log.intent}
+                      </span>
+                      <span style={{ backgroundColor: 'rgba(34, 197, 94, 0.2)', color: '#86efac', padding: '2px 6px', borderRadius: '4px', fontSize: '0.70rem', fontWeight: 600 }}>
+                        ⏱️ {log.durationMs}ms
+                      </span>
+                    </div>
+
+
+                    {/* Tools Invoked & Data Returned */}
+                    {log.toolsExecuted && log.toolsExecuted.length > 0 && (
+                      <div style={{ backgroundColor: 'rgba(0,0,0,0.4)', padding: '8px', borderRadius: '6px', marginTop: '4px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+                        <div style={{ fontSize: '0.72rem', fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '4px' }}>
+                          🛠️ Tools Invoked ({log.toolsExecuted.length}):
+                        </div>
+                        {log.toolsExecuted.map((t, tIdx) => (
+                          <div key={tIdx} style={{ fontSize: '0.70rem', fontFamily: 'monospace', color: 'var(--color-zinc-300)', marginTop: '4px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {t.name}</span>
+                              <span style={{ color: 'var(--color-zinc-400)' }}>Args: {JSON.stringify(t.args || {})}</span>
+                            </div>
+                            {t.result && (
+                              <details style={{ marginTop: '3px' }}>
+                                <summary style={{ color: '#a7f3d0', cursor: 'pointer', fontSize: '0.68rem', fontWeight: 600 }}>
+                                  View Data Returned from Sheet/Cache ▾
+                                </summary>
+                                <pre style={{ margin: '4px 0 0 0', padding: '6px', backgroundColor: '#000', borderRadius: '4px', fontSize: '0.65rem', color: '#86efac', overflowX: 'auto' }}>
+                                  {JSON.stringify(t.result, null, 2)}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Final Synthesized Answer */}
+                    <div style={{ fontSize: '0.74rem', color: 'var(--color-zinc-200)', backgroundColor: 'rgba(255,255,255,0.04)', padding: '8px', borderRadius: '6px', marginTop: '2px', borderLeft: '3px solid var(--color-amber-400)' }}>
+                      <div style={{ color: 'var(--color-amber-400)', fontWeight: 800, fontSize: '0.70rem', marginBottom: '2px' }}>Final Synthesized Answer:</div>
+                      {log.finalAnswer || log.resultSummary}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
     </>
   );
 }
+

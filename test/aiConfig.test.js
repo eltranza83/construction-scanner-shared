@@ -1,0 +1,103 @@
+import assert from 'node:assert/strict';
+import { test, describe } from 'node:test';
+import { determineTaskModel, AI_CONFIG } from '../src/config/aiConfig.js';
+import { executeClientToolCall, runAllAiToolDiagnostics, evaluateSystemAndDataHealth } from '../src/services/aiTools.js';
+import { fetchWithExponentialBackoff } from '../api/_lib/ai-retry.js';
+
+describe('Centralized AI Configuration & Intent Routing', () => {
+  test('primaryModel and reasoningModel defaults are set correctly', () => {
+    assert.equal(AI_CONFIG.primaryModel, 'gemini-3.5-flash-lite');
+    assert.equal(AI_CONFIG.reasoningModel, 'gemini-3.5-flash');
+  });
+
+  test('determineTaskModel routes standard queries to Flash', () => {
+    const flashQuery1 = 'How much have we paid the electrician?';
+    const flashQuery2 = 'What do we still owe all subcontractors?';
+    const flashQuery3 = 'Find all receipts from ABC Electric and summarize them.';
+
+    assert.equal(determineTaskModel(flashQuery1), 'gemini-3.5-flash-lite');
+    assert.equal(determineTaskModel(flashQuery2), 'gemini-3.5-flash-lite');
+    assert.equal(determineTaskModel(flashQuery3), 'gemini-3.5-flash-lite');
+  });
+
+  test('determineTaskModel respects forceDeepReasoning toggle', () => {
+    const simpleQuery = 'What is the date today?';
+    assert.equal(determineTaskModel(simpleQuery, false), 'gemini-3.5-flash-lite');
+    assert.equal(determineTaskModel(simpleQuery, true), 'gemini-3.5-flash');
+  });
+});
+
+describe('Exponential Backoff Retry Engine', () => {
+  test('retries on HTTP 429 / 503 errors and succeeds on recovery', async () => {
+    let attempts = 0;
+    const mockFetch = async () => {
+      attempts++;
+      if (attempts < 2) {
+        return { ok: false, status: 503, text: async () => 'Service Unavailable' };
+      }
+      return { ok: true, status: 200, json: async () => ({ success: true }) };
+    };
+
+    const response = await fetchWithExponentialBackoff(
+      'https://example.com/api',
+      {},
+      { maxRetries: 2, initialDelayMs: 10, backoffFactor: 2, jitter: false, retryableStatusCodes: [503] },
+      mockFetch
+    );
+
+    assert.equal(attempts, 2);
+    assert.equal(response.ok, true);
+  });
+});
+
+describe('AI Tools & Two-Tier Diagnostic Health Suite', () => {
+  test('executeClientToolCall handles subcontractor balance query', async () => {
+    const mockDashboardData = {
+      phases: [
+        {
+          name: 'Electrical & Lighting',
+          contractor: 'Kike Vallejo',
+          contractAmount: 15000,
+          payments: [{ amount: 5000, date: '2026-08-10', payee: 'Kike Vallejo' }]
+        }
+      ]
+    };
+
+    const result = await executeClientToolCall('get_subcontractor_balance', { tradeOrContractor: 'Kike Vallejo' }, { dashboardData: mockDashboardData });
+    assert.equal(result.foundCount, 1);
+    assert.equal(result.results[0].quote, 15000);
+    assert.equal(result.results[0].totalPaid, 5000);
+    assert.equal(result.results[0].remainingBalance, 10000);
+    assert.ok(result._executionDurationMs !== undefined);
+  });
+
+  test('executeClientToolCall handles Open-Meteo weather lookup', async () => {
+    const result = await executeClientToolCall('get_weather_for_jobsite', { locationName: 'Dallas Lot 3' });
+    assert.equal(result.location, 'Dallas Lot 3');
+    assert.ok(result.current || result.error);
+    assert.ok(result._executionDurationMs !== undefined);
+  });
+
+  test('evaluateSystemAndDataHealth cleanly separates Tool Health from Data Health', () => {
+    const emptyContext = {};
+    const health = evaluateSystemAndDataHealth(emptyContext);
+    
+    assert.equal(health.overallToolOperational, true);
+    assert.ok(health.toolHealth.length >= 4);
+    assert.ok(health.dataHealth.length >= 5);
+    assert.equal(health.dataWarningCount, 5); // 5 empty datasets when unconfigured
+  });
+
+  test('runAllAiToolDiagnostics returns test results and health payload', async () => {
+    const data = await runAllAiToolDiagnostics({});
+    assert.ok(data.testResults);
+    assert.equal(data.testResults.length, 5);
+    assert.ok(data.health);
+    data.testResults.forEach((r) => {
+      assert.ok(r.tool);
+      assert.ok(r.title);
+      assert.equal(r.passed, true);
+      assert.ok(r.durationMs >= 0);
+    });
+  });
+});

@@ -1,9 +1,47 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
+function apiDevPlugin() {
+  return {
+    name: 'api-dev-middleware',
+    configureServer(server) {
+      server.middlewares.use(async (req, res, next) => {
+        if (req.url === '/api/ask-brain' && req.method === 'POST') {
+          try {
+            const chunks = [];
+            for await (const chunk of req) {
+              chunks.push(chunk);
+            }
+            const bodyBuffer = Buffer.concat(chunks);
+            const { POST } = await import('./api/ask-brain.js');
+            const webRequest = new Request('http://localhost:5173/api/ask-brain', {
+              method: 'POST',
+              headers: req.headers,
+              body: bodyBuffer
+            });
+            const webResponse = await POST(webRequest);
+            res.statusCode = webResponse.status;
+            webResponse.headers.forEach((value, key) => {
+              res.setHeader(key, value);
+            });
+            const responseText = await webResponse.text();
+            res.end(responseText);
+          } catch (err) {
+            console.error('Error executing /api/ask-brain in dev server:', err);
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: err.message }));
+          }
+          return;
+        }
+        next();
+      });
+    }
+  };
+}
+
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), apiDevPlugin()],
   build: {
     rolldownOptions: {
       output: {

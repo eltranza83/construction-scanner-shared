@@ -1,4 +1,6 @@
 import { DOCUMENT_EXTRACTION_PROMPT, GEMINI_RESPONSE_SCHEMA } from './_lib/document-prompt.js';
+import { AI_CONFIG } from './_lib/ai-config.js';
+import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 import {
   HttpError,
   errorResponse,
@@ -23,9 +25,11 @@ function parseGeminiJson(text) {
 }
 
 export async function generateDocumentData({ bytes, mimeType, apiKey, fetchImpl = fetch }) {
-  const model = process.env.GEMINI_MODEL || 'gemini-3.1-flash-lite';
-  const response = await fetchImpl(
-    `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+  const model = AI_CONFIG.primaryModel;
+  const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+  
+  const response = await fetchWithExponentialBackoff(
+    targetUrl,
     {
       method: 'POST',
       headers: {
@@ -50,12 +54,14 @@ export async function generateDocumentData({ bytes, mimeType, apiKey, fetchImpl 
           responseSchema: GEMINI_RESPONSE_SCHEMA
         }
       })
-    }
+    },
+    AI_CONFIG.retry,
+    fetchImpl
   );
 
   if (!response.ok) {
     const detail = await response.text();
-    console.error(`Gemini request failed (${response.status}): ${detail}`);
+    console.error(`Gemini extraction failed (${response.status}): ${detail}`);
     throw new HttpError(502, 'AI extraction is temporarily unavailable. Please try again.');
   }
 

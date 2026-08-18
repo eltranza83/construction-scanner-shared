@@ -1,0 +1,46 @@
+/**
+ * Centralized Server-Side AI Configuration for Vercel API Routes
+ */
+
+export const AI_CONFIG = {
+  primaryModel: process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
+  reasoningModel: process.env.GEMINI_REASONING_MODEL || 'gemini-3.5-flash',
+
+  
+  retry: {
+    maxRetries: 2,
+    initialDelayMs: 400,
+    backoffFactor: 2,
+    jitter: true,
+    retryableStatusCodes: [429, 500, 502, 503, 504]
+  },
+  
+  generation: {
+    temperature: 0.3,
+    maxOutputTokens: 2048
+  }
+};
+
+export function determineTaskModel(query = '', forceDeepReasoning = false) {
+  if (forceDeepReasoning) {
+    return AI_CONFIG.reasoningModel;
+  }
+
+  const q = String(query).toLowerCase();
+
+  const complexIntentPatterns = [
+    /compare\s+(our\s+)?actual\s+spending/i,
+    /audit\s+this\s+project/i,
+    /identify\s+anything\s+that\s+looks\s+unusual/i,
+    /where\s+are\s+we\s+going\s+over/i,
+    /compare\s+these\s+(two\s+)?(options|quotes|proposals|contractors)/i,
+    /which\s+is\s+better\s+financially/i,
+    /analyze\s+(the\s+)?profitability/i,
+    /financial\s+risk\s+assessment/i,
+    /recommend\s+(a\s+)?strategy/i,
+    /forecast\s+completion\s+cost/i
+  ];
+
+  const requiresDeepReasoning = complexIntentPatterns.some((pattern) => pattern.test(q));
+  return requiresDeepReasoning ? AI_CONFIG.reasoningModel : AI_CONFIG.primaryModel;
+}
