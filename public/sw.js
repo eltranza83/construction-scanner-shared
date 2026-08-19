@@ -1,4 +1,5 @@
-const CACHE_NAME = 'jobscan-cache-v117';
+const CACHE_NAME = 'jobscan-cache-v118';
+
 
 
 const ASSETS = [
