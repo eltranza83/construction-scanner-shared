@@ -243,11 +243,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   // Voice State Machine & Continuous Hands-Free State
   const [voiceMode, setVoiceMode] = useState(() => {
     try {
-      return localStorage.getItem('jobscan_voice_mode') || VOICE_MODES.PUSH_TO_TALK;
+      return localStorage.getItem('jobscan_voice_mode') || VOICE_MODES.CONTINUOUS_HANDS_FREE;
     } catch (_) {
-      return VOICE_MODES.PUSH_TO_TALK;
+      return VOICE_MODES.CONTINUOUS_HANDS_FREE;
     }
   });
+
   const [silenceTimeoutSec, setSilenceTimeoutSec] = useState(() => {
     try {
       return parseInt(localStorage.getItem('jobscan_silence_timeout_sec') || '7', 10);
@@ -1687,6 +1688,94 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
               <div ref={chatEndRef} />
             </div>
 
+            {/* Live Voice State Active Bar */}
+            {(voiceState !== VOICE_STATES.IDLE) && (
+              <div
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                    ? 'rgba(34, 197, 94, 0.15)'
+                    : (voiceState === VOICE_STATES.SPEAKING)
+                    ? 'rgba(239, 68, 68, 0.15)'
+                    : 'rgba(168, 85, 247, 0.15)',
+                  borderTop: '1px solid ' + (
+                    (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                      ? 'rgba(34, 197, 94, 0.3)'
+                      : (voiceState === VOICE_STATES.SPEAKING)
+                      ? 'rgba(239, 68, 68, 0.3)'
+                      : 'rgba(168, 85, 247, 0.3)'
+                  ),
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: '8px',
+                  flexShrink: 0
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
+                  <div
+                    style={{
+                      width: '10px',
+                      height: '10px',
+                      borderRadius: '50%',
+                      backgroundColor: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                        ? '#22c55e'
+                        : (voiceState === VOICE_STATES.SPEAKING)
+                        ? '#ef4444'
+                        : '#a855f7',
+                      animation: 'pulse 1.2s infinite'
+                    }}
+                  />
+                  <span
+                    style={{
+                      fontSize: '0.78rem',
+                      fontWeight: 800,
+                      color: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                        ? '#86efac'
+                        : (voiceState === VOICE_STATES.SPEAKING)
+                        ? '#fca5a5'
+                        : '#d8b4fe',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }}
+                  >
+                    {voiceState === VOICE_STATES.AUTO_LISTENING
+                      ? `🎙️ Hands-Free Listening: Speak now (${silenceRemaining}s remaining)...`
+                      : voiceState === VOICE_STATES.LISTENING
+                      ? '🎙️ Listening... Speak your question now'
+                      : voiceState === VOICE_STATES.SPEAKING
+                      ? '🔊 Jarvis is speaking... (Tap Interrupt to stop)'
+                      : '🧠 Jarvis is processing...'}
+                  </span>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (voiceState === VOICE_STATES.SPEAKING) {
+                      voiceSmRef.current?.bargeIn('user_clicked_banner_interrupt');
+                    } else {
+                      voiceSmRef.current?.standDown('user_clicked_banner_cancel');
+                    }
+                  }}
+                  style={{
+                    padding: '3px 8px',
+                    backgroundColor: 'rgba(0,0,0,0.4)',
+                    border: '1px solid rgba(255,255,255,0.2)',
+                    borderRadius: '4px',
+                    color: '#fff',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  {voiceState === VOICE_STATES.SPEAKING ? '⏹ Interrupt' : '✕ Stand Down'}
+                </button>
+              </div>
+            )}
+
             {/* Input Bar */}
             <form
               onSubmit={handleSendMessage}
@@ -1703,6 +1792,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 boxSizing: 'border-box'
               }}
             >
+
               <button
                 type="button"
                 onClick={() => {

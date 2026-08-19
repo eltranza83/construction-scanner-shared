@@ -90,9 +90,10 @@ export function stripWakeWord(text = '') {
  */
 export class VoiceStateMachine {
   constructor(config = {}) {
-    this.mode = config.mode || VOICE_MODES.PUSH_TO_TALK;
+    this.mode = config.mode || VOICE_MODES.CONTINUOUS_HANDS_FREE;
     this.silenceTimeoutSec = config.silenceTimeoutSec || 7;
     this.wakeWordEnabled = Boolean(config.wakeWordEnabled);
+
     this.state = VOICE_STATES.IDLE;
     this.currentSessionId = generateSessionId();
     this.listeners = new Set();
