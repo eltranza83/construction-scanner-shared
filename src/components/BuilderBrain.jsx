@@ -426,8 +426,26 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   // 6 Municipal Stages state (Global & Editable)
   const [phases, setPhases] = useState(() => loadGlobalPhases(DEFAULT_CONSTRUCTION_PHASES));
   const [activePhaseId, setActivePhaseId] = useState('plumbing');
-  const [phaseCheckState, setPhaseCheckState] = useState({});
+  const [phaseCheckState, setPhaseCheckState] = useState(() => {
+    try {
+      const raw = localStorage.getItem('jobscan_phase_checks_' + projectId);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  });
   const [isCustomizing, setIsCustomizing] = useState(false);
+
+  // Sync phase checks on project change
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem('jobscan_phase_checks_' + projectId);
+      setPhaseCheckState(raw ? JSON.parse(raw) : {});
+    } catch {
+      setPhaseCheckState({});
+    }
+  }, [projectId]);
+
 
   // Editing state for Pre-Work Notes
   const [editingPreNoteKey, setEditingPreNoteKey] = useState(null);
@@ -644,14 +662,32 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   // Active Stage object
   const currentPhase = phases.find((p) => p.id === activePhaseId) || phases[0];
 
+  const getPhaseCheckCounts = (p) => {
+    if (!p) return { passed: 0, total: 0, isPassed: false };
+    const total = p.hasSubcategories
+      ? (p.subcategories || []).reduce((acc, s) => acc + (s.inspectionChecklist?.length || 0), 0)
+      : (p.inspectionChecklist?.length || 0);
+    const passed = p.hasSubcategories
+      ? (p.subcategories || []).reduce((acc, s) => acc + (s.inspectionChecklist?.filter((chk) => phaseCheckState[`${p.id}_${chk.id}`]).length || 0), 0)
+      : ((p.inspectionChecklist || []).filter((chk) => phaseCheckState[`${p.id}_${chk.id}`]).length || 0);
+    return { passed, total, isPassed: total > 0 && passed === total };
+  };
+
   const isCheckItemChecked = (phaseId, itemId) => {
     return phaseCheckState[`${phaseId}_${itemId}`] || false;
   };
 
   const toggleCheckItem = (phaseId, itemId) => {
     const key = `${phaseId}_${itemId}`;
-    setPhaseCheckState((prev) => ({ ...prev, [key]: !prev[key] }));
+    setPhaseCheckState((prev) => {
+      const updated = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem('jobscan_phase_checks_' + projectId, JSON.stringify(updated));
+      } catch (_) {}
+      return updated;
+    });
   };
+
 
   const handleSMSPreNotes = (tradeName = currentPhase.trade, notesList = currentPhase.preTradeNotes) => {
     const textBody = `[ADEPEC HOMES PRE-WORK SPECS - ${projectName}]\nTrade: ${tradeName}\nPhase: ${currentPhase.name}\n\nPre-Work Requirements:\n` +
@@ -872,10 +908,28 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   };
 
   const handleScheduleInspection = () => {
-    alert(`✅ City Inspection Readiness Confirmed for ${currentPhase.name}! All pre-inspection checks verified for ${projectName}.`);
+    const updated = { ...phaseCheckState };
+    if (currentPhase.hasSubcategories) {
+      (currentPhase.subcategories || []).forEach((sub) => {
+        (sub.inspectionChecklist || []).forEach((i) => {
+          updated[`${currentPhase.id}_${i.id}`] = true;
+        });
+      });
+    } else {
+      (currentPhase.inspectionChecklist || []).forEach((i) => {
+        updated[`${currentPhase.id}_${i.id}`] = true;
+      });
+    }
+    setPhaseCheckState(updated);
+    try {
+      localStorage.setItem('jobscan_phase_checks_' + projectId, JSON.stringify(updated));
+    } catch (_) {}
+    alert(`✅ City Inspection Readiness Confirmed for ${currentPhase.name}! All pre-inspection checks marked PASSED for ${projectName}.`);
   };
 
   const siteSetupCompletedCount = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]).length;
+  const completedPhasesCount = phases.filter((p) => getPhaseCheckCounts(p).isPassed).length;
+
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
@@ -976,8 +1030,9 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           }}
         >
           <CheckSquare size={15} />
-          <span>Phase Inspections</span>
+          <span>Phase Inspections ({completedPhasesCount}/{phases.length} Passed)</span>
         </button>
+
 
         <button
           onClick={() => setActiveSubTab('specs')}
@@ -2022,6 +2077,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           >
             {phases.map((p) => {
               const isActive = activePhaseId === p.id;
+              const { passed, total, isPassed } = getPhaseCheckCounts(p);
               return (
                 <button
                   key={p.id}
@@ -2029,9 +2085,11 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                   style={{
                     padding: '9px 10px',
                     borderRadius: '8px',
-                    border: '1px solid ' + (isActive ? 'var(--color-amber-500)' : 'var(--color-zinc-800)'),
-                    backgroundColor: isActive ? 'rgba(197, 160, 89, 0.15)' : 'var(--color-zinc-900)',
-                    color: isActive ? 'var(--color-amber-500)' : 'var(--color-zinc-300)',
+                    border: '1px solid ' + (isPassed ? '#10b981' : (isActive ? 'var(--color-amber-500)' : 'var(--color-zinc-800)')),
+                    backgroundColor: isPassed
+                      ? (isActive ? 'rgba(16, 185, 129, 0.25)' : 'rgba(16, 185, 129, 0.12)')
+                      : (isActive ? 'rgba(197, 160, 89, 0.15)' : 'var(--color-zinc-900)'),
+                    color: isPassed ? '#34d399' : (isActive ? 'var(--color-amber-500)' : 'var(--color-zinc-300)'),
                     fontSize: '0.8rem',
                     fontWeight: 700,
                     cursor: 'pointer',
@@ -2045,9 +2103,35 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 >
                   <span style={{ fontSize: '1rem', flexShrink: 0 }}>{p.icon}</span>
                   <span>{p.shortName || p.name}</span>
+                  {isPassed ? (
+                    <span
+                      style={{
+                        backgroundColor: '#10b981',
+                        color: '#000',
+                        borderRadius: '50%',
+                        width: '16px',
+                        height: '16px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '0.65rem',
+                        fontWeight: 900
+                      }}
+                      title="100% Passed"
+                    >
+                      ✓
+                    </span>
+                  ) : (
+                    total > 0 && (
+                      <span style={{ fontSize: '0.70rem', color: passed > 0 ? '#34d399' : 'var(--color-zinc-400)' }}>
+                        ({passed}/{total})
+                      </span>
+                    )
+                  )}
                 </button>
               );
             })}
+
           </div>
 
           {/* Phase Card */}
@@ -2135,6 +2219,49 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
             <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--color-zinc-100)', margin: '0 0 14px 0' }}>
               {currentPhase.name} Protocol
             </h3>
+
+            {/* Stage Complete Banner */}
+            {getPhaseCheckCounts(currentPhase).isPassed && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '14px',
+                  gap: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399' }}>
+                      Stage Complete — Ready for City Inspection
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                      All {getPhaseCheckCounts(currentPhase).total} pre-inspection checks verified for {projectName}.
+                    </div>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    backgroundColor: '#10b981',
+                    color: '#000',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  100% PASSED
+                </span>
+              </div>
+            )}
+
 
             {/* SECTION 1: CRITICAL PRE-WORK NOTES (ACCORDION) */}
             {(() => {

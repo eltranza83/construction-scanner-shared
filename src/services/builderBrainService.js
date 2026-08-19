@@ -471,10 +471,19 @@ export async function askGeminiBrain(
   const todayStr = new Date().toISOString().split('T')[0];
   const pendingR = reminders.filter((r) => r.status === 'pending' && (!r.targetDate || r.targetDate === todayStr));
 
+  let savedPhaseChecks = {};
+  try {
+    if (typeof window !== 'undefined' && window.localStorage) {
+      const raw = window.localStorage.getItem('jobscan_phase_checks_' + projectId);
+      if (raw) savedPhaseChecks = JSON.parse(raw);
+    }
+  } catch (_) {}
+
   // Load All 6 Municipal Inspection Stages with live checklist status
   const inspectionsData = (INSPECTION_STAGES || []).map((stage) => {
     const items = loadInspectionData(projectId, stage.id) || [];
-    const passedCount = items.filter((i) => i.status === 'pass').length;
+    const stageShortId = stage.id === 'rough-in-plumbing' ? 'plumbing' : stage.id;
+    const passedCount = items.filter((i) => i.status === 'pass' || savedPhaseChecks[`${stageShortId}_${i.id}`] || savedPhaseChecks[`${stage.id}_${i.id}`]).length;
     return {
       stageId: stage.id,
       stageName: stage.name,
@@ -483,15 +492,19 @@ export async function askGeminiBrain(
       totalItems: items.length,
       passedCount,
       isFullyPassed: items.length > 0 && passedCount === items.length,
-      items: items.map((i) => ({
-        id: i.id,
-        title: i.title || i.text || i.name || 'Inspection Item',
-        category: i.category || 'General',
-        status: i.status === 'pass' ? 'PASSED' : (i.status === 'fail' ? 'FAILED' : 'PENDING'),
-        note: i.note || ''
-      }))
+      items: items.map((i) => {
+        const isPassed = i.status === 'pass' || savedPhaseChecks[`${stageShortId}_${i.id}`] || savedPhaseChecks[`${stage.id}_${i.id}`];
+        return {
+          id: i.id,
+          title: i.title || i.text || i.name || 'Inspection Item',
+          category: i.category || 'General',
+          status: isPassed ? 'PASSED' : (i.status === 'fail' ? 'FAILED' : 'PENDING'),
+          note: i.note || ''
+        };
+      })
     };
   });
+
 
   const projectContext = {
     projectId,
