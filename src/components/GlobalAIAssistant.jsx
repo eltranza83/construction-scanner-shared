@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Bot,
   Mic,
+  MicOff,
   Send,
   X,
   Volume2,
@@ -14,7 +15,11 @@ import {
   FileText,
   ExternalLink,
   Eye,
-  Download
+  Download,
+  Radio,
+  Headphones,
+  Square,
+  Activity
 } from 'lucide-react';
 import {
   loadProjectSpecs,
@@ -34,6 +39,15 @@ import {
   fetchDriveFileAsObjectUrl
 } from '../services/googleDrive';
 import DocumentViewerModal from './DocumentViewerModal';
+import {
+  VoiceStateMachine,
+  VOICE_STATES,
+  VOICE_MODES,
+  isExitIntent,
+  containsWakeWord,
+  stripWakeWord
+} from '../services/voiceStateMachine';
+
 
 
 const findReferencedDriveFile = (query, driveTree, messages = []) => {
@@ -225,7 +239,44 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const [activePreviewFile, setActivePreviewFile] = useState(null);
+
+  // Voice State Machine & Continuous Hands-Free State
+  const [voiceMode, setVoiceMode] = useState(() => {
+    try {
+      return localStorage.getItem('jobscan_voice_mode') || VOICE_MODES.PUSH_TO_TALK;
+    } catch (_) {
+      return VOICE_MODES.PUSH_TO_TALK;
+    }
+  });
+  const [silenceTimeoutSec, setSilenceTimeoutSec] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem('jobscan_silence_timeout_sec') || '7', 10);
+    } catch (_) {
+      return 7;
+    }
+  });
+  const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
+    try {
+      return localStorage.getItem('jobscan_wake_word_enabled') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const [voiceState, setVoiceState] = useState(VOICE_STATES.IDLE);
+  const [silenceRemaining, setSilenceRemaining] = useState(7);
+  const voiceSmRef = useRef(null);
+  const recognitionRef = useRef(null);
+
+  if (!voiceSmRef.current) {
+    voiceSmRef.current = new VoiceStateMachine({
+      mode: voiceMode,
+      silenceTimeoutSec,
+      wakeWordEnabled
+    });
+  }
+
   const chatEndRef = useRef(null);
+
 
   const handleRunDiagnosticSuite = async () => {
     setIsRunningTests(true);
@@ -496,11 +547,25 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           utterance.lang = 'en-GB';
         }
       }
+
+      const activeSession = voiceSmRef.current?.currentSessionId;
+      utterance.onstart = () => {
+        voiceSmRef.current?.startSpeaking(clean, 'tts_started');
+      };
+      utterance.onend = () => {
+        voiceSmRef.current?.finishSpeaking('tts_ended', activeSession);
+      };
+      utterance.onerror = (err) => {
+        voiceSmRef.current?.handleError('tts-error', err?.error || 'speech synthesis error', activeSession);
+      };
+
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('Speech synthesis error:', e);
+      voiceSmRef.current?.finishSpeaking('tts_catch_error');
     }
   };
+
 
 
   const executeMessage = async (queryText) => {
@@ -763,28 +828,141 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     executeMessage(input);
   };
 
-  const handleVoiceInput = () => {
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      alert('Voice mic is not supported on this browser.');
+  // 1. Voice State Machine Subscription
+  useEffect(() => {
+    const sm = voiceSmRef.current;
+    if (!sm) return;
+
+    const unsubscribe = sm.subscribe((snapshot) => {
+      setVoiceState(snapshot.state);
+      setSilenceRemaining(snapshot.silenceRemaining);
+      setIsRecording(snapshot.state === VOICE_STATES.LISTENING || snapshot.state === VOICE_STATES.AUTO_LISTENING);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  // 2. Sync Configuration Changes
+  useEffect(() => {
+    const sm = voiceSmRef.current;
+    if (!sm) return;
+    sm.updateConfig({
+      mode: voiceMode,
+      silenceTimeoutSec,
+      wakeWordEnabled
+    });
+    try {
+      localStorage.setItem('jobscan_voice_mode', voiceMode);
+      localStorage.setItem('jobscan_silence_timeout_sec', String(silenceTimeoutSec));
+      localStorage.setItem('jobscan_wake_word_enabled', String(wakeWordEnabled));
+    } catch (_) {}
+  }, [voiceMode, silenceTimeoutSec, wakeWordEnabled]);
+
+  // 3. Speech Recognition Controller tied to Voice State Machine
+  useEffect(() => {
+    const shouldListen = voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING;
+
+    if (!shouldListen) {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (_) {}
+        recognitionRef.current = null;
+      }
       return;
     }
+
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      console.warn('Speech recognition not supported on this browser.');
+      voiceSmRef.current?.handleError('not-supported', 'SpeechRecognition API unavailable');
+      return;
+    }
+
+    const recSessionId = voiceSmRef.current.currentSessionId;
     const rec = new SpeechRecognition();
     rec.continuous = false;
-    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : navigator.language?.startsWith('es') ? 'es-US' : 'en-US';
-    rec.onstart = () => setIsRecording(true);
+    rec.interimResults = false;
+    rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : (typeof navigator !== 'undefined' && navigator.language?.startsWith('es')) ? 'es-US' : 'en-US';
+
     rec.onresult = (e) => {
-      const spoken = e.results[0][0].transcript;
-      setIsRecording(false);
-      if (spoken && spoken.trim()) {
-        setInput(spoken);
-        executeMessage(spoken.trim());
+      if (voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale session guard
+      const spoken = e.results[0]?.[0]?.transcript || '';
+      const trimmed = spoken.trim();
+      if (!trimmed) return;
+
+      // Acoustic Feedback Check
+      if (voiceSmRef.current.isAcousticFeedback(trimmed)) {
+        console.log('🔇 [Acoustic Feedback Suppressed]', trimmed);
+        return;
+      }
+
+      // Exit Intent Check
+      if (isExitIntent(trimmed)) {
+        voiceSmRef.current.standDown('exit_intent_detected');
+        const exitMsg = {
+          sender: 'ai',
+          text: 'Understood. Standing down. Tap the microphone when you need me.',
+          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        };
+        setMessages((prev) => [...prev, exitMsg]);
+        speakText(exitMsg.text, trimmed);
+        return;
+      }
+
+      // Normal Query or Wake-Word Processing
+      const finalQuery = stripWakeWord(trimmed);
+      if (finalQuery) {
+        setInput(finalQuery);
+        executeMessage(finalQuery);
       }
     };
-    rec.onerror = () => setIsRecording(false);
-    rec.onend = () => setIsRecording(false);
-    rec.start();
+
+    rec.onerror = (e) => {
+      if (voiceSmRef.current.currentSessionId !== recSessionId) return;
+      console.warn('[Speech Recognition Error]', e.error);
+      voiceSmRef.current.handleError(e.error, e.message, recSessionId);
+    };
+
+    rec.onend = () => {
+      if (voiceSmRef.current.currentSessionId !== recSessionId) return;
+      // In PTT mode, ending recognition returns to IDLE unless thinking/speaking
+      if (voiceSmRef.current.mode === VOICE_MODES.PUSH_TO_TALK && voiceSmRef.current.state === VOICE_STATES.LISTENING) {
+        voiceSmRef.current.transition(VOICE_STATES.IDLE, 'rec_ended_ptt');
+      }
+    };
+
+    try {
+      rec.start();
+      recognitionRef.current = rec;
+    } catch (err) {
+      console.warn('Error starting speech recognition:', err);
+      voiceSmRef.current.handleError('start-failed', err.message, recSessionId);
+    }
+
+    return () => {
+      try {
+        rec.abort();
+      } catch (_) {}
+    };
+  }, [voiceState, aiLanguage]);
+
+  const handleVoiceInput = () => {
+    const sm = voiceSmRef.current;
+    if (!sm) return;
+
+    if (sm.state === VOICE_STATES.SPEAKING) {
+      // Barge-in interruption
+      sm.bargeIn('user_tapped_mic_during_speech');
+    } else if (sm.state === VOICE_STATES.LISTENING || sm.state === VOICE_STATES.AUTO_LISTENING) {
+      // Toggle off / cancel listening
+      sm.standDown('user_toggled_off_mic');
+    } else {
+      // Start listening
+      sm.startListening('user_tapped_mic');
+    }
   };
+
 
   return (
     <>
@@ -902,9 +1080,53 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                   <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-zinc-100)', margin: 0 }}>
                     J.A.R.V.I.S. Field AI — {projectName}
                   </h3>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--color-amber-500)', margin: 0 }}>
-                    Voice & Text Co-Pilot • J.A.R.V.I.S. Audio Readout
-                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
+                    <span style={{ fontSize: '0.74rem', color: 'var(--color-amber-500)', margin: 0 }}>
+                      Co-Pilot
+                    </span>
+                    <span
+                      style={{
+                        fontSize: '0.68rem',
+                        fontWeight: 800,
+                        padding: '1px 6px',
+                        borderRadius: '4px',
+                        backgroundColor: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                          ? 'rgba(34, 197, 94, 0.2)'
+                          : (voiceState === VOICE_STATES.SPEAKING)
+                          ? 'rgba(239, 68, 68, 0.2)'
+                          : (voiceState === VOICE_STATES.THINKING)
+                          ? 'rgba(168, 85, 247, 0.2)'
+                          : 'rgba(39, 39, 42, 0.6)',
+                        color: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                          ? '#86efac'
+                          : (voiceState === VOICE_STATES.SPEAKING)
+                          ? '#fca5a5'
+                          : (voiceState === VOICE_STATES.THINKING)
+                          ? '#d8b4fe'
+                          : 'var(--color-zinc-400)',
+                        border: '1px solid ' + (
+                          (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                            ? 'rgba(34, 197, 94, 0.4)'
+                            : (voiceState === VOICE_STATES.SPEAKING)
+                            ? 'rgba(239, 68, 68, 0.4)'
+                            : (voiceState === VOICE_STATES.THINKING)
+                            ? 'rgba(168, 85, 247, 0.4)'
+                            : 'var(--color-zinc-800)'
+                        )
+                      }}
+                    >
+                      {voiceState === VOICE_STATES.SPEAKING
+                        ? '🔊 Speaking (Tap mic to stop)'
+                        : voiceState === VOICE_STATES.AUTO_LISTENING
+                        ? `🟢 Auto-Listening (${silenceRemaining}s)`
+                        : voiceState === VOICE_STATES.LISTENING
+                        ? `🟢 Listening... (${silenceRemaining}s)`
+                        : voiceState === VOICE_STATES.THINKING
+                        ? '🧠 Thinking...'
+                        : '⚪ Idle'}
+                    </span>
+                  </div>
+
                 </div>
               </div>
 
@@ -1184,8 +1406,80 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                     🔊 Save & Test Voice
                   </button>
                 </div>
+
+                {/* Continuous Hands-Free & Wake-Word Settings */}
+                <div style={{ borderTop: '1px dashed var(--color-zinc-800)', paddingTop: '10px' }}>
+                  <div style={{ fontSize: '0.75rem', fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    🎙️ Voice Conversation & Microphone Loop
+                  </div>
+
+                  {/* Mode Selector */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', marginBottom: '10px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceMode(VOICE_MODES.PUSH_TO_TALK)}
+                      style={{
+                        padding: '7px 6px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        backgroundColor: voiceMode === VOICE_MODES.PUSH_TO_TALK ? 'var(--color-amber-500)' : 'var(--color-zinc-900)',
+                        color: voiceMode === VOICE_MODES.PUSH_TO_TALK ? '#000' : 'var(--color-zinc-300)',
+                        border: voiceMode === VOICE_MODES.PUSH_TO_TALK ? '1px solid var(--color-amber-500)' : '1px solid var(--color-zinc-800)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      ✋ Push-to-Talk
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setVoiceMode(VOICE_MODES.CONTINUOUS_HANDS_FREE)}
+                      style={{
+                        padding: '7px 6px',
+                        borderRadius: '6px',
+                        fontSize: '0.74rem',
+                        fontWeight: 700,
+                        backgroundColor: voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '#22c55e' : 'var(--color-zinc-900)',
+                        color: voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '#000' : 'var(--color-zinc-300)',
+                        border: voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '1px solid #22c55e' : '1px solid var(--color-zinc-800)',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      🎙️ Continuous Hands-Free
+                    </button>
+                  </div>
+
+                  {/* Silence Timeout Slider */}
+                  <div style={{ marginBottom: '8px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.72rem', color: 'var(--color-zinc-300)', marginBottom: '3px' }}>
+                      <span>⏳ Silence Timeout (Auto Stand-down):</span>
+                      <strong style={{ color: 'var(--color-amber-400)' }}>{silenceTimeoutSec} seconds</strong>
+                    </div>
+                    <input
+                      type="range"
+                      min="4"
+                      max="15"
+                      step="1"
+                      value={silenceTimeoutSec}
+                      onChange={(e) => setSilenceTimeoutSec(parseInt(e.target.value, 10))}
+                      style={{ width: '100%', accentColor: 'var(--color-amber-500)' }}
+                    />
+                  </div>
+
+                  {/* Wake-Word Toggle */}
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.74rem', color: 'var(--color-zinc-200)', userSelect: 'none' }}>
+                    <input
+                      type="checkbox"
+                      checked={wakeWordEnabled}
+                      onChange={(e) => setWakeWordEnabled(e.target.checked)}
+                      style={{ accentColor: 'var(--color-amber-500)', width: '15px', height: '15px' }}
+                    />
+                    <span>Enable Wake-Word Detection (<strong>"Hey Jarvis"</strong> / <strong>"Jarvis"</strong>)</span>
+                  </label>
+                </div>
               </div>
             )}
+
 
             {/* Chat Messages */}
             <div
@@ -1412,18 +1706,44 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
               <button
                 type="button"
                 onClick={() => {
+                  const nextMode = voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? VOICE_MODES.PUSH_TO_TALK : VOICE_MODES.CONTINUOUS_HANDS_FREE;
+                  setVoiceMode(nextMode);
+                }}
+                style={{
+                  height: '44px',
+                  padding: '0 8px',
+                  backgroundColor: voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? 'rgba(34, 197, 94, 0.18)' : 'rgba(39, 39, 42, 0.6)',
+                  border: '1px solid ' + (voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '#22c55e' : 'var(--color-zinc-700)'),
+                  color: voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '#86efac' : 'var(--color-zinc-400)',
+                  borderRadius: '8px',
+                  fontSize: '0.72rem',
+                  fontWeight: 800,
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '3px',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0
+                }}
+                title="Toggle Hands-Free Voice Mode (Automatically listens after Jarvis answers)"
+              >
+                {voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE ? '🎙️ Auto' : '✋ PTT'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
                   const next = aiLanguage === 'es' ? 'en' : 'es';
                   setAiLanguage(next);
                   localStorage.setItem('jobscan_ai_lang', next);
                 }}
                 style={{
                   height: '44px',
-                  padding: '0 10px',
+                  padding: '0 8px',
                   backgroundColor: aiLanguage === 'es' ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
                   border: '1px solid ' + (aiLanguage === 'es' ? '#22c55e' : '#3b82f6'),
                   color: aiLanguage === 'es' ? '#86efac' : '#93c5fd',
                   borderRadius: '8px',
-                  fontSize: '0.75rem',
+                  fontSize: '0.72rem',
                   fontWeight: 800,
                   cursor: 'pointer',
                   display: 'flex',
@@ -1438,48 +1758,64 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
               </button>
               <button
                 type="button"
-                onClick={() => setForceDeepReasoning((prev) => !prev)}
-                style={{
-                  height: '44px',
-                  padding: '0 10px',
-                  backgroundColor: forceDeepReasoning ? 'rgba(168, 85, 247, 0.2)' : 'rgba(39, 39, 42, 0.6)',
-                  border: '1px solid ' + (forceDeepReasoning ? '#a855f7' : 'var(--color-zinc-700)'),
-                  color: forceDeepReasoning ? '#c084fc' : 'var(--color-zinc-400)',
-                  borderRadius: '8px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px',
-                  whiteSpace: 'nowrap',
-                  flexShrink: 0
-                }}
-                title="Toggle Deep Reasoning (Force Gemini 2.5 Pro for complex audits and comparisons)"
-              >
-                {forceDeepReasoning ? '🧠 Deep Reasoning' : '⚡ Auto Intent'}
-              </button>
-              <button
-                type="button"
                 onClick={handleVoiceInput}
                 style={{
                   height: '44px',
                   minWidth: '44px',
-                  padding: '0 12px',
-                  backgroundColor: isRecording ? 'rgba(239, 68, 68, 0.2)' : 'rgba(197, 160, 89, 0.15)',
-                  border: '1px solid ' + (isRecording ? '#ef4444' : 'var(--color-amber-500)'),
-                  color: isRecording ? '#ef4444' : 'var(--color-amber-500)',
+                  padding: '0 10px',
+                  backgroundColor: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                    ? 'rgba(34, 197, 94, 0.25)'
+                    : (voiceState === VOICE_STATES.SPEAKING)
+                    ? 'rgba(239, 68, 68, 0.25)'
+                    : 'rgba(197, 160, 89, 0.15)',
+                  border: '1px solid ' + (
+                    (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                      ? '#22c55e'
+                      : (voiceState === VOICE_STATES.SPEAKING)
+                      ? '#ef4444'
+                      : 'var(--color-amber-500)'
+                  ),
+                  color: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                    ? '#86efac'
+                    : (voiceState === VOICE_STATES.SPEAKING)
+                    ? '#fca5a5'
+                    : 'var(--color-amber-500)',
                   borderRadius: '8px',
                   cursor: 'pointer',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  flexShrink: 0
+                  gap: '4px',
+                  flexShrink: 0,
+                  boxShadow: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
+                    ? '0 0 10px rgba(34, 197, 94, 0.4)'
+                    : 'none'
                 }}
-                title="Voice Dictation (Mic)"
+                title={
+                  voiceState === VOICE_STATES.SPEAKING
+                    ? 'Tap to Interrupt (Barge-In)'
+                    : voiceState === VOICE_STATES.AUTO_LISTENING
+                    ? `Hands-Free Listening (${silenceRemaining}s)`
+                    : isRecording
+                    ? 'Listening...'
+                    : 'Voice Dictation (Mic)'
+                }
               >
-                <Mic size={20} />
+                {voiceState === VOICE_STATES.SPEAKING ? (
+                  <>
+                    <Square size={14} fill="#fca5a5" />
+                    <span style={{ fontSize: '0.70rem', fontWeight: 800 }}>Stop</span>
+                  </>
+                ) : (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING) ? (
+                  <>
+                    <Mic size={16} />
+                    <span style={{ fontSize: '0.70rem', fontWeight: 800 }}>{silenceRemaining}s</span>
+                  </>
+                ) : (
+                  <Mic size={18} />
+                )}
               </button>
+
               <input
                 type="text"
                 placeholder={aiLanguage === 'es' ? 'Pregunta en Español: "¿Cuánto balance con el pintor?"...' : 'Ask J.A.R.V.I.S. in English or Spanish...'}
