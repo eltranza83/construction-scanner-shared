@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { FileText, Download, ExternalLink, X, Loader2, AlertTriangle, RefreshCw } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { FileText, Download, ExternalLink, X, Loader2, AlertTriangle, Activity } from 'lucide-react';
 import {
   resolveDocumentViewPlan,
   RENDER_MODES,
@@ -10,7 +10,53 @@ export default function DocumentViewerModal({ file, token, onClose }) {
   const [viewPlan, setViewPlan] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasIframeError, setHasIframeError] = useState(false);
+  const modalRef = useRef(null);
+  const closeButtonRef = useRef(null);
+  const previousActiveElement = useRef(null);
 
+  // Focus management and keyboard accessibility
+  useEffect(() => {
+    previousActiveElement.current = document.activeElement;
+    if (closeButtonRef.current) {
+      closeButtonRef.current.focus();
+    }
+
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+
+      // Simple focus trap
+      if (e.key === 'Tab' && modalRef.current) {
+        const focusableElements = modalRef.current.querySelectorAll(
+          'a[href], button:not([disabled]), textarea, input, select'
+        );
+        if (focusableElements.length > 0) {
+          const first = focusableElements[0];
+          const last = focusableElements[focusableElements.length - 1];
+
+          if (e.shiftKey && document.activeElement === first) {
+            e.preventDefault();
+            last.focus();
+          } else if (!e.shiftKey && document.activeElement === last) {
+            e.preventDefault();
+            first.focus();
+          }
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      if (previousActiveElement.current && typeof previousActiveElement.current.focus === 'function') {
+        previousActiveElement.current.focus();
+      }
+    };
+  }, [onClose]);
+
+  // Strategy resolution & lifecycle
   useEffect(() => {
     if (!file) return;
     let isSubscribed = true;
@@ -51,6 +97,10 @@ export default function DocumentViewerModal({ file, token, onClose }) {
 
   return (
     <div
+      ref={modalRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label={`Document viewer for ${fileName}`}
       style={{
         position: 'fixed',
         top: 0,
@@ -92,11 +142,11 @@ export default function DocumentViewerModal({ file, token, onClose }) {
             >
               {fileName}
             </div>
-            <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.72rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
               <span>📁 {folderName}</span>
               {viewPlan?.strategyName && (
-                <span style={{ color: 'var(--color-amber-500)', opacity: 0.8 }}>
-                  • {viewPlan.strategyName}
+                <span style={{ color: 'var(--color-amber-500)', opacity: 0.9, display: 'flex', alignItems: 'center', gap: '3px' }}>
+                  <Activity size={10} /> {viewPlan.strategyName} ({viewPlan.durationMs}ms)
                 </span>
               )}
             </div>
@@ -110,6 +160,7 @@ export default function DocumentViewerModal({ file, token, onClose }) {
               download={fileName}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Download Document"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -135,6 +186,7 @@ export default function DocumentViewerModal({ file, token, onClose }) {
               href={viewPlan.externalUrl}
               target="_blank"
               rel="noopener noreferrer"
+              aria-label="Open in Google Drive"
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -156,8 +208,10 @@ export default function DocumentViewerModal({ file, token, onClose }) {
           )}
 
           <button
+            ref={closeButtonRef}
             type="button"
             onClick={onClose}
+            aria-label="Close Document Viewer (Escape)"
             style={{
               padding: '6px 10px',
               backgroundColor: 'rgba(239, 68, 68, 0.15)',
@@ -195,7 +249,7 @@ export default function DocumentViewerModal({ file, token, onClose }) {
         {isLoading && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', color: 'var(--color-amber-400)' }}>
             <Loader2 size={40} className="spin-animation" />
-            <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Preparing document view...</span>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700 }}>Resolving optimal viewer strategy...</span>
           </div>
         )}
 
@@ -219,7 +273,7 @@ export default function DocumentViewerModal({ file, token, onClose }) {
               Preview Restricted by Browser
             </div>
             <div style={{ color: 'var(--color-zinc-400)', fontSize: '0.82rem', lineHeight: 1.5 }}>
-              Your mobile browser or security settings restricted inline previewing. You can open this file directly in Google Drive or download it.
+              Your browser or security settings restricted inline previewing. You can open this file directly in Google Drive or download it.
             </div>
             <div style={{ display: 'flex', gap: '10px', marginTop: '6px', width: '100%' }}>
               {viewPlan?.externalUrl && (
