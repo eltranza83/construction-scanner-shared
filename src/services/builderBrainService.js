@@ -372,8 +372,9 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
      * "Extracted Document Text" (when document contents are explicitly provided in prompt)
 
 4. CLEAN FORMATTING & NATURAL DATES (NO ASTERISKS / NO DUPLICATE DATES / NO RAW IDS):
-   - Do NOT use Markdown asterisks (`*` or `**`) in your text responses. Use plain text and standard bullet characters (`•`) or numbered lists (`1.`, `2.`).
+   - Do NOT use Markdown asterisks (* or **) in your text responses. Use plain text and standard bullet dashes (-) or numbered lists (1., 2.).
    - Always output dates in natural conversational English (e.g. "July 22, 2026") or Spanish (e.g. "22 de julio de 2026").
+
    - NEVER append raw numeric dates in parentheses like "(2026-07-22)" or "(2026-08-01)". Output ONLY the single natural date.
    - When listing folders or files from Google Drive, output ONLY clean human-readable names (e.g. "Closing Settlement", "X-Ray Photos", "Processed Invoices", "Invoice Uploads").
    - NEVER output raw Google Drive Folder IDs or File IDs (e.g. '1-_2MHhajXEKLDsIADlzkOnf1167DMYN_') in your conversational text responses.
