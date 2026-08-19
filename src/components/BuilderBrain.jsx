@@ -882,53 +882,9 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   };
 
-  const handleFlagUncheckedWatchouts = () => {
-    let unchecked = [];
-    if (currentPhase.hasSubcategories) {
-      currentPhase.subcategories.forEach((sub) => {
-        const subUnchecked = sub.inspectionChecklist.filter(
-          (i) => !isCheckItemChecked(currentPhase.id, i.id)
-        );
-        subUnchecked.forEach((item) => {
-          unchecked.push({ item, trade: sub.trade });
-        });
-      });
-    } else {
-      const simpleUnchecked = currentPhase.inspectionChecklist.filter(
-        (i) => !isCheckItemChecked(currentPhase.id, i.id)
-      );
-      unchecked = simpleUnchecked.map((item) => ({ item, trade: currentPhase.trade }));
-    }
-
-    if (unchecked.length === 0) {
-      alert(`✅ All items in the ${currentPhase.name} checklist are marked PASSED! Ready for City Inspection.`);
-      return;
-    }
-    alert(`⚠️ Notice: ${unchecked.length} items remain incomplete for ${currentPhase.name}. Please verify these items before calling the City Inspector.`);
-  };
-
-  const handleScheduleInspection = () => {
-    const updated = { ...phaseCheckState };
-    if (currentPhase.hasSubcategories) {
-      (currentPhase.subcategories || []).forEach((sub) => {
-        (sub.inspectionChecklist || []).forEach((i) => {
-          updated[`${currentPhase.id}_${i.id}`] = true;
-        });
-      });
-    } else {
-      (currentPhase.inspectionChecklist || []).forEach((i) => {
-        updated[`${currentPhase.id}_${i.id}`] = true;
-      });
-    }
-    setPhaseCheckState(updated);
-    try {
-      localStorage.setItem('jobscan_phase_checks_' + projectId, JSON.stringify(updated));
-    } catch (_) {}
-    alert(`✅ City Inspection Readiness Confirmed for ${currentPhase.name}! All pre-inspection checks marked PASSED for ${projectName}.`);
-  };
-
   const siteSetupCompletedCount = siteSetupProtocol.inspectionChecklist.filter((i) => siteSetupChecks[i.id]).length;
   const completedPhasesCount = phases.filter((p) => getPhaseCheckCounts(p).isPassed).length;
+
 
 
   return (
@@ -3062,54 +3018,11 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                           })}
                         </div>
                       )}
-
-                      {/* Action Buttons */}
-                      <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                        <button
-                          onClick={handleFlagUncheckedWatchouts}
-                          style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                            border: '1px solid #ef4444',
-                            color: '#ef4444',
-                            fontWeight: 700,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          <AlertTriangle size={15} /> Review Incomplete Checks
-                        </button>
-                        <button
-                          onClick={handleScheduleInspection}
-                          style={{
-                            flex: 1,
-                            padding: '10px 12px',
-                            borderRadius: '6px',
-                            backgroundColor: 'var(--color-amber-500)',
-                            border: 'none',
-                            color: '#000',
-                            fontWeight: 800,
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            gap: '6px'
-                          }}
-                        >
-                          <CheckSquare size={15} /> Passed — City Inspection Ready
-                        </button>
-                      </div>
                     </div>
                   )}
                 </div>
               );
+
             })()}
           </div>
         </div>
