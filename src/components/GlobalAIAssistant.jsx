@@ -33,6 +33,8 @@ import {
   fetchDriveFileBase64,
   fetchDriveFileAsObjectUrl
 } from '../services/googleDrive';
+import DocumentViewerModal from './DocumentViewerModal';
+
 
 const findReferencedDriveFile = (query, driveTree, messages = []) => {
   if (!driveTree || !query) return null;
@@ -222,15 +224,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [showSettings, setShowSettings] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
-  const [previewDoc, setPreviewDoc] = useState({
-    isOpen: false,
-    fileId: '',
-    fileName: '',
-    folderName: '',
-    objectUrl: '',
-    isLoading: false,
-    error: ''
-  });
+  const [activePreviewFile, setActivePreviewFile] = useState(null);
   const chatEndRef = useRef(null);
 
   const handleRunDiagnosticSuite = async () => {
@@ -254,31 +248,11 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
   };
 
-  const handleOpenDocumentPreview = async (fileObj) => {
+  const handleOpenDocumentPreview = (fileObj) => {
     if (!fileObj || !fileObj.fileId) return;
-    setPreviewDoc({
-      isOpen: true,
-      fileId: fileObj.fileId,
-      fileName: fileObj.fileName || 'Document Preview',
-      folderName: fileObj.folderName || 'Google Drive',
-      objectUrl: '',
-      isLoading: true,
-      error: ''
-    });
-
-    try {
-      if (googleToken) {
-        const url = await fetchDriveFileAsObjectUrl(googleToken, fileObj.fileId);
-        setPreviewDoc((prev) => ({ ...prev, objectUrl: url, isLoading: false }));
-      } else {
-        window.open(`https://drive.google.com/file/d/${fileObj.fileId}/view`, '_blank');
-        setPreviewDoc({ isOpen: false, fileId: '', fileName: '', folderName: '', objectUrl: '', isLoading: false, error: '' });
-      }
-    } catch (err) {
-      console.warn('Error fetching preview doc:', err);
-      setPreviewDoc((prev) => ({ ...prev, isLoading: false, error: 'Could not load document preview directly from Drive.' }));
-    }
+    setActivePreviewFile(fileObj);
   };
+
 
   // Sync Google Drive folders & files manifest
   useEffect(() => {
@@ -1554,151 +1528,15 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         </div>
       )}
 
-      {/* Full-Screen Mobile Interactive Document Lightbox */}
-      {previewDoc.isOpen && (
-        <div
-          style={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            zIndex: 100000,
-            backgroundColor: 'rgba(0, 0, 0, 0.95)',
-            display: 'flex',
-            flexDirection: 'column',
-            backdropFilter: 'blur(10px)'
-          }}
-        >
-          {/* Header */}
-          <div
-            style={{
-              padding: '12px 16px',
-              backgroundColor: 'var(--color-zinc-950)',
-              borderBottom: '1px solid var(--color-zinc-800)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              color: '#fff'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-              <FileText size={18} style={{ color: 'var(--color-amber-400)', flexShrink: 0 }} />
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 800, fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {previewDoc.fileName}
-                </div>
-                <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)' }}>
-                  📁 {previewDoc.folderName}
-                </div>
-              </div>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {previewDoc.objectUrl && (
-                <a
-                  href={previewDoc.objectUrl}
-                  download={previewDoc.fileName}
-                  style={{
-                    padding: '6px 10px',
-                    backgroundColor: 'var(--color-zinc-900)',
-                    color: 'var(--color-zinc-200)',
-                    border: '1px solid var(--color-zinc-700)',
-                    borderRadius: '6px',
-                    fontSize: '0.75rem',
-                    fontWeight: 700,
-                    textDecoration: 'none',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                >
-                  <Download size={13} /> Save
-                </a>
-              )}
-              <a
-                href={`https://drive.google.com/file/d/${previewDoc.fileId}/view`}
-                target="_blank"
-                rel="noopener noreferrer"
-                style={{
-                  padding: '6px 10px',
-                  backgroundColor: 'var(--color-zinc-900)',
-                  color: 'var(--color-zinc-200)',
-                  border: '1px solid var(--color-zinc-700)',
-                  borderRadius: '6px',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  textDecoration: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <ExternalLink size={13} /> Drive
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  if (previewDoc.objectUrl) URL.revokeObjectURL(previewDoc.objectUrl);
-                  setPreviewDoc({ isOpen: false, fileId: '', fileName: '', folderName: '', objectUrl: '', isLoading: false, error: '' });
-                }}
-                style={{
-                  padding: '6px 12px',
-                  backgroundColor: 'var(--color-zinc-800)',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontWeight: 800,
-                  fontSize: '0.82rem',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }}
-              >
-                <X size={16} /> Close
-              </button>
-            </div>
-          </div>
-
-          {/* Document Body */}
-          <div style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'auto', padding: '8px' }}>
-            {previewDoc.isLoading && (
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px', color: 'var(--color-amber-400)' }}>
-                <Loader2 size={36} className="animate-spin" />
-                <span style={{ fontSize: '0.85rem', fontWeight: 700 }}>Fetching document from Google Drive...</span>
-              </div>
-            )}
-            {previewDoc.error && (
-              <div style={{ color: '#ef4444', textAlign: 'center', padding: '20px' }}>
-                <div>{previewDoc.error}</div>
-                <a
-                  href={`https://drive.google.com/file/d/${previewDoc.fileId}/view`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ display: 'inline-block', marginTop: '12px', color: 'var(--color-amber-400)', fontWeight: 700 }}
-                >
-                  Open Directly in Google Drive ↗
-                </a>
-              </div>
-            )}
-            {!previewDoc.isLoading && !previewDoc.error && previewDoc.objectUrl && (
-              previewDoc.fileName.toLowerCase().endsWith('.pdf') ? (
-                <iframe
-                  src={previewDoc.objectUrl}
-                  title={previewDoc.fileName}
-                  style={{ width: '100%', height: '100%', border: 'none', borderRadius: '8px', backgroundColor: '#fff' }}
-                />
-              ) : (
-                <img
-                  src={previewDoc.objectUrl}
-                  alt={previewDoc.fileName}
-                  style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', borderRadius: '8px' }}
-                />
-              )
-            )}
-          </div>
-        </div>
+      {/* Provider-Agnostic, Capability-Driven Document Viewer Modal */}
+      {activePreviewFile && (
+        <DocumentViewerModal
+          file={activePreviewFile}
+          token={googleToken}
+          onClose={() => setActivePreviewFile(null)}
+        />
       )}
+
 
       {/* Two-Tier Health & AI Diagnostic Suite Modal */}
       {showTestSuite && (
