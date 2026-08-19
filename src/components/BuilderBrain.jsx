@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import {
   Zap,
-  AlertTriangle,
   Trash2,
+
   X,
   Plus,
   CheckSquare,
@@ -638,28 +638,14 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   };
 
-  const handleFlagUncheckedSetup = () => {
-    const unchecked = siteSetupProtocol.inspectionChecklist.filter((i) => !siteSetupChecks[i.id]);
-    if (unchecked.length === 0) {
-      alert(`✅ All Site Setup items are marked complete for ${projectName}! Ready for lot mobilization.`);
-      return;
-    }
-    alert(`⚠️ Notice: ${unchecked.length} Site Setup items remain unchecked for ${projectName}. Please verify these items before mobilizing trades.`);
-  };
-
   const handleSMSSiteSetupPreNotes = () => {
     const textBody = `[ADEPEC HOMES SITE SETUP INSTRUCTIONS - ${projectName}]\nTrade: Site Prep & Utilities\n\nRequirements:\n` +
       siteSetupProtocol.preTradeNotes.map((note, idx) => `${idx + 1}. ${note}`).join('\n');
     window.location.href = `sms:?body=${encodeURIComponent(textBody)}`;
   };
 
-  const handleCompleteSiteSetup = () => {
-    alert(`🎉 Site Mobilization Complete for ${projectName}! You can now proceed to 1. Plumbing Rough-In.`);
-    setActiveSubTab('phases');
-    setActivePhaseId('plumbing');
-  };
-
   // Active Stage object
+
   const currentPhase = phases.find((p) => p.id === activePhaseId) || phases[0];
 
   const getPhaseCheckCounts = (p) => {
@@ -1565,6 +1551,49 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               Site Setup & Lot Mobilization Protocol
             </h3>
 
+            {/* Site Setup Complete Banner */}
+            {siteSetupCompletedCount === siteSetupProtocol.inspectionChecklist.length && siteSetupProtocol.inspectionChecklist.length > 0 && (
+              <div
+                style={{
+                  backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                  border: '1px solid rgba(16, 185, 129, 0.4)',
+                  borderRadius: '8px',
+                  padding: '10px 14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  marginBottom: '14px',
+                  gap: '10px'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '1.2rem' }}>✅</span>
+                  <div>
+                    <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#34d399' }}>
+                      Site Setup Complete — Lot Mobilized
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)' }}>
+                      All {siteSetupProtocol.inspectionChecklist.length} mobilization requirements verified for {projectName}.
+                    </div>
+                  </div>
+                </div>
+                <span
+                  style={{
+                    backgroundColor: '#10b981',
+                    color: '#000',
+                    padding: '3px 8px',
+                    borderRadius: '6px',
+                    fontSize: '0.72rem',
+                    fontWeight: 800,
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  100% READY
+                </span>
+              </div>
+            )}
+
+
             {/* SECTION 1: TELL SUB / SUPPLIERS BEFORE WORK STARTS (ACCORDION) */}
             <div
               style={{
@@ -1968,50 +1997,6 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                         </div>
                       );
                     })}
-                  </div>
-
-                  {/* Actions */}
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '6px' }}>
-                    <button
-                      onClick={handleFlagUncheckedSetup}
-                      style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        backgroundColor: 'rgba(239, 68, 68, 0.15)',
-                        border: '1px solid #ef4444',
-                        color: '#ef4444',
-                        fontWeight: 700,
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '5px'
-                      }}
-                    >
-                      <AlertTriangle size={14} /> Flag Unchecked as Watch-Outs
-                    </button>
-                    <button
-                      onClick={handleCompleteSiteSetup}
-                      style={{
-                        flex: 1,
-                        padding: '10px 12px',
-                        borderRadius: '6px',
-                        backgroundColor: 'var(--color-amber-500)',
-                        border: 'none',
-                        color: '#000',
-                        fontWeight: 800,
-                        fontSize: '0.8rem',
-                        cursor: 'pointer',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '5px'
-                      }}
-                    >
-                      <CheckSquare size={14} /> Mark Site Setup 100% Ready
-                    </button>
                   </div>
                 </div>
               )}

@@ -1,4 +1,5 @@
-const CACHE_NAME = 'jobscan-cache-v123';
+const CACHE_NAME = 'jobscan-cache-v124';
+
 
 
 
