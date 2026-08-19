@@ -859,9 +859,11 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     } catch (_) {}
   }, [voiceMode, silenceTimeoutSec, wakeWordEnabled]);
 
-  // 3. Speech Recognition Controller tied to Voice State Machine
+  // 3. Speech Recognition Controller tied to Voice State Machine (Active in LISTENING, AUTO_LISTENING, and SPEAKING for barge-in)
   useEffect(() => {
-    const shouldListen = voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING;
+    const shouldListen = voiceState === VOICE_STATES.LISTENING || 
+                         voiceState === VOICE_STATES.AUTO_LISTENING || 
+                         (voiceState === VOICE_STATES.SPEAKING && voiceMode === VOICE_MODES.CONTINUOUS_HANDS_FREE);
 
     if (!shouldListen) {
       if (recognitionRef.current) {
@@ -881,16 +883,57 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
 
     const recSessionId = voiceSmRef.current.currentSessionId;
+    const isSpeakingState = voiceState === VOICE_STATES.SPEAKING;
     const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = isSpeakingState ? true : false;
+    rec.interimResults = true;
     rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : (typeof navigator !== 'undefined' && navigator.language?.startsWith('es')) ? 'es-US' : 'en-US';
 
     rec.onresult = (e) => {
       if (voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale session guard
-      const spoken = e.results[0]?.[0]?.transcript || '';
+      
+      let spoken = '';
+      let isFinalResult = false;
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        spoken += e.results[i][0].transcript;
+        if (e.results[i].isFinal) isFinalResult = true;
+      }
       const trimmed = spoken.trim();
       if (!trimmed) return;
+
+      // 1. Voice Barge-In / Interruption during SPEAKING
+      if (voiceSmRef.current.state === VOICE_STATES.SPEAKING) {
+        // Acoustic Feedback Check: ignore Jarvis's own TTS output coming from the speaker
+        if (voiceSmRef.current.isAcousticFeedback(trimmed)) {
+          return;
+        }
+
+        console.log('⚡ [Voice Barge-In Activated by User]:', trimmed);
+        try {
+          window.speechSynthesis.cancel();
+        } catch (_) {}
+        voiceSmRef.current.bargeIn('user_interrupted_by_voice');
+
+        // Check if user said a command to stop/pause
+        const isStopCommand = /^(hey|hold on|wait|stop|pause|quiet|listen|jarvis|hey jarvis|espera|para|detente|oye)+$/i.test(trimmed.replace(/[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]/g, '').trim());
+        if (isStopCommand) {
+          // Immediately entered LISTENING state, ready for next user question
+          return;
+        }
+
+        // If user already spoke their new question while interrupting, execute it on final!
+        if (isFinalResult) {
+          const finalQuery = stripWakeWord(trimmed);
+          if (finalQuery && finalQuery.length > 2) {
+            setInput(finalQuery);
+            executeMessage(finalQuery);
+          }
+        }
+        return;
+      }
+
+      // 2. Normal LISTENING / AUTO_LISTENING flow (only trigger on final recognition)
+      if (!isFinalResult) return;
 
       // Acoustic Feedback Check
       if (voiceSmRef.current.isAcousticFeedback(trimmed)) {
@@ -946,7 +989,8 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         rec.abort();
       } catch (_) {}
     };
-  }, [voiceState, aiLanguage]);
+  }, [voiceState, aiLanguage, voiceMode]);
+
 
   const handleVoiceInput = () => {
     const sm = voiceSmRef.current;
