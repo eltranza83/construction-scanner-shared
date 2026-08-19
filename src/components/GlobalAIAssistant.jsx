@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Bot,
   Mic,
-  MicOff,
   Send,
   X,
   Volume2,
@@ -10,16 +9,10 @@ import {
   Settings,
   Sparkles,
   Zap,
-  MessageSquare,
   Loader2,
   FileText,
   ExternalLink,
-  Eye,
-  Download,
-  Radio,
-  Headphones,
-  Square,
-  Activity
+  Square
 } from 'lucide-react';
 import {
   loadProjectSpecs,
@@ -35,9 +28,9 @@ import {
   createFolder,
   trashDriveFileOrFolder,
   syncFinishSpecsToDrive,
-  fetchDriveFileBase64,
-  fetchDriveFileAsObjectUrl
+  fetchDriveFileBase64
 } from '../services/googleDrive';
+
 import DocumentViewerModal from './DocumentViewerModal';
 import {
   VoiceStateMachine,
@@ -840,8 +833,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       setIsRecording(snapshot.state === VOICE_STATES.LISTENING || snapshot.state === VOICE_STATES.AUTO_LISTENING);
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      sm.clearTimers();
+    };
   }, []);
+
 
   // 2. Sync Configuration Changes
   useEffect(() => {

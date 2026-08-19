@@ -3,9 +3,10 @@
  * Pure AI Model Architecture: Feeds live project records directly to Gemini Cloud AI in one pass.
  * No brittle hardcoded if/else rules or regex catchphrases.
  */
-import { AI_CONFIG, determineTaskModel } from '../config/aiConfig.js';
+import { determineTaskModel } from '../config/aiConfig.js';
 import { executeClientToolCall } from './aiTools.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
+
 
 
 const SPECS_STORAGE_PREFIX = 'jobscan_project_specs_';
