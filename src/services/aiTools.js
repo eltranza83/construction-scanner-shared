@@ -2,6 +2,14 @@
  * Client-Side AI Tool Executors, Data Retrieval & Diagnostic Test Suite
  */
 import { AI_TOOL_DECLARATIONS, executeWeatherTool } from '../../api/_lib/ai-tools-definitions.js';
+import {
+  saveMemory,
+  getMemories,
+  searchMemories,
+  updateMemory,
+  deactivateMemory,
+  detectAmbiguity
+} from './memoryService.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -320,6 +328,164 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       break;
     }
 
+    case 'save_memory': {
+      const textToSave = String(args.text || '').trim();
+      const ambiguityCheck = detectAmbiguity(textToSave);
+      
+      if (ambiguityCheck.isAmbiguous) {
+        resultPayload = {
+          saved: false,
+          isAmbiguous: true,
+          warning: ambiguityCheck.warning,
+          message: `I noticed this statement contains speculative language ("${ambiguityCheck.indicator}"). Do you want me to save this as a permanent memory, or was it just a possibility?`
+        };
+        break;
+      }
+
+      const savedItem = await saveMemory({
+        text: textToSave,
+        projectId: args.projectId || projectContext.projectId || null,
+        category: args.category || 'general',
+        memoryType: args.memoryType || 'project_fact',
+        importance: args.importance || 'important',
+        isGlobal: Boolean(args.isGlobal),
+        effectiveDate: args.effectiveDate || null,
+        source: 'user_explicit'
+      });
+
+      resultPayload = {
+        saved: true,
+        memoryId: savedItem.id,
+        memory: savedItem,
+        message: `Got it. I've saved that to your memory.`
+      };
+      break;
+    }
+
+    case 'search_memories': {
+      const searchQuery = String(args.query || '').trim();
+      const searchTargetProj = args.projectId || projectContext.projectId || null;
+      const results = await searchMemories(searchQuery, {
+        projectId: searchTargetProj,
+        category: args.category,
+        memoryType: args.memoryType
+      });
+
+      resultPayload = {
+        found: results.length > 0,
+        query: searchQuery,
+        totalMatches: results.length,
+        memories: results.map(m => ({
+          id: m.id,
+          text: m.text,
+          projectId: m.projectId,
+          isGlobal: m.isGlobal,
+          category: m.category,
+          memoryType: m.memoryType,
+          importance: m.importance,
+          effectiveDate: m.effectiveDate,
+          createdAt: m.createdAt
+        }))
+      };
+      break;
+    }
+
+    case 'list_memories': {
+      const listTargetProj = args.projectId || projectContext.projectId || null;
+      const list = await getMemories({
+        projectId: listTargetProj,
+        category: args.category,
+        includeGlobal: args.includeGlobal !== false,
+        activeOnly: true
+      });
+
+      resultPayload = {
+        found: list.length > 0,
+        projectId: listTargetProj,
+        total: list.length,
+        memories: list.map(m => ({
+          id: m.id,
+          text: m.text,
+          projectId: m.projectId,
+          isGlobal: m.isGlobal,
+          category: m.category,
+          memoryType: m.memoryType,
+          importance: m.importance
+        }))
+      };
+      break;
+    }
+
+    case 'update_memory': {
+      const targetQuery = String(args.searchQuery || args.memoryId || args.updatedText || '').trim();
+      const updateTargetProj = args.projectId || projectContext.projectId || null;
+      let targetId = args.memoryId;
+
+      if (!targetId && targetQuery) {
+        const found = await searchMemories(targetQuery, { projectId: updateTargetProj, limit: 1 });
+        if (found.length > 0) {
+          targetId = found[0].id;
+        }
+      }
+
+      if (targetId) {
+        const updatedItem = await updateMemory(
+          targetId,
+          { text: args.updatedText },
+          args.reason || 'Updated via conversation'
+        );
+        resultPayload = {
+          updated: true,
+          memoryId: targetId,
+          memory: updatedItem,
+          message: `I've updated that memory.`
+        };
+      } else {
+        // If no existing memory found, save as new
+        const savedNew = await saveMemory({
+          text: args.updatedText,
+          projectId: updateTargetProj,
+          source: 'user_explicit'
+        });
+        resultPayload = {
+          updated: true,
+          isNew: true,
+          memoryId: savedNew.id,
+          memory: savedNew,
+          message: `I didn't find the exact previous memory, but I've saved the updated information.`
+        };
+      }
+      break;
+    }
+
+    case 'delete_memory': {
+      const deleteQuery = String(args.searchQuery || args.memoryId || '').trim();
+      const deleteTargetProj = args.projectId || projectContext.projectId || null;
+      let deleteId = args.memoryId;
+
+      if (!deleteId && deleteQuery) {
+        const found = await searchMemories(deleteQuery, { projectId: deleteTargetProj, limit: 1 });
+        if (found.length > 0) {
+          deleteId = found[0].id;
+        }
+      }
+
+      if (deleteId) {
+        await deactivateMemory(deleteId, args.reason || 'Deactivated via user request');
+        resultPayload = {
+          deleted: true,
+          memoryId: deleteId,
+          message: `Got it. I've deactivated that memory.`
+        };
+      } else {
+        resultPayload = {
+          deleted: false,
+          message: `I couldn't locate that specific memory to delete.`
+        };
+      }
+      break;
+    }
+
     default:
       resultPayload = { found: false, error: `Tool ${functionName} not implemented` };
   }
@@ -381,6 +547,13 @@ export function evaluateSystemAndDataHealth(projectContext = {}) {
       isHealthy: true,
       badge: '🟢 Operational',
       detail: 'Direct Phase Category Router Active'
+    },
+    {
+      id: 'memory_engine',
+      name: 'Persistent Memory Second Brain',
+      isHealthy: true,
+      badge: '🟢 Operational',
+      detail: 'Firestore & Dual-Store Memory Engine Active'
     }
   ];
 
@@ -420,6 +593,13 @@ export function evaluateSystemAndDataHealth(projectContext = {}) {
       hasData: items.length > 0,
       badge: items.length > 0 ? `🟢 ${items.length} Items Active` : '🟢 Default Protocol Ready',
       detail: items.length > 0 ? `${items.filter(i => i.status === 'completed').length} completed` : 'Standard 6-stage municipal protocol ready'
+    },
+    {
+      id: 'persistent_memories',
+      name: 'Persistent Context Memories',
+      hasData: true,
+      badge: '🟢 Second Brain Ready',
+      detail: 'Contextual memory database active'
     }
   ];
 
@@ -472,6 +652,12 @@ export async function runAllAiToolDiagnostics(projectContext = {}) {
       title: 'Field Schedule & Reminders Check',
       tool: 'get_project_schedule',
       args: { category: 'all' }
+    },
+    {
+      id: 'memory',
+      title: 'Persistent Memory Search Check',
+      tool: 'search_memories',
+      args: { query: 'painter' }
     }
   ];
 

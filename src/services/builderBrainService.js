@@ -6,6 +6,7 @@
 import { determineTaskModel } from '../config/aiConfig.js';
 import { executeClientToolCall } from './aiTools.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
+import { searchMemories, formatMemoriesForPrompt } from './memoryService.js';
 
 
 
@@ -223,6 +224,7 @@ function buildGroundingSystemInstruction(context) {
     siteSetupData = null,
     inspectionsData = [],
     pendingR = [],
+    memoriesData = [],
     timeGreeting = 'Good morning',
     spanishTimeGreeting = 'Buenos días',
     currentTimeString = '',
@@ -307,6 +309,8 @@ function buildGroundingSystemInstruction(context) {
     }
   }
 
+  const memoryRecords = formatMemoriesForPrompt(memoriesData);
+
   return `You are Jarvis, the expert AI Construction Field Co-Pilot for custom home builder ADEPEC HOMES / SiteTactix.
 
 CURRENT PROJECT CONTEXT:
@@ -352,65 +356,74 @@ ${reminderRecords}
 ${driveRecords}
 
 ======================================================================
+[MODULE 7: PERSISTENT BUSINESS & SITE MEMORIES (SECOND BRAIN)] -> STATUS: LOADED & ACTIVE
+======================================================================
+${memoryRecords}
+
+======================================================================
 BEHAVIOR, VERIFICATION & CITATION RULES:
 ======================================================================
-1. SYSTEM ARCHITECTURE BOUNDARIES:
-   - The application is the authoritative source for deterministic data retrieval, validation, permissions, and actions.
-   - You (Jarvis / Gemini) are responsible solely for natural language understanding, reasoning, and conversational presentation over the data provided in this manifest.
-   - Module statuses (LOADED & ACTIVE, NOT LOADED, METADATA ONLY, CONTENT EXTRACTED) are authoritative.
+1. SYSTEM ARCHITECTURE & DUAL-STORE ROLES:
+   - "Live Financial Spreadsheet" is the single authoritative source for actual financial transactions, payments, and mathematical accounting.
+   - "Persistent Saved Memory" is the authoritative source for verbal quotes, subcontractor preferences, site decisions, and lessons learned that the user told you to remember.
+   - You (Jarvis / Gemini) are responsible for natural language understanding, reasoning, and conversational presentation over the data provided in this manifest.
 
-2. MODULE VERIFICATION & MISSING DATA PROTOCOL:
-   - Before answering any query, verify that the required data module is marked as LOADED.
-   - If a required module is NOT LOADED, or if the internal contents of a document (e.g. PDF closing statements, contract text, unextracted receipts) are marked METADATA ONLY, you MUST explicitly state what is missing, identify the missing source, and either ask a clarifying question or request the appropriate app action (such as opening the document on screen with [[ACTION:VIEW_FILE:...]]).
-   - NEVER fabricate, extrapolate, or guess data, dollar figures, inspection items, or document text.
+2. EXPLICIT MEMORY COMMAND EXECUTION (SAVE, UPDATE, FORGET):
+   - When the user uses explicit memory commands such as:
+     * "Remember this / that..."
+     * "I need you to remember..."
+     * "Make a note of this..."
+     * "Keep this in mind..."
+     * "Save this for later..."
+     * "Going forward..."
+     * "Don't forget that..."
+   - You MUST IMMEDIATELY call the 'save_memory' function tool with the text and appropriate category/importance. Do NOT ask for confirmation or hesitate—the user's explicit phrase is their direct authorization to save.
+   - When the user asks to change, correct, or update a previously remembered fact (e.g., "Actually change that note to check", "The painter wants checks now"), you MUST call the 'update_memory' function tool.
+   - When the user asks to forget or remove a memory (e.g., "Forget what I told you about...", "Delete that note"), you MUST call the 'delete_memory' function tool.
+   - When the user asks what you remember or queries preferences/quotes (e.g., "What do you remember about Lot 12?", "How does the painter want to get paid?"), answer naturally, concisely, and directly in your professional co-pilot persona (e.g., "For Lot 3, the painter prefers to be paid by check.") using the factual records retrieved from 'search_memories' or [MODULE 7].
 
-3. MANDATORY SOURCE PROVENANCE:
-   - Every factual statement must cite its exact provenance naturally in your answer:
-     * "Live Financial Spreadsheet" (for budgets, payments, contractor balances)
-     * "Municipal Inspection Checklist" (for plumbing, framing, foundation, etc.)
-     * "Site Setup Checklist" (for mobilization, permit boards, meters, temp utilities)
-     * "Google Drive Index" (for folder names, uploaded files, file metadata)
-     * "Extracted Document Text" (when document contents are explicitly provided in prompt)
+3. DUAL-STORE CONTRADICTION & RECONCILIATION RULE:
+   - When a saved memory and the live spreadsheet differ (for example, memory records an original verbal quote of $8,500 while the spreadsheet shows $0.00 paid to date), DO NOT state the difference as an absolute financial ledger balance.
+   - State both clearly and transparently (e.g., "The painter's saved verbal quote is $8,500, while the project spreadsheet currently shows $0.00 paid. That means $8,500 of the quoted amount has not yet been recorded as paid in the official ledger.").
+   - Financial calculations (balances, payments, totals) must ALWAYS come from the spreadsheet, never assumed or hallucinated from memory.
 
-4. CLEAN FORMATTING & NATURAL DATES (NO ASTERISKS / NO DUPLICATE DATES / NO RAW IDS):
+4. STRICT PROJECT ISOLATION:
+   - Never apply a project-specific memory from one lot (e.g. Lot 12) to a different lot (e.g. Lot 15).
+   - Only memories explicitly marked as [GLOBAL BUSINESS KNOWLEDGE] apply across all projects.
+   - If information for a requested lot is not in the spreadsheet or memory, state clearly that you do not have that record; do NOT guess or transfer from other lots.
+
+5. SPECULATION & AMBIGUITY GUARD:
+   - If the user uses speculative or tentative language (e.g., "might switch to ACH", "may want", "possibly considering"), do NOT save it as a permanent fact. Clarify or ask for confirmation first.
+
+6. MANDATORY SOURCE CITATION:
+   - Always clearly cite the origin of facts in your response:
+     * "According to your project spreadsheet..." (for financial numbers, payments)
+     * "Your saved memory says..." (for verbal agreements, preferences, quotes)
+     * "Municipal Inspection Checklist..." (for plumbing, framing, etc.)
+     * "Site Setup Checklist..." (for meters, silt fence, mobilization)
+     * "Google Drive Index..." (for folder/file structure)
+
+7. CLEAN FORMATTING & NATURAL DATES (NO ASTERISKS / NO DUPLICATE DATES / NO RAW IDS):
    - Do NOT use Markdown asterisks (* or **) in your text responses. Use plain text and standard bullet dashes (-) or numbered lists (1., 2.).
    - Always output dates in natural conversational English (e.g. "July 22, 2026") or Spanish (e.g. "22 de julio de 2026").
-
-   - NEVER append raw numeric dates in parentheses like "(2026-07-22)" or "(2026-08-01)". Output ONLY the single natural date.
-   - When listing folders or files from Google Drive, output ONLY clean human-readable names (e.g. "Closing Settlement", "X-Ray Photos", "Processed Invoices", "Invoice Uploads").
    - NEVER output raw Google Drive Folder IDs or File IDs (e.g. '1-_2MHhajXEKLDsIADlzkOnf1167DMYN_') in your conversational text responses.
 
-
-
-5. OPENING DOCUMENTS & PRONOUN CONFIRMATIONS:
+8. OPENING DOCUMENTS & PRONOUN CONFIRMATIONS:
    - When the user asks to see, open, pull up, or show a document or receipt, or says 'open it', 'yeah go ahead', 'show it to me', 'pull it up':
      * Check the recent conversation context to resolve the exact file being discussed.
      * If the reference unambiguously maps to a single file, confirm you are opening it and ALWAYS append: [[ACTION:VIEW_FILE:{"fileId":"FILE_ID","fileName":"FILE_NAME","folderName":"FOLDER_NAME"}]].
      * If multiple matching files exist, ask ONE clarifying question asking which specific file to open instead of guessing.
 
-6. STATE-CHANGING ACTIONS & PERMISSIONS:
-   - For any action that modifies data—creating folders, editing sheets, moving files, or logging records—you MUST ask for explicit confirmation from the user first (e.g. "Would you like me to go ahead and create the folder '[Folder Name]' in your Google Drive project folder for [Project Name]?"), unless the user has explicitly given automatic approval for that action in the conversation.
+9. STATE-CHANGING ACTIONS & PERMISSIONS:
+   - For Google Drive file actions (creating folders, moving files, or deleting files in Drive), you MUST ask for explicit confirmation from the user first (e.g. "Would you like me to go ahead and create the folder '[Folder Name]' in your Google Drive project folder for [Project Name]?").
+   - This confirmation requirement does NOT apply to memory commands (save_memory, update_memory, delete_memory), which execute immediately when explicitly commanded.
    - When confirmed by the user, emit the corresponding action code (e.g. [[ACTION:CREATE_FOLDER:FolderName]]).
 
-7. MUNICIPAL INSPECTIONS & SITE SETUP:
-   - For municipal inspection status or punchlist queries, reference the exact checklist items marked as "PENDING" or "[ ]" under [MODULE 3].
-   - For site mobilization readiness, reference [MODULE 2] and report which items are passed vs pending.
-
-8. NATURAL GREETINGS & VOICE FLOW:
+10. NATURAL GREETINGS & VOICE FLOW:
    - Greet the user with a time-of-day greeting (Good morning / afternoon / evening) ONLY when the user initiates a greeting.
    - Do NOT repeat greetings on follow-up questions or data inquiries—answer directly, cleanly, and concisely.
    - Seamlessly support English and Spanish based on user input.`;
 }
-
-
-
-
-
-
-
-
-
-
 
 function formatToolResultsHumanReadable(toolTelemetryList) {
   const parts = [];
@@ -420,11 +433,31 @@ function formatToolResultsHumanReadable(toolTelemetryList) {
 
     if (t.name === 'get_weather_for_jobsite') {
       if (res.current) {
-        parts.push(`The current weather at the jobsite is **${res.current.temperature_2m || res.current.temp || 75}°F**${res.current.condition ? `, ${res.current.condition}` : ''}.`);
+        parts.push(`The current weather at the jobsite is ${res.current.temperature_2m || res.current.temp || 75}°F${res.current.condition ? `, ${res.current.condition}` : ''}.`);
       }
     } else if (t.name === 'get_project_schedule') {
       if (res.items && res.items.length > 0) {
-        parts.push(`There are **${res.totalItems}** active checklist items on the project schedule.`);
+        parts.push(`There are ${res.totalItems} active checklist items on the project schedule.`);
+      }
+    } else if (t.name === 'save_memory') {
+      if (res.message) {
+        parts.push(res.message);
+      }
+    } else if (t.name === 'update_memory' || t.name === 'delete_memory') {
+      if (res.message) {
+        parts.push(res.message);
+      }
+    } else if (t.name === 'search_memories' || t.name === 'list_memories') {
+      if (res.memories && res.memories.length > 0) {
+        if (res.memories.length === 1) {
+          const m = res.memories[0].text;
+          parts.push(m.endsWith('.') ? m : `${m}.`);
+        } else {
+          const memList = res.memories.map(m => `- ${m.text}`).join('\n');
+          parts.push(memList);
+        }
+      } else if (res.found === false || res.total === 0) {
+        parts.push(`I don't have any saved notes or preferences matching that request for this project.`);
       }
     }
   }
@@ -453,6 +486,8 @@ export async function askGeminiBrain(
   const driveData = driveTreeOverride || loadDriveTree(projectId);
   const projectSpecs = loadProjectSpecs(projectId);
   const siteSetupProtocol = getSiteSetupProtocol();
+  let lastErrorCode = null;
+  let toolTelemetryList = [];
 
   let siteSetupChecks = {};
   try {
@@ -506,6 +541,17 @@ export async function askGeminiBrain(
   });
 
 
+  // Pre-fetch relevant persistent memories for this lot / project scope
+  let memoriesData = [];
+  try {
+    memoriesData = await searchMemories(query, {
+      projectId,
+      limit: 8
+    });
+  } catch (mErr) {
+    console.warn('[BuilderBrain] Failed to pre-fetch memories:', mErr);
+  }
+
   const projectContext = {
     projectId,
     activeProjectName,
@@ -515,7 +561,8 @@ export async function askGeminiBrain(
     driveTree: driveData,
     projectSpecs,
     siteSetupData,
-    inspectionsData
+    inspectionsData,
+    memoriesData
   };
 
   const now = new Date();
@@ -534,6 +581,7 @@ export async function askGeminiBrain(
     siteSetupData,
     inspectionsData,
     pendingR,
+    memoriesData,
     timeGreeting,
     spanishTimeGreeting,
     currentTimeString,
@@ -580,9 +628,89 @@ export async function askGeminiBrain(
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
   const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key')) : '') || envKey || '';
 
-  let lastErrorCode = null;
-  let toolTelemetryList = [];
+  // 1. DIRECT EXPLICIT MEMORY COMMAND PROCESSING
+  const qTrim = query.trim();
+  const rememberMatch = qTrim.match(/^(?:i need you to |please )?remember (?:that )?(.+)$/i) 
+    || qTrim.match(/^(?:make a note|take note|save (?:this )?(?:for later|to memory)?|keep (?:this )?in mind)(?: that|:)? (.+)$/i);
 
+  const updateMatch = qTrim.match(/^(?:hey,? )?(?:actually,? )?(?:we need to |please )?(?:change|update)(?: that[.,]?)?(?: note| preference| memory)? (?:to|that)?[:\s]*(.+)$/i)
+    || qTrim.match(/^(?:actually,? )?(?:the painter|he|she|they) (?:wants|prefers) (?:to be paid by )?(.+) now[.,]?$/i);
+
+  const forgetMatch = qTrim.match(/^(?:forget|delete|remove)(?: what i told you about| that note about| the note about| that)? (.+)$/i);
+
+  if (rememberMatch && !rememberMatch[1].toLowerCase().startsWith('what') && !rememberMatch[1].toLowerCase().startsWith('how') && !rememberMatch[1].toLowerCase().startsWith('where')) {
+    const textToSave = rememberMatch[1].trim();
+    try {
+      const saveRes = await executeClientToolCall('save_memory', {
+        text: textToSave,
+        projectId
+      }, projectContext);
+
+      if (saveRes && saveRes.saved) {
+        return {
+          text: "Got it. I've saved that to your memory.",
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'Gemini Memory Engine',
+            intent: 'Memory Saved',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'save_memory', args: { text: textToSave, projectId }, result: saveRes }]
+          }
+        };
+      }
+    } catch (sErr) {
+      console.warn('[BuilderBrain] Direct memory save fallback failed:', sErr);
+    }
+  } else if (updateMatch) {
+    const updatedText = updateMatch[1].trim();
+    try {
+      const updateRes = await executeClientToolCall('update_memory', {
+        updatedText,
+        projectId,
+        searchQuery: updatedText
+      }, projectContext);
+
+      if (updateRes && updateRes.updated) {
+        return {
+          text: "Got it. I've updated that memory.",
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'Gemini Memory Engine',
+            intent: 'Memory Updated',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'update_memory', args: { updatedText, projectId }, result: updateRes }]
+          }
+        };
+      }
+    } catch (uErr) {
+      console.warn('[BuilderBrain] Direct memory update fallback failed:', uErr);
+    }
+  } else if (forgetMatch) {
+    const searchQuery = forgetMatch[1].trim();
+    try {
+      const deleteRes = await executeClientToolCall('delete_memory', {
+        searchQuery,
+        projectId
+      }, projectContext);
+
+      if (deleteRes && deleteRes.deleted) {
+        return {
+          text: "Got it. I've removed that from your active memory.",
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'Gemini Memory Engine',
+            intent: 'Memory Deleted',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'delete_memory', args: { searchQuery, projectId }, result: deleteRes }]
+          }
+        };
+      }
+    } catch (dErr) {
+      console.warn('[BuilderBrain] Direct memory delete fallback failed:', dErr);
+    }
+  }
+
+  // 2. REMOTE CLOUD AI INFERENCE WITH FULL GROUNDED MANIFEST
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -604,7 +732,7 @@ export async function askGeminiBrain(
     if (apiRes.ok) {
       const data = await apiRes.json();
 
-      // If Gemini requested a tool execution (e.g. weather)
+      // If Gemini requested a tool execution (e.g. weather, memory)
       if (data && data.toolCalls && data.toolCalls.length > 0) {
         for (const tc of data.toolCalls) {
           try {
@@ -623,6 +751,17 @@ export async function askGeminiBrain(
           }
         }
 
+        const sourcesUsed = [];
+        if (dashData && (dashData.subcontractors?.length > 0 || dashData.phases?.length > 0 || dashData.projectInfo?.budgetGross)) {
+          sourcesUsed.push('Google Sheets');
+        }
+        if (memoriesData && memoriesData.length > 0) {
+          sourcesUsed.push(`Memory Vault (${memoriesData.length} active)`);
+        }
+        if (driveData && (driveData.directFiles?.length > 0 || driveData.subfolders?.length > 0)) {
+          sourcesUsed.push('Google Drive');
+        }
+
         const cleanSummary = formatToolResultsHumanReadable(toolTelemetryList);
         if (cleanSummary) {
           return {
@@ -632,6 +771,8 @@ export async function askGeminiBrain(
               source: 'Gemini Cloud AI',
               intent: 'Tool Augmented Response',
               durationMs: Date.now() - clientStartTime,
+              sourcesUsed: sourcesUsed,
+              memoriesGroundedCount: memoriesData?.length || 0,
               toolsExecuted: toolTelemetryList
             }
           };
@@ -639,6 +780,17 @@ export async function askGeminiBrain(
       }
 
       if (data && data.text) {
+        const sourcesUsed = [];
+        if (dashData && (dashData.subcontractors?.length > 0 || dashData.phases?.length > 0 || dashData.projectInfo?.budgetGross)) {
+          sourcesUsed.push('Google Sheets');
+        }
+        if (memoriesData && memoriesData.length > 0) {
+          sourcesUsed.push(`Memory Vault (${memoriesData.length} active)`);
+        }
+        if (driveData && (driveData.directFiles?.length > 0 || driveData.subfolders?.length > 0)) {
+          sourcesUsed.push('Google Drive');
+        }
+
         return {
           text: data.text.trim(),
           telemetry: {
@@ -646,6 +798,8 @@ export async function askGeminiBrain(
             source: 'Gemini Cloud AI',
             intent: data.telemetry?.intent || (forceDeepReasoning ? 'Forced Deep Reasoning' : 'Standard Response'),
             durationMs: Date.now() - clientStartTime,
+            sourcesUsed: sourcesUsed,
+            memoriesGroundedCount: memoriesData?.length || 0,
             toolsExecuted: []
           }
         };
@@ -657,7 +811,21 @@ export async function askGeminiBrain(
     lastErrorCode = 'NETWORK_TIMEOUT';
   }
 
-  // Graceful fallback when cloud assistant is unavailable
+  // 3. FAST LOCAL LEDGER & PERSISTENT MEMORY FALLBACK
+  if (memoriesData && memoriesData.length > 0) {
+    const memSummary = memoriesData.map(m => `- ${m.text}`).join('\n');
+    return {
+      text: `According to your saved memory:\n${memSummary}`,
+      telemetry: {
+        modelUsed: 'Local Memory Engine',
+        source: 'Persistent Memory Vault',
+        intent: 'Memory Retrieval',
+        durationMs: Date.now() - clientStartTime,
+        toolsExecuted: []
+      }
+    };
+  }
+
   return {
     text: `I am temporarily unable to connect to the cloud AI assistant for open reasoning. However, all your project financials, schedule, and files for ${activeProjectName} are active locally. What specific record would you like to check?`,
     telemetry: {

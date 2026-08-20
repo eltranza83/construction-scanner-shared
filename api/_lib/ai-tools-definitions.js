@@ -105,6 +105,92 @@ export const AI_TOOL_DECLARATIONS = [
         projectId: { type: 'STRING', description: 'Optional project ID' }
       }
     }
+  },
+  {
+    name: 'save_memory',
+    description: 'Save a permanent contextual fact, verbal agreement, subcontractor preference, quote, site decision, or lesson learned to persistent memory.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        text: { type: 'STRING', description: 'The exact fact, decision, or preference to remember.' },
+        projectId: { type: 'STRING', description: 'The project/lot identifier (e.g. Lot 12) or null if global.' },
+        category: {
+          type: 'STRING',
+          description: 'Category: subcontractor, vendor, decision, preference, quote, procedure, rule, lesson_learned, or general.'
+        },
+        memoryType: {
+          type: 'STRING',
+          description: 'Type: project_fact, subcontractor, vendor, preference, decision, agreement, instruction, lesson_learned, business_rule, or general.'
+        },
+        importance: {
+          type: 'STRING',
+          description: 'Importance level: critical, important, or informational.'
+        },
+        isGlobal: {
+          type: 'BOOLEAN',
+          description: 'True if this is a company-wide or multi-project rule/preference.'
+        },
+        effectiveDate: {
+          type: 'STRING',
+          description: 'Optional date (YYYY-MM-DD) when this fact or agreement became effective.'
+        }
+      },
+      required: ['text']
+    }
+  },
+  {
+    name: 'search_memories',
+    description: 'Search persistent business memory for verbal agreements, subcontractor preferences, site decisions, quotes, and lessons learned.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        query: { type: 'STRING', description: 'Search term or question regarding saved memories.' },
+        projectId: { type: 'STRING', description: 'Optional project ID / lot identifier to scope the search.' },
+        category: { type: 'STRING', description: 'Optional category filter.' },
+        memoryType: { type: 'STRING', description: 'Optional memory type filter.' }
+      }
+    }
+  },
+  {
+    name: 'list_memories',
+    description: 'List all active saved memories, site decisions, or subcontractor preferences for a specific project/lot or globally.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        projectId: { type: 'STRING', description: 'Optional project ID / lot identifier.' },
+        category: { type: 'STRING', description: 'Optional category filter.' },
+        includeGlobal: { type: 'BOOLEAN', description: 'Whether to include company-wide global memories.' }
+      }
+    }
+  },
+  {
+    name: 'update_memory',
+    description: 'Update an existing saved memory when details change (e.g., subcontractor changes payment method from check to ACH).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        memoryId: { type: 'STRING', description: 'ID of the existing memory to update (if known).' },
+        searchQuery: { type: 'STRING', description: 'Query to locate the existing memory if ID is not known.' },
+        updatedText: { type: 'STRING', description: 'The new updated memory text.' },
+        projectId: { type: 'STRING', description: 'Optional project ID.' },
+        reason: { type: 'STRING', description: 'Reason for the change.' }
+      },
+      required: ['updatedText']
+    }
+  },
+  {
+    name: 'delete_memory',
+    description: 'Deactivate or forget a previously saved memory (e.g. when user says "Forget what I told you about...").',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        memoryId: { type: 'STRING', description: 'ID of the memory to forget (if known).' },
+        searchQuery: { type: 'STRING', description: 'Query or description of what memory to forget.' },
+        projectId: { type: 'STRING', description: 'Optional project ID.' },
+        reason: { type: 'STRING', description: 'Reason for deactivation.' }
+      },
+      required: ['searchQuery']
+    }
   }
 ];
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import {
   Zap,
   Trash2,
-
+  Brain,
   X,
   Plus,
   CheckSquare,
@@ -21,6 +21,8 @@ import {
   Settings,
   MessageSquare
 } from 'lucide-react';
+import MemoryVault from './MemoryVault.jsx';
+import { getMemories } from '../services/memoryService.js';
 import {
   loadProjectSpecs,
   saveProjectSpecs,
@@ -364,8 +366,15 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
-  const [activeSubTab, setActiveSubTab] = useState('site_setup'); // 'site_setup' | 'phases' | 'specs'
+  const [activeSubTab, setActiveSubTab] = useState('site_setup'); // 'site_setup' | 'phases' | 'specs' | 'vault'
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
+  const [memoryVaultCount, setMemoryVaultCount] = useState(0);
+
+  useEffect(() => {
+    getMemories({ projectId, includeGlobal: true, activeOnly: true })
+      .then((mems) => setMemoryVaultCount(Array.isArray(mems) ? mems.length : 0))
+      .catch(() => {});
+  }, [projectId, activeSubTab]);
 
   // Finish Selections & Specs state
   const [specs, setSpecs] = useState(() => loadProjectSpecs(projectId));
@@ -914,21 +923,22 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         </div>
       </div>
 
-      {/* 3 MASTER PROJECT HUBS */}
+      {/* 4 MASTER PROJECT HUBS */}
       <div
         style={{
           display: 'flex',
-          gap: '8px',
+          gap: '6px',
           backgroundColor: 'var(--color-zinc-950)',
           padding: '4px',
           borderRadius: '10px',
-          border: '1px solid var(--color-zinc-800)'
+          border: '1px solid var(--color-zinc-800)',
+          flexWrap: 'wrap'
         }}
       >
         <button
           onClick={() => setActiveSubTab('site_setup')}
           style={{
-            flex: 1.2,
+            flex: '1 1 120px',
             padding: '10px 8px',
             borderRadius: '8px',
             border: 'none',
@@ -953,7 +963,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         <button
           onClick={() => setActiveSubTab('phases')}
           style={{
-            flex: 1.2,
+            flex: '1 1 120px',
             padding: '10px 8px',
             borderRadius: '8px',
             border: 'none',
@@ -975,11 +985,10 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           <span>Phase Inspections ({completedPhasesCount}/{phases.length} Passed)</span>
         </button>
 
-
         <button
           onClick={() => setActiveSubTab('specs')}
           style={{
-            flex: 1.2,
+            flex: '1 1 120px',
             padding: '10px 8px',
             borderRadius: '8px',
             border: 'none',
@@ -1000,7 +1009,37 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
           <Palette size={15} />
           <span>Finishes & Specs ({specs.length})</span>
         </button>
+
+        <button
+          onClick={() => setActiveSubTab('vault')}
+          style={{
+            flex: '1 1 120px',
+            padding: '10px 8px',
+            borderRadius: '8px',
+            border: 'none',
+            backgroundColor: activeSubTab === 'vault' ? 'var(--color-amber-500)' : 'transparent',
+            color: activeSubTab === 'vault' ? '#000' : 'var(--color-zinc-400)',
+            fontSize: '0.82rem',
+            fontWeight: 800,
+            cursor: 'pointer',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+            transition: 'all 0.15s ease',
+            whiteSpace: 'nowrap',
+            boxShadow: activeSubTab === 'vault' ? '0 2px 8px rgba(245, 158, 11, 0.25)' : 'none'
+          }}
+        >
+          <Brain size={15} />
+          <span>Memory Vault ({memoryVaultCount})</span>
+        </button>
       </div>
+
+      {/* DEDICATED PERSISTENT MEMORY VAULT VIEW */}
+      {activeSubTab === 'vault' && (
+        <MemoryVault projectId={projectId} projectName={projectName} />
+      )}
 
       {/* DEDICATED FINISHES & SPECS VIEW */}
       {activeSubTab === 'specs' && (

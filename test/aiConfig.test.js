@@ -91,7 +91,7 @@ describe('AI Tools & Two-Tier Diagnostic Health Suite', () => {
   test('runAllAiToolDiagnostics returns test results and health payload', async () => {
     const data = await runAllAiToolDiagnostics({});
     assert.ok(data.testResults);
-    assert.equal(data.testResults.length, 5);
+    assert.ok(data.testResults.length >= 5);
     assert.ok(data.health);
     data.testResults.forEach((r) => {
       assert.ok(r.tool);

@@ -29,6 +29,7 @@ export function determineTaskModel(query = '', forceDeepReasoning = false) {
   const q = String(query).toLowerCase();
 
   const complexIntentPatterns = [
+    /\b(remember|save to memory|keep in mind|make a note|store in memory|forget|update memory|change that (note|preference|memory)|how does .* prefer|what did .* quote)\b/i,
     /compare\s+(our\s+)?actual\s+spending/i,
     /audit\s+this\s+project/i,
     /identify\s+anything\s+that\s+looks\s+unusual/i,

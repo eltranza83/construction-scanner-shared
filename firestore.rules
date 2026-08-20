@@ -64,5 +64,9 @@ service cloud.firestore {
           ])
         );
     }
+
+    match /memories/{memoryId} {
+      allow read, write: if signedIn();
+    }
   }
 }

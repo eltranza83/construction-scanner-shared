@@ -1540,6 +1540,19 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                             )}
                           </div>
 
+                          {/* Sources Used Banner */}
+                          {m.telemetry.sourcesUsed && m.telemetry.sourcesUsed.length > 0 && (
+                            <div style={{ margin: '4px 0', fontSize: '0.70rem', color: '#fef08a', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800 }}>📚 Sources:</span>
+                              {m.telemetry.sourcesUsed.map((src, sIdx) => (
+                                <span key={sIdx} style={{ backgroundColor: 'rgba(234, 179, 8, 0.15)', border: '1px solid rgba(234, 179, 8, 0.3)', padding: '1px 5px', borderRadius: '3px', color: '#fde047', fontWeight: 600 }}>
+                                  {src.includes('Sheets') ? '📊 ' : src.includes('Memory') ? '🧠 ' : src.includes('Drive') ? '📁 ' : '⚡ '}
+                                  {src}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
                           {m.telemetry.toolsExecuted && m.telemetry.toolsExecuted.length > 0 ? (
                             <div style={{ marginTop: '5px', backgroundColor: 'rgba(0, 0, 0, 0.45)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                               <div style={{ fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -1563,8 +1576,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                               ))}
                             </div>
                           ) : (
-                            <div style={{ fontSize: '0.68rem', color: 'var(--color-zinc-400)', marginTop: '3px' }}>
-                              ℹ️ No tool calls required for this response.
+                            <div style={{ fontSize: '0.68rem', color: 'var(--color-zinc-400)', marginTop: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                              {m.telemetry.memoriesGroundedCount > 0 ? (
+                                <span style={{ color: '#a7f3d0' }}>
+                                  🧠 Memory Vault: {m.telemetry.memoriesGroundedCount} persistent memory retrieved from Firestore
+                                </span>
+                              ) : (
+                                <span>ℹ️ Grounded directly from live data manifest.</span>
+                              )}
                             </div>
                           )}
                         </div>
