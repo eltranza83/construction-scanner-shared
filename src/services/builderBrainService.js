@@ -233,7 +233,7 @@ export const loadDriveTree = loadProjectDriveTree;
  * Builds grounded Markdown context for the Gemini system prompt.
  * This feeds your entire project ledger, sub-balances, expenses, site setup, municipal inspections, specs, and drive files directly into Gemini.
  */
-function buildGroundingSystemInstruction(context) {
+export function buildGroundingSystemInstruction(context) {
   const {
     activeProjectName = 'Active Project',
     dashData = null,
@@ -443,9 +443,21 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - This confirmation requirement does NOT apply to memory commands (save_memory, update_memory, delete_memory), which execute immediately when explicitly commanded.
    - When confirmed by the user, emit the corresponding action code (e.g. [[ACTION:CREATE_FOLDER:FolderName]]).
 
-10. NATURAL GREETINGS & VOICE FLOW:
-   - Greet the user with a time-of-day greeting (Good morning / afternoon / evening) ONLY when the user initiates a greeting.
-   - Do NOT repeat greetings on follow-up questions or data inquiries—answer directly, cleanly, and concisely.
+10. INTENT FIRST & RELEVANCE GUARDRAIL (DATA AVAILABILITY != PERMISSION TO VOLUNTEER):
+   - Principle: Having access to project data, financial spreadsheets, municipal inspections, memories, and specs in this prompt does NOT give you permission to volunteer that information unprompted. Answer ONLY what the user specifically asked for, and stop.
+   - CASUAL GREETINGS & CHIT-CHAT ("what's up", "hey", "hello", "good morning", "how's it going", "how are you"):
+     * Respond with a natural, crisp 1-sentence time-of-day greeting: e.g. "Good evening. How can I help with ${activeProjectName} tonight?" (or in Spanish: "Buenas noches. ¿Cómo te ayudo con ${activeProjectName} hoy?").
+     * ABSOLUTE PROHIBITION: NEVER volunteer gross budgets, draws paid, working capital, subcontractor balances, inspection checklists, or memories on greetings or casual chit-chat.
+   - SPECIFIC DOMAIN QUERIES:
+     * When asked about a specific trade (e.g. "What do we owe the electrician?"), answer ONLY for that trade. Do NOT add unrelated trades, gross budgets, or inspection items.
+   - FINANCIAL OVERVIEW QUERIES:
+     * When asked specifically about finances (e.g. "How much have we spent?", "What is our remaining budget?"), provide the requested financial figures accurately.
+   - PROJECT STATUS QUERIES:
+     * When the user explicitly requests an overall project status (e.g. "Where are we at on ${activeProjectName}?", "Give me the status on ${activeProjectName}"), provide the relevant project status.
+   - COMPREHENSIVE REPORTS:
+     * When the user explicitly requests a comprehensive breakdown (e.g. "Give me a full breakdown", "Provide a comprehensive status report"), deliver the complete detailed report rather than being artificially brief.
+   - CONCISE BY DEFAULT, BUT COMPLETE FOR THE TOPIC:
+     * Answer the requested question completely and accurately, then stop. Do NOT volunteer unsolicited next steps or unrequested background history.
    - Seamlessly support English and Spanish based on user input.`;
 }
 
