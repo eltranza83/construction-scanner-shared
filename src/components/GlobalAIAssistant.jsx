@@ -761,8 +761,10 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       speakText(cleanAnswer, query);
 
 
-      // Auto-open fullscreen document preview modal (Option 2)
-      if (viewFiles.length > 0) {
+      // Auto-open fullscreen document preview modal (Option B: strictly only when J.A.R.V.I.S. explicitly confirmed opening via action tag)
+      // When J.A.R.V.I.S. is just asking a clarifying question, the interactive card appears in the chat message for manual tap without covering the screen unprompted.
+      const isConfirmedAction = actionViewFileMatches.length > 0;
+      if (viewFiles.length > 0 && isConfirmedAction) {
         handleOpenDocumentPreview(viewFiles[0]);
       }
 
