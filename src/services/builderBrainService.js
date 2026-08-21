@@ -5,6 +5,7 @@
  */
 import { determineTaskModel } from '../config/aiConfig.js';
 import { executeClientToolCall } from './aiTools.js';
+import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
 import { searchMemories, formatMemoriesForPrompt } from './memoryService.js';
 
@@ -715,9 +716,21 @@ export async function askGeminiBrain(
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 15000);
 
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      const auth = getFirebaseAuthInstance();
+      const user = auth?.currentUser;
+      if (user) {
+        const idToken = await user.getIdToken();
+        if (idToken) {
+          headers.Authorization = `Bearer ${idToken}`;
+        }
+      }
+    } catch (_) {}
+
     const apiRes = await fetch('/api/ask-brain', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         contents,
         systemInstruction,

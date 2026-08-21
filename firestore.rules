@@ -66,7 +66,12 @@ service cloud.firestore {
     }
 
     match /memories/{memoryId} {
-      allow read, write: if signedIn();
+      allow get: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow list: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid) && request.resource.data.uid == resource.data.uid;
+      allow delete: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
     }
   }
 }
+

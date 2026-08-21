@@ -1,4 +1,4 @@
-import { HttpError, errorResponse, jsonResponse } from './_lib/firebase-auth.js';
+import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
 import { determineTaskModel, AI_CONFIG } from './_lib/ai-config.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 import { AI_TOOL_DECLARATIONS } from './_lib/ai-tools-definitions.js';
@@ -6,6 +6,8 @@ import { AI_TOOL_DECLARATIONS } from './_lib/ai-tools-definitions.js';
 export async function POST(request) {
   const startTime = Date.now();
   try {
+    await requireScannerAccess(request, fetch, { rateLimit: 30 });
+
     const body = await request.json().catch(() => ({}));
     const { contents, systemInstruction, prompt, query, forceDeepReasoning, forceNoTools, apiKey: clientApiKey } = body;
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';

@@ -2,12 +2,14 @@
  * Serverless API Route: /api/embed-memory
  * Generates vector embeddings for memory text and search queries via Gemini Embeddings API.
  */
-import { errorResponse, jsonResponse } from './_lib/firebase-auth.js';
+import { errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 import { AI_CONFIG } from './_lib/ai-config.js';
 
 export async function POST(request) {
   try {
+    await requireScannerAccess(request, fetch, { rateLimit: 40 });
+
     const body = await request.json().catch(() => ({}));
     const { text, texts, apiKey: clientApiKey } = body;
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';

@@ -57,3 +57,76 @@ test('generateDocumentData sends inline bytes and parses Gemini JSON', async () 
   assert.deepEqual(data, { vendor: 'Test' });
   assert.equal(requestBody.contents[0].parts[1].inlineData.data, 'AQID');
 });
+
+test('requireScannerAccess rejects unauthenticated request with 401', async () => {
+  const req = new Request('https://example.test/api/ask-brain', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query: 'test' })
+  });
+
+  await assert.rejects(
+    () => requireScannerAccess(req, async () => null),
+    (err) => {
+      assert.equal(err instanceof HttpError, true);
+      assert.equal(err.status, 401);
+      assert.equal(err.message, 'Sign in is required.');
+      return true;
+    }
+  );
+});
+
+test('requireScannerAccess rejects unauthorized user without invite document with 403', async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes('accounts:lookup')) {
+      return Response.json({ users: [{ localId: 'unauthorized-uid', email: 'intruder@example.com' }] });
+    }
+    // No admin doc, no user_access doc
+    return new Response('', { status: 404 });
+  };
+
+  const req = new Request('https://example.test/api/embed-memory', {
+    method: 'POST',
+    headers: { authorization: 'Bearer invalid-access-token' }
+  });
+
+  await assert.rejects(
+    () => requireScannerAccess(req, fetchImpl),
+    (err) => {
+      assert.equal(err instanceof HttpError, true);
+      assert.equal(err.status, 403);
+      assert.equal(err.message, 'Scanner access is not authorized for this account.');
+      return true;
+    }
+  );
+});
+
+test('requireScannerAccess enforces rate limits when threshold exceeded', async () => {
+  const fetchImpl = async (url) => {
+    if (String(url).includes('accounts:lookup')) {
+      return Response.json({ users: [{ localId: 'rate-limit-test-uid', email: 'builder@example.com' }] });
+    }
+    return Response.json({ name: 'access' });
+  };
+
+  const req = new Request('https://example.test/api/ask-brain', {
+    headers: { authorization: 'Bearer valid-token' }
+  });
+
+  // Call within limit
+  const user = await requireScannerAccess(req, fetchImpl, { rateLimit: 2, windowMs: 10000 });
+  assert.equal(user.uid, 'rate-limit-test-uid');
+
+  await requireScannerAccess(req, fetchImpl, { rateLimit: 2, windowMs: 10000 });
+
+  // Exceed limit
+  await assert.rejects(
+    () => requireScannerAccess(req, fetchImpl, { rateLimit: 2, windowMs: 10000 }),
+    (err) => {
+      assert.equal(err instanceof HttpError, true);
+      assert.equal(err.status, 429);
+      return true;
+    }
+  );
+});
+

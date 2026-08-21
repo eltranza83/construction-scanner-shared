@@ -4,7 +4,7 @@
  * verbal agreements, quotes, and lessons learned across projects.
  */
 import { collection, doc, getDoc, getDocs, setDoc, updateDoc, query as firestoreQuery, where } from 'firebase/firestore/lite';
-import { getFirebaseDb } from './firebase.js';
+import { getFirebaseDb, getFirebaseAuthInstance } from './firebase.js';
 
 export const MEMORY_STORAGE_KEY = 'sitetactix_persistent_memories_v1';
 export const MEMORY_COLLECTION = 'memories';
@@ -241,6 +241,7 @@ export function sanitizeMemoryRecord(raw = {}) {
     lastVerifiedAt: raw.lastVerifiedAt || now,
     createdBy: raw.createdBy || 'user',
     updatedBy: raw.updatedBy || 'user',
+    uid: raw.uid || (getFirebaseAuthInstance()?.currentUser?.uid) || null,
     tags: Array.isArray(raw.tags) && raw.tags.length > 0 ? raw.tags : extractTags(rawText),
     embedding: Array.isArray(raw.embedding) ? raw.embedding : null,
     active: raw.active !== false,
@@ -396,14 +397,21 @@ export async function getMemories(options = {}) {
   // Try fetching fresh from Firestore if available
   try {
     const db = getFirebaseDb();
-    if (db) {
-      const snapshot = await getDocs(collection(db, MEMORY_COLLECTION));
+    const auth = getFirebaseAuthInstance();
+    const user = auth?.currentUser;
+
+    if (db && user) {
+      const memoriesRef = collection(db, MEMORY_COLLECTION);
+      const q = firestoreQuery(memoriesRef, where('uid', '==', user.uid));
+      const snapshot = await getDocs(q);
       const remoteList = [];
       snapshot.forEach(d => remoteList.push(d.data()));
       if (remoteList.length > 0) {
         list = remoteList;
         saveLocalMemories(remoteList);
       }
+    } else if (db && !user) {
+      // Unauthenticated client relies on local storage cache
     }
   } catch (err) {
     // Gracefully use local cache
