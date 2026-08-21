@@ -540,3 +540,211 @@ export function formatMemoriesForPrompt(memories = []) {
     return `${idx + 1}. ${scopeLabel} ${typeLabel} ${importanceLabel}"${m.text}" ${dateLabel}`;
   }).join('\n');
 }
+
+export const USER_PREFERENCE_STORAGE_KEY = 'sitetactix_user_preferences_v1';
+
+/**
+ * Loads user preferences for a given user ID and optional project ID.
+ */
+export async function loadUserPreferences(userId = 'default_user', projectId = null) {
+  if (!userId) userId = 'default_user';
+  let prefs = [];
+
+  // LocalStorage / memory cache
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(`${USER_PREFERENCE_STORAGE_KEY}_${userId}`);
+      if (raw) prefs = JSON.parse(raw);
+    } catch {
+      prefs = [];
+    }
+  }
+
+  // Firestore sync if available
+  const db = getFirebaseDb();
+  if (db && userId !== 'default_user') {
+    try {
+      const q = firestoreQuery(collection(db, 'user_preferences'), where('uid', '==', userId));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        const remoteList = [];
+        snap.forEach(d => remoteList.push({ id: d.id, ...d.data() }));
+        prefs = remoteList;
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(`${USER_PREFERENCE_STORAGE_KEY}_${userId}`, JSON.stringify(prefs));
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load user preferences from Firestore, using local cache:', err?.message);
+    }
+  }
+
+  return prefs;
+}
+
+/**
+ * Saves or updates a user preference record.
+ */
+export async function saveUserPreference(userId = 'default_user', prefData = {}) {
+  if (!userId) userId = 'default_user';
+  const now = new Date().toISOString();
+  const id = prefData.id || `pref_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+  const record = {
+    id,
+    uid: userId,
+    category: prefData.category || 'response_style',
+    preferenceStatement: prefData.preferenceStatement || prefData.statement || '',
+    inferredIntent: prefData.inferredIntent || 'custom_style',
+    confidence: typeof prefData.confidence === 'number' ? prefData.confidence : 1.0,
+    source: prefData.source || 'explicit',
+    observationCount: prefData.observationCount || 1,
+    status: prefData.status || 'active',
+    scope: prefData.scope || 'global',
+    projectId: prefData.projectId || null,
+    createdAt: prefData.createdAt || now,
+    updatedAt: now,
+    lastObservedAt: prefData.lastObservedAt || now,
+    lastPromptedAt: prefData.lastPromptedAt || null,
+    rejectedUntil: prefData.rejectedUntil || null,
+    auditHistory: Array.isArray(prefData.auditHistory) ? prefData.auditHistory : [
+      {
+        action: prefData.status === 'candidate' ? 'candidate_created' : 'activated',
+        timestamp: now,
+        actor: prefData.source === 'explicit' ? 'user_explicit' : 'ai_observer',
+        details: { source: prefData.source, confidence: prefData.confidence }
+      }
+    ]
+  };
+
+  // 1. Save in local cache
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const key = `${USER_PREFERENCE_STORAGE_KEY}_${userId}`;
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const idx = existing.findIndex(p => p.id === id || (p.inferredIntent === record.inferredIntent && p.scope === record.scope && p.projectId === record.projectId));
+      if (idx >= 0) {
+        const existingHistory = existing[idx].auditHistory || [];
+        existingHistory.push({
+          action: 'modified',
+          timestamp: now,
+          actor: 'user_preference_engine',
+          details: { status: record.status }
+        });
+        existing[idx] = { ...existing[idx], ...record, auditHistory: existingHistory, updatedAt: now };
+      } else {
+        existing.push(record);
+      }
+      localStorage.setItem(key, JSON.stringify(existing));
+    } catch (err) {
+      console.warn('LocalStorage save failed for preference:', err?.message);
+    }
+  }
+
+  // 2. Save in Firestore if available
+  const db = getFirebaseDb();
+  if (db && userId !== 'default_user') {
+    try {
+      await setDoc(doc(db, 'user_preferences', id), record, { merge: true });
+    } catch (err) {
+      console.warn('Firestore setDoc failed for preference:', err?.message);
+    }
+  }
+
+  return record;
+}
+
+/**
+ * Updates status of a user preference (e.g. candidate -> active, candidate -> rejected).
+ */
+export async function updateUserPreferenceStatus(userId = 'default_user', preferenceId, newStatus, rejectionCooldownDays = 30) {
+  if (!preferenceId) return null;
+  const now = new Date().toISOString();
+  let rejectedUntil = null;
+
+  if (newStatus === 'rejected') {
+    const d = new Date();
+    d.setDate(d.getDate() + rejectionCooldownDays);
+    rejectedUntil = d.toISOString();
+  }
+
+  const auditEntry = {
+    action: newStatus === 'active' ? 'confirmed' : (newStatus === 'rejected' ? 'rejected' : 'status_changed'),
+    timestamp: now,
+    actor: 'user',
+    details: { newStatus, rejectedUntil }
+  };
+
+  const updates = {
+    status: newStatus,
+    updatedAt: now,
+    ...(rejectedUntil ? { rejectedUntil } : {})
+  };
+
+  // LocalStorage update
+  if (typeof localStorage !== 'undefined') {
+    try {
+      const key = `${USER_PREFERENCE_STORAGE_KEY}_${userId}`;
+      const existing = JSON.parse(localStorage.getItem(key) || '[]');
+      const idx = existing.findIndex(p => p.id === preferenceId);
+      if (idx >= 0) {
+        const history = existing[idx].auditHistory || [];
+        history.push(auditEntry);
+        existing[idx] = { ...existing[idx], ...updates, auditHistory: history };
+        localStorage.setItem(key, JSON.stringify(existing));
+      }
+    } catch (err) {
+      console.warn('LocalStorage status update failed:', err?.message);
+    }
+  }
+
+  // Firestore update
+  const db = getFirebaseDb();
+  if (db && userId !== 'default_user') {
+    try {
+      await updateDoc(doc(db, 'user_preferences', preferenceId), updates);
+    } catch (err) {
+      console.warn('Firestore status update failed:', err?.message);
+    }
+  }
+
+  return { id: preferenceId, ...updates };
+}
+
+/**
+ * Deactivates or deletes a specific user preference.
+ */
+export async function deleteUserPreference(userId = 'default_user', preferenceId) {
+  return await updateUserPreferenceStatus(userId, preferenceId, 'deactivated');
+}
+
+/**
+ * Resets all user preferences for the authenticated user.
+ */
+export async function resetAllUserPreferences(userId = 'default_user') {
+  if (!userId) userId = 'default_user';
+
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.removeItem(`${USER_PREFERENCE_STORAGE_KEY}_${userId}`);
+    } catch {}
+  }
+
+  const db = getFirebaseDb();
+  if (db && userId !== 'default_user') {
+    try {
+      const q = firestoreQuery(collection(db, 'user_preferences'), where('uid', '==', userId));
+      const snap = await getDocs(q);
+      const updates = [];
+      snap.forEach(d => {
+        updates.push(updateDoc(doc(db, 'user_preferences', d.id), { status: 'deactivated', updatedAt: new Date().toISOString() }));
+      });
+      await Promise.all(updates);
+    } catch (err) {
+      console.warn('Firestore reset failed:', err?.message);
+    }
+  }
+
+  return { success: true, message: 'All user preferences reset.' };
+}
+

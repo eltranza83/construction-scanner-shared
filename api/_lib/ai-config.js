@@ -18,6 +18,16 @@ export const AI_CONFIG = {
   generation: {
     temperature: 0.3,
     maxOutputTokens: 2048
+  },
+
+  preferenceLearning: {
+    candidateThreshold: 0.80,
+    minObservationsForCandidate: 2,
+    explicitConfidence: 1.00,
+    maxProactivePromptsPerSession: 1,
+    promptCooldownTurns: 6,
+    minConfidenceToObserve: 0.40,
+    rejectedSuppressionDays: 30
   }
 };
 

@@ -3,11 +3,22 @@
  * Pure AI Model Architecture: Feeds live project records directly to Gemini Cloud AI in one pass.
  * No brittle hardcoded if/else rules or regex catchphrases.
  */
-import { determineTaskModel } from '../config/aiConfig.js';
+import { determineTaskModel, AI_CONFIG } from '../config/aiConfig.js';
 import { executeClientToolCall, circuitBreaker } from './aiTools.js';
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
-import { searchMemories, formatMemoriesForPrompt } from './memoryService.js';
+import { searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
+import {
+  compileUserPreferencesPrompt,
+  analyzeInteractionForPreference,
+  calculateObservationConfidence,
+  shouldProactivelyPrompt,
+  generateProactiveConfirmationQuestion,
+  evaluateConfirmationResponse,
+  PREFERENCE_STATUS,
+  PREFERENCE_SOURCES,
+  PREFERENCE_SCOPES
+} from './userPreferenceEngine.js';
 
 
 
@@ -232,6 +243,7 @@ function buildGroundingSystemInstruction(context) {
     inspectionsData = [],
     pendingR = [],
     memoriesData = [],
+    userPreferencesPrompt = '',
     timeGreeting = 'Good morning',
     spanishTimeGreeting = 'Buenos días',
     currentTimeString = '',
@@ -366,6 +378,11 @@ ${driveRecords}
 [MODULE 7: PERSISTENT BUSINESS & SITE MEMORIES (SECOND BRAIN)] -> STATUS: LOADED & ACTIVE
 ======================================================================
 ${memoryRecords}
+
+======================================================================
+[MODULE 8: USER PREFERENCES & INTERACTION STYLE (LEARNED & CONFIGURED)] -> STATUS: ACTIVE
+======================================================================
+${userPreferencesPrompt || 'Default: Concise, professional builder co-pilot.'}
 
 ======================================================================
 BEHAVIOR, VERIFICATION & CITATION RULES:
@@ -705,8 +722,21 @@ export async function askGeminiBrain(
     console.warn('[BuilderBrain] Failed to pre-fetch memories:', mErr);
   }
 
+  const authInstance = getFirebaseAuthInstance();
+  const userId = authInstance?.currentUser?.uid || 'default_user';
+
+  let userPreferences = [];
+  let userPreferencesPrompt = '';
+  try {
+    userPreferences = await loadUserPreferences(userId, projectId);
+    userPreferencesPrompt = compileUserPreferencesPrompt(userPreferences, projectId);
+  } catch (pErr) {
+    console.warn('[BuilderBrain] Failed to load user preferences:', pErr);
+  }
+
   const projectContext = {
     projectId,
+    userId,
     activeProjectName,
     items: reminders,
     pendingR,
@@ -715,7 +745,8 @@ export async function askGeminiBrain(
     projectSpecs,
     siteSetupData,
     inspectionsData,
-    memoriesData
+    memoriesData,
+    userPreferences
   };
 
   const now = new Date();
@@ -735,6 +766,7 @@ export async function askGeminiBrain(
     inspectionsData,
     pendingR,
     memoriesData,
+    userPreferencesPrompt,
     timeGreeting,
     spanishTimeGreeting,
     currentTimeString,
@@ -780,6 +812,92 @@ export async function askGeminiBrain(
 
   const envKey = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_GEMINI_API_KEY) ? import.meta.env.VITE_GEMINI_API_KEY : '';
   const effectiveKey = (apiKey && apiKey.trim()) || (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key')) : '') || envKey || '';
+
+  // 1. DIRECT USER PREFERENCE COMMAND PROCESSING
+  const prefAnalysis = analyzeInteractionForPreference(query, { activeProjectId: projectId, userId });
+  if (prefAnalysis) {
+    if (prefAnalysis.type === 'session_opt_out') {
+      if (typeof sessionStorage !== 'undefined') {
+        sessionStorage.setItem('jobscan_session_learning_disabled', 'true');
+      }
+      return {
+        text: "Understood. I will not learn or observe any communication preferences from this conversation.",
+        telemetry: {
+          modelUsed: determineTaskModel(query, forceDeepReasoning),
+          source: 'User Preference Engine',
+          intent: 'Session Learning Disabled',
+          durationMs: Date.now() - clientStartTime
+        }
+      };
+    }
+    if (prefAnalysis.type === 'user_command') {
+      if (prefAnalysis.action === 'list_preferences') {
+        const listRes = await executeClientToolCall('list_user_preferences', {}, projectContext, correlationId);
+        const prefsList = listRes?.preferences || [];
+        const text = prefsList.length > 0
+          ? `Here is what I've learned about how you work:\n` + prefsList.map((p, i) => `${i + 1}. [${p.scope === 'project' ? `Project: ${p.projectId}` : 'Global'}] ${p.statement}`).join('\n')
+          : "I haven't saved any custom communication preferences for you yet. You can tell me how you prefer answers (for example: \"Remember that I always want the bottom line first\").";
+        return {
+          text,
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'User Preference Engine',
+            intent: 'List Preferences',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'list_user_preferences', result: listRes }]
+          }
+        };
+      }
+      if (prefAnalysis.action === 'reset_all_preferences') {
+        const resetRes = await executeClientToolCall('reset_user_preferences', { confirm: true }, projectContext, correlationId);
+        return {
+          text: "I've reset and cleared all learned communication preferences and behavioral habits.",
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'User Preference Engine',
+            intent: 'Reset Preferences',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'reset_user_preferences', result: resetRes }]
+          }
+        };
+      }
+      if (prefAnalysis.action === 'deactivate_specific') {
+        const deactRes = await executeClientToolCall('deactivate_user_preference', { searchQuery: prefAnalysis.target }, projectContext, correlationId);
+        return {
+          text: deactRes?.message || `I've removed that preference.`,
+          telemetry: {
+            modelUsed: determineTaskModel(query, forceDeepReasoning),
+            source: 'User Preference Engine',
+            intent: 'Deactivate Preference',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [{ name: 'deactivate_user_preference', result: deactRes }]
+          }
+        };
+      }
+    }
+    if (prefAnalysis.type === 'explicit_preference') {
+      const savePrefRes = await saveUserPreference(userId, {
+        preferenceStatement: prefAnalysis.preferenceStatement,
+        inferredIntent: prefAnalysis.inferredIntent,
+        category: prefAnalysis.category,
+        source: PREFERENCE_SOURCES.EXPLICIT,
+        scope: prefAnalysis.scope,
+        projectId: prefAnalysis.projectId,
+        confidence: 1.0,
+        status: PREFERENCE_STATUS.ACTIVE
+      });
+      return {
+        text: `Got it. I've saved your preference: "${prefAnalysis.preferenceStatement}" as your persistent ${prefAnalysis.scope} default.`,
+        telemetry: {
+          modelUsed: determineTaskModel(query, forceDeepReasoning),
+          source: 'User Preference Engine',
+          intent: 'Explicit Preference Saved',
+          durationMs: Date.now() - clientStartTime,
+          preference: savePrefRes
+        }
+      };
+    }
+  }
 
   // 1. DIRECT EXPLICIT MEMORY COMMAND PROCESSING
   const qTrim = query.trim();

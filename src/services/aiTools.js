@@ -8,8 +8,19 @@ import {
   searchMemories,
   updateMemory,
   deactivateMemory,
-  detectAmbiguity
+  detectAmbiguity,
+  loadUserPreferences,
+  saveUserPreference,
+  updateUserPreferenceStatus,
+  deleteUserPreference,
+  resetAllUserPreferences
 } from './memoryService.js';
+import {
+  PREFERENCE_STATUS,
+  PREFERENCE_SCOPES,
+  PREFERENCE_SOURCES,
+  resolvePreferenceConflicts
+} from './userPreferenceEngine.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -29,33 +40,38 @@ export const TOOL_REGISTRY = {
   },
   get_vendor_history: {
     type: 'READ',
-    source: 'Google Sheets: Vendor & Subcontractor Payments',
-    description: 'Retrieves transaction history and line-item payment records for a trade.'
+    source: 'Google Sheets: Payment Ledger',
+    description: 'Retrieves line-item payment records for a subcontractor.'
   },
   search_receipts: {
     type: 'READ',
-    source: 'Google Sheets: Payments Ledger',
-    description: 'Searches individual payment descriptions and amounts.'
+    source: 'Google Sheets & Extracted Receipt Vault',
+    description: 'Searches recorded receipts by payee, description, or amount.'
   },
   get_project_budget: {
     type: 'READ',
-    source: 'Google Sheets: Summary_Dashboard Budget Totals',
-    description: 'Retrieves gross budget, total spent, and remaining project funds.'
+    source: 'Google Sheets: Summary_Dashboard',
+    description: 'Fetches overall project budget, spending, and variance.'
   },
   get_project_schedule: {
     type: 'READ',
-    source: 'Project Checklist & Municipal Schedule',
-    description: 'Retrieves inspection stages and checklist status.'
+    source: 'Google Sheets: Summary_Dashboard Schedule & Reminders',
+    description: 'Retrieves upcoming field milestones and trade calls.'
   },
   get_drive_files: {
     type: 'READ',
-    source: 'Google Drive',
-    description: 'Searches indexed blueprints, PDFs, and folder directories.'
+    source: 'Google Drive File Tree',
+    description: 'Searches project blueprints, permits, and engineering files.'
   },
   get_homeowner_specs: {
     type: 'READ',
-    source: 'Homeowner Finish Specs',
-    description: 'Searches paint codes, fixtures, and selections.'
+    source: 'Homeowner Specifications & Finishes Sheet',
+    description: 'Retrieves finish, fixture, and paint specifications.'
+  },
+  get_site_setup: {
+    type: 'READ',
+    source: 'Site Setup Checklist Database',
+    description: 'Retrieves jobsite logistics, gates, power, and sanitation status.'
   },
   get_site_setup_protocol: {
     type: 'READ',
@@ -89,6 +105,29 @@ export const TOOL_REGISTRY = {
     source: 'Firestore: /memories (Persistent Memory Vault)',
     confirmationPolicy: 'explicit',
     description: 'Deactivates a memory record.'
+  },
+  list_user_preferences: {
+    type: 'READ',
+    source: 'Firestore: /user_preferences (User Preference Vault)',
+    description: 'Lists all learned and configured user communication preferences.'
+  },
+  confirm_user_preference: {
+    type: 'WRITE',
+    source: 'Firestore: /user_preferences (User Preference Vault)',
+    confirmationPolicy: 'auto_safe',
+    description: 'Promotes an observed candidate to an active user preference.'
+  },
+  deactivate_user_preference: {
+    type: 'WRITE',
+    source: 'Firestore: /user_preferences (User Preference Vault)',
+    confirmationPolicy: 'explicit',
+    description: 'Deactivates or forgets a specific learned communication preference.'
+  },
+  reset_user_preferences: {
+    type: 'WRITE',
+    source: 'Firestore: /user_preferences (User Preference Vault)',
+    confirmationPolicy: 'explicit',
+    description: 'Purges all learned communication preferences for the user.'
   }
 };
 
@@ -891,6 +930,105 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           message: `I couldn't locate that specific memory to delete.`
         };
       }
+      break;
+    }
+
+    case 'list_user_preferences': {
+      const targetUserId = projectContext.userId || projectContext.uid || 'default_user';
+      const prefs = await loadUserPreferences(targetUserId, projectContext.projectId);
+      const activeOnly = prefs.filter(p => p.status === 'active');
+      const resolved = resolvePreferenceConflicts(activeOnly, projectContext.projectId);
+
+      resultPayload = {
+        success: true,
+        status: resolved.length > 0 ? 'ok' : 'not_found',
+        totalPreferences: resolved.length,
+        preferences: resolved.map(p => ({
+          id: p.id,
+          category: p.category,
+          scope: p.scope,
+          projectId: p.projectId,
+          statement: p.preferenceStatement,
+          source: p.source,
+          confidence: p.confidence
+        })),
+        data: resolved,
+        message: resolved.length > 0
+          ? `I have ${resolved.length} active communication preference(s) saved.`
+          : `You don't have any custom communication preferences saved yet.`
+      };
+      break;
+    }
+
+    case 'confirm_user_preference': {
+      const targetUserId = projectContext.userId || projectContext.uid || 'default_user';
+      const candidateId = args.candidateId;
+      let record;
+
+      if (candidateId) {
+        record = await updateUserPreferenceStatus(targetUserId, candidateId, 'active');
+      } else if (args.statement) {
+        record = await saveUserPreference(targetUserId, {
+          preferenceStatement: args.statement,
+          scope: args.scope || 'global',
+          projectId: args.scope === 'project' ? projectContext.projectId : null,
+          source: 'explicit',
+          status: 'active',
+          confidence: 1.0
+        });
+      }
+
+      resultPayload = {
+        success: true,
+        status: 'ok',
+        activated: true,
+        data: record,
+        preference: record,
+        message: `I've confirmed and saved your preference as default.`
+      };
+      break;
+    }
+
+    case 'deactivate_user_preference': {
+      const targetUserId = projectContext.userId || projectContext.uid || 'default_user';
+      const queryStr = String(args.searchQuery || '').toLowerCase();
+      const prefs = await loadUserPreferences(targetUserId, projectContext.projectId);
+      const match = prefs.find(p => p.status === 'active' && (
+        p.preferenceStatement.toLowerCase().includes(queryStr) ||
+        p.inferredIntent.toLowerCase().includes(queryStr) ||
+        p.category.toLowerCase().includes(queryStr)
+      ));
+
+      if (match) {
+        await deleteUserPreference(targetUserId, match.id);
+        resultPayload = {
+          success: true,
+          status: 'ok',
+          deactivated: true,
+          preferenceId: match.id,
+          statement: match.preferenceStatement,
+          message: `I've removed that preference.`
+        };
+      } else {
+        resultPayload = {
+          success: false,
+          status: 'not_found',
+          deactivated: false,
+          message: `I couldn't locate a saved preference matching "${args.searchQuery}".`
+        };
+      }
+      break;
+    }
+
+    case 'reset_user_preferences': {
+      const targetUserId = projectContext.userId || projectContext.uid || 'default_user';
+      await resetAllUserPreferences(targetUserId);
+      resultPayload = {
+        success: true,
+        status: 'ok',
+        reset: true,
+        message: `I've reset all saved communication preferences.`
+      };
       break;
     }
 

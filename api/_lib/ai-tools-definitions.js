@@ -191,6 +191,50 @@ export const AI_TOOL_DECLARATIONS = [
       },
       required: ['searchQuery']
     }
+  },
+  {
+    name: 'list_user_preferences',
+    description: 'Retrieve all learned and configured user preferences, communication styles, and interaction rules for the current user.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        category: { type: 'STRING', description: 'Optional category filter (e.g. response_style, information_depth, terminology)' },
+        scope: { type: 'STRING', description: 'Optional scope filter (global or project)' }
+      }
+    }
+  },
+  {
+    name: 'confirm_user_preference',
+    description: 'Promote an observed preference candidate to an active persistent user preference after user confirmation.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        candidateId: { type: 'STRING', description: 'ID of the candidate preference' },
+        statement: { type: 'STRING', description: 'The preference rule statement' },
+        scope: { type: 'STRING', description: 'global or project' }
+      }
+    }
+  },
+  {
+    name: 'deactivate_user_preference',
+    description: 'Deactivate or delete a specific learned user preference.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        searchQuery: { type: 'STRING', description: 'Keyword or topic of the preference to delete (e.g. concise answers, bottom line)' }
+      },
+      required: ['searchQuery']
+    }
+  },
+  {
+    name: 'reset_user_preferences',
+    description: 'Forget and purge all learned communication preferences and behavioral habits for the user.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        confirm: { type: 'BOOLEAN', description: 'Confirmation flag' }
+      }
+    }
   }
 ];
 
