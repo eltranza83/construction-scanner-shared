@@ -13,6 +13,266 @@ import {
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
+/**
+ * Explicit Tool Classification & Provenance Registry
+ */
+export const TOOL_REGISTRY = {
+  get_weather_for_jobsite: {
+    type: 'READ',
+    source: 'Open-Meteo Weather API',
+    description: 'Fetches real-time weather observations for jobsite coordinates.'
+  },
+  get_subcontractor_balance: {
+    type: 'READ',
+    source: 'Google Sheets: Summary_Dashboard & Subcontractor Schedule',
+    description: 'Retrieves contract quote, amount paid, and remaining balance owed.'
+  },
+  get_vendor_history: {
+    type: 'READ',
+    source: 'Google Sheets: Vendor & Subcontractor Payments',
+    description: 'Retrieves transaction history and line-item payment records for a trade.'
+  },
+  search_receipts: {
+    type: 'READ',
+    source: 'Google Sheets: Payments Ledger',
+    description: 'Searches individual payment descriptions and amounts.'
+  },
+  get_project_budget: {
+    type: 'READ',
+    source: 'Google Sheets: Summary_Dashboard Budget Totals',
+    description: 'Retrieves gross budget, total spent, and remaining project funds.'
+  },
+  get_project_schedule: {
+    type: 'READ',
+    source: 'Project Checklist & Municipal Schedule',
+    description: 'Retrieves inspection stages and checklist status.'
+  },
+  get_drive_files: {
+    type: 'READ',
+    source: 'Google Drive',
+    description: 'Searches indexed blueprints, PDFs, and folder directories.'
+  },
+  get_homeowner_specs: {
+    type: 'READ',
+    source: 'Homeowner Finish Specs',
+    description: 'Searches paint codes, fixtures, and selections.'
+  },
+  get_site_setup_protocol: {
+    type: 'READ',
+    source: 'Site Setup Protocol Database',
+    description: 'Retrieves safety, dumpster, porta-potty, and staging checklist.'
+  },
+  search_memories: {
+    type: 'READ',
+    source: 'Firestore: /memories (Persistent Memory Vault)',
+    description: 'Searches contextual notes, contractor preferences, and business facts.'
+  },
+  list_memories: {
+    type: 'READ',
+    source: 'Firestore: /memories (Persistent Memory Vault)',
+    description: 'Lists all active memories for the project or user.'
+  },
+  save_memory: {
+    type: 'WRITE',
+    source: 'Firestore: /memories (Persistent Memory Vault)',
+    confirmationPolicy: 'auto_safe',
+    description: 'Stores a verified fact, preference, or reminder in the persistent vault.'
+  },
+  update_memory: {
+    type: 'WRITE',
+    source: 'Firestore: /memories (Persistent Memory Vault)',
+    confirmationPolicy: 'explicit',
+    description: 'Modifies an existing memory note in the vault.'
+  },
+  delete_memory: {
+    type: 'WRITE',
+    source: 'Firestore: /memories (Persistent Memory Vault)',
+    confirmationPolicy: 'explicit',
+    description: 'Deactivates a memory record.'
+  }
+};
+
+/**
+ * Deterministic Idempotency & Deduplication Engine for WRITE tools
+ */
+const recentWriteActions = new Map();
+const inFlightWritePromises = new Map();
+const IDEMPOTENCY_WINDOW_MS = 60000; // 60 seconds duplicate protection
+export const TOOL_TIMEOUT_MS = 6000; // 6000ms max execution time per tool
+
+export function generateIdempotencyKey(toolName, args = {}, projectId = '') {
+  const normalizedText = String(args.text || args.updatedText || args.searchQuery || args.memoryId || '').trim().toLowerCase();
+  const normalizedCategory = String(args.category || '').trim().toLowerCase();
+  const normalizedDate = String(args.effectiveDate || '').trim();
+  return `${toolName}:${projectId || 'global'}:${normalizedText}:${normalizedCategory}:${normalizedDate}`;
+}
+
+export function checkIdempotency(toolName, args = {}, projectId = '') {
+  const meta = TOOL_REGISTRY[toolName] || { type: 'READ' };
+  if (meta.type !== 'WRITE') return null;
+
+  const key = generateIdempotencyKey(toolName, args, projectId);
+  const now = Date.now();
+
+  if (recentWriteActions.has(key)) {
+    const entry = recentWriteActions.get(key);
+    if (now - entry.timestamp < IDEMPOTENCY_WINDOW_MS) {
+      return {
+        isDuplicate: true,
+        key,
+        cachedResult: entry.result
+      };
+    }
+  }
+  return { isDuplicate: false, key };
+}
+
+export function recordIdempotency(key, result) {
+  if (!key) return;
+  recentWriteActions.set(key, {
+    timestamp: Date.now(),
+    result
+  });
+
+  const now = Date.now();
+  for (const [k, v] of recentWriteActions.entries()) {
+    if (now - v.timestamp > IDEMPOTENCY_WINDOW_MS * 2) {
+      recentWriteActions.delete(k);
+    }
+  }
+}
+
+export function clearIdempotencyCache() {
+  recentWriteActions.clear();
+  inFlightWritePromises.clear();
+}
+
+/**
+ * Dependency Circuit Breaker for External Services
+ * Trips after 3 failures, recovers after 30s
+ */
+export class DependencyCircuitBreaker {
+  constructor() {
+    this.services = new Map();
+    this.FAILURE_THRESHOLD = 3;
+    this.RECOVERY_WINDOW_MS = 30000;
+  }
+
+  isOpen(serviceName) {
+    const entry = this.services.get(serviceName);
+    if (!entry) return false;
+    if (entry.state === 'OPEN') {
+      if (Date.now() - entry.lastFailureTime > this.RECOVERY_WINDOW_MS) {
+        entry.state = 'HALF_OPEN';
+        return false;
+      }
+      return true;
+    }
+    return false;
+  }
+
+  recordSuccess(serviceName) {
+    this.services.set(serviceName, { failures: 0, state: 'CLOSED', lastFailureTime: 0 });
+  }
+
+  recordFailure(serviceName) {
+    const entry = this.services.get(serviceName) || { failures: 0, state: 'CLOSED', lastFailureTime: 0 };
+    entry.failures += 1;
+    entry.lastFailureTime = Date.now();
+    if (entry.failures >= this.FAILURE_THRESHOLD) {
+      entry.state = 'OPEN';
+    }
+    this.services.set(serviceName, entry);
+  }
+
+  getStatus(serviceName) {
+    const entry = this.services.get(serviceName);
+    return entry ? entry.state : 'CLOSED';
+  }
+
+  reset() {
+    this.services.clear();
+  }
+}
+
+export const circuitBreaker = new DependencyCircuitBreaker();
+
+/**
+ * Argument Sanitizer: Strips control characters and script injections
+ */
+export function sanitizeToolArgs(args = {}) {
+  if (!args || typeof args !== 'object') return {};
+  const sanitized = {};
+  for (const [key, value] of Object.entries(args)) {
+    if (typeof value === 'string') {
+      sanitized[key] = value
+        .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+        .replace(/<\s*script[^>]*>.*?<\s*\/\s*script\s*>/gi, '')
+        .trim();
+    } else if (Array.isArray(value)) {
+      sanitized[key] = value.map(item =>
+        typeof item === 'string'
+          ? item
+              .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+              .replace(/<\s*script[^>]*>.*?<\s*\/\s*script\s*>/gi, '')
+              .trim()
+          : item
+      );
+    } else if (value && typeof value === 'object') {
+      sanitized[key] = sanitizeToolArgs(value);
+    } else {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
+}
+
+/**
+ * Tool Result Schema Validator: Enforces standard contract with schemaVersion "1.0"
+ */
+export function validateToolResultContract(rawResult, toolName = '', correlationId = '') {
+  const toolMeta = TOOL_REGISTRY[toolName] || { type: 'READ', source: 'Local Project Data' };
+  const safeResult = rawResult && typeof rawResult === 'object' ? rawResult : {};
+
+  const isSuccess = safeResult.success !== undefined ? Boolean(safeResult.success) : !safeResult.error;
+  const status = safeResult.status || (isSuccess ? 'ok' : 'error');
+
+  return {
+    ...safeResult,
+    schemaVersion: '1.0',
+    correlationId: correlationId || safeResult.correlationId || `corr_${Date.now()}`,
+    toolName: toolName || safeResult.toolName || 'unknown_tool',
+    toolType: safeResult.toolType || toolMeta.type || 'READ',
+    source: safeResult.source || toolMeta.source || 'Local Project Data',
+    success: isSuccess,
+    status,
+    data: safeResult.data !== undefined ? safeResult.data : (safeResult.error ? null : safeResult),
+    isDuplicate: Boolean(safeResult.isDuplicate),
+    idempotencyKey: safeResult.idempotencyKey || null,
+    error: safeResult.error ? String(safeResult.error) : null,
+    _executionDurationMs: typeof safeResult._executionDurationMs === 'number' ? safeResult._executionDurationMs : 0
+  };
+}
+
+/**
+ * Execution Timeout Wrapper
+ */
+export async function withToolTimeout(promiseFn, functionName, timeoutMs = TOOL_TIMEOUT_MS) {
+  let timeoutId;
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(new Error(`Tool execution for ${functionName} timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+  });
+
+  try {
+    const result = await Promise.race([promiseFn(), timeoutPromise]);
+    return result;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function parseAmount(val) {
   if (typeof val === 'number') return val;
   if (!val) return 0;
@@ -34,23 +294,78 @@ function getPhasesArray(dashboardData) {
 /**
  * Execute tool call dynamically against client-side project data.
  */
-export async function executeClientToolCall(functionName, args = {}, projectContext = {}) {
+export async function executeClientToolCall(functionName, rawArgs = {}, projectContext = {}, correlationId = '') {
   const startTime = Date.now();
-  const {
-    items = [],
-    dashboardData = null,
-    driveTree = null,
-    projectSpecs = [],
-    siteSetupData = null
-  } = projectContext;
+  const toolMeta = TOOL_REGISTRY[functionName] || {
+    type: 'READ',
+    source: 'Local Engine'
+  };
+  const args = sanitizeToolArgs(rawArgs);
 
-  let resultPayload = null;
+  // 1. Circuit Breaker Check for External / Failing Dependencies
+  if (circuitBreaker.isOpen(functionName)) {
+    return validateToolResultContract({
+      success: false,
+      status: 'circuit_open',
+      error: `The service for ${functionName} is temporarily unavailable due to repeated failures (Circuit Breaker OPEN).`,
+      _executionDurationMs: Date.now() - startTime
+    }, functionName, correlationId);
+  }
 
-  switch (functionName) {
-    case 'get_weather_for_jobsite': {
-      resultPayload = await executeWeatherTool(args);
-      break;
+  // 2. Idempotency & Concurrency Mutex for WRITE Tools
+  let idempotencyKey = null;
+  if (toolMeta.type === 'WRITE') {
+    idempotencyKey = generateIdempotencyKey(functionName, args, projectContext.projectId);
+
+    // A. Check cached duplicate
+    const cached = checkIdempotency(functionName, args, projectContext.projectId);
+    if (cached?.isDuplicate) {
+      return validateToolResultContract({
+        success: true,
+        status: 'deduplicated',
+        isDuplicate: true,
+        saved: true,
+        updated: true,
+        deleted: true,
+        idempotencyKey,
+        data: cached.cachedResult?.data || args,
+        message: 'Action already completed previously.',
+        _executionDurationMs: Date.now() - startTime
+      }, functionName, correlationId);
     }
+
+    // B. Check in-flight concurrent execution for this exact key
+    if (inFlightWritePromises.has(idempotencyKey)) {
+      try {
+        const inFlightRes = await inFlightWritePromises.get(idempotencyKey);
+        return validateToolResultContract({
+          ...inFlightRes,
+          status: 'deduplicated',
+          isDuplicate: true,
+          _executionDurationMs: Date.now() - startTime
+        }, functionName, correlationId);
+      } catch (_) {
+        // Fall through to retry fresh execution if in-flight failed
+      }
+    }
+  }
+
+  const executeInternal = async () => {
+    const {
+      items = [],
+      dashboardData = null,
+      driveTree = null,
+      projectSpecs = [],
+      siteSetupData = null
+    } = projectContext;
+
+    let resultPayload = null;
+
+    switch (functionName) {
+      case 'get_weather_for_jobsite': {
+        resultPayload = await executeWeatherTool(args);
+        break;
+      }
 
     case 'get_subcontractor_balance':
     case 'get_vendor_history': {
@@ -265,21 +580,28 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
     case 'get_drive_files': {
       const folderName = (args.folderName || '').toLowerCase();
       const keyword = (args.keyword || '').toLowerCase();
-      const tree = driveTree || [];
+      
+      let nodes = [];
+      if (Array.isArray(driveTree)) {
+        nodes = driveTree;
+      } else if (driveTree && typeof driveTree === 'object') {
+        nodes = [...(driveTree.directFiles || []), ...(driveTree.subfolders || [])];
+      }
 
       const results = [];
-      function searchTree(nodes) {
-        for (const n of nodes) {
+      function searchTree(nodeList) {
+        if (!Array.isArray(nodeList)) return;
+        for (const n of nodeList) {
           const name = (n.name || '').toLowerCase();
           if ((!folderName || name.includes(folderName)) && (!keyword || name.includes(keyword))) {
-            results.push({ name: n.name, type: n.isFolder ? 'folder' : 'file', link: n.webViewLink || null });
+            results.push({ name: n.name, type: n.isFolder || n.mimeType?.includes('folder') ? 'folder' : 'file', link: n.webViewLink || null });
           }
-          if (n.children && n.children.length > 0) {
+          if (Array.isArray(n.children) && n.children.length > 0) {
             searchTree(n.children);
           }
         }
       }
-      searchTree(tree);
+      searchTree(nodes);
 
       resultPayload = {
         found: results.length > 0,
@@ -334,10 +656,27 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       
       if (ambiguityCheck.isAmbiguous) {
         resultPayload = {
+          success: false,
+          status: 'ambiguous',
           saved: false,
           isAmbiguous: true,
           warning: ambiguityCheck.warning,
           message: `I noticed this statement contains speculative language ("${ambiguityCheck.indicator}"). Do you want me to save this as a permanent memory, or was it just a possibility?`
+        };
+        break;
+      }
+
+      // Idempotency / Duplicate Check
+      const idempotency = checkIdempotency('save_memory', args, projectContext.projectId);
+      if (idempotency?.isDuplicate) {
+        resultPayload = {
+          success: true,
+          status: 'deduplicated',
+          isDuplicate: true,
+          saved: true,
+          idempotencyKey: idempotency.key,
+          data: idempotency.cachedResult?.data || { text: textToSave },
+          message: `Got it. I've already saved that to your memory.`
         };
         break;
       }
@@ -354,11 +693,20 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       });
 
       resultPayload = {
+        success: true,
+        status: 'ok',
+        isDuplicate: false,
+        idempotencyKey: idempotency?.key,
         saved: true,
         memoryId: savedItem.id,
         memory: savedItem,
+        data: savedItem,
         message: `Got it. I've saved that to your memory.`
       };
+
+      if (idempotency?.key) {
+        recordIdempotency(idempotency.key, resultPayload);
+      }
       break;
     }
 
@@ -372,9 +720,12 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       });
 
       resultPayload = {
+        success: true,
+        status: results.length > 0 ? 'ok' : 'not_found',
         found: results.length > 0,
         query: searchQuery,
         totalMatches: results.length,
+        data: results,
         memories: results.map(m => ({
           id: m.id,
           text: m.text,
@@ -400,9 +751,12 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       });
 
       resultPayload = {
+        success: true,
+        status: list.length > 0 ? 'ok' : 'not_found',
         found: list.length > 0,
         projectId: listTargetProj,
         total: list.length,
+        data: list,
         memories: list.map(m => ({
           id: m.id,
           text: m.text,
@@ -421,6 +775,21 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       const updateTargetProj = args.projectId || projectContext.projectId || null;
       let targetId = args.memoryId;
 
+      // Idempotency / Duplicate Check
+      const idempotency = checkIdempotency('update_memory', args, projectContext.projectId);
+      if (idempotency?.isDuplicate) {
+        resultPayload = {
+          success: true,
+          status: 'deduplicated',
+          isDuplicate: true,
+          updated: true,
+          idempotencyKey: idempotency.key,
+          data: idempotency.cachedResult?.data || { text: args.updatedText },
+          message: `Memory has already been updated.`
+        };
+        break;
+      }
+
       if (!targetId && targetQuery) {
         const found = await searchMemories(targetQuery, { projectId: updateTargetProj, limit: 1 });
         if (found.length > 0) {
@@ -435,11 +804,19 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
           args.reason || 'Updated via conversation'
         );
         resultPayload = {
+          success: true,
+          status: 'ok',
+          isDuplicate: false,
+          idempotencyKey: idempotency?.key,
           updated: true,
           memoryId: targetId,
           memory: updatedItem,
+          data: updatedItem,
           message: `I've updated that memory.`
         };
+        if (idempotency?.key) {
+          recordIdempotency(idempotency.key, resultPayload);
+        }
       } else {
         // If no existing memory found, save as new
         const savedNew = await saveMemory({
@@ -448,12 +825,20 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
           source: 'user_explicit'
         });
         resultPayload = {
+          success: true,
+          status: 'ok',
+          isDuplicate: false,
+          idempotencyKey: idempotency?.key,
           updated: true,
           isNew: true,
           memoryId: savedNew.id,
           memory: savedNew,
+          data: savedNew,
           message: `I didn't find the exact previous memory, but I've saved the updated information.`
         };
+        if (idempotency?.key) {
+          recordIdempotency(idempotency.key, resultPayload);
+        }
       }
       break;
     }
@@ -462,6 +847,20 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       const deleteQuery = String(args.searchQuery || args.memoryId || '').trim();
       const deleteTargetProj = args.projectId || projectContext.projectId || null;
       let deleteId = args.memoryId;
+
+      // Idempotency / Duplicate Check
+      const idempotency = checkIdempotency('delete_memory', args, projectContext.projectId);
+      if (idempotency?.isDuplicate) {
+        resultPayload = {
+          success: true,
+          status: 'deduplicated',
+          isDuplicate: true,
+          deleted: true,
+          idempotencyKey: idempotency.key,
+          message: `Memory was already deactivated.`
+        };
+        break;
+      }
 
       if (!deleteId && deleteQuery) {
         const found = await searchMemories(deleteQuery, { projectId: deleteTargetProj, limit: 1 });
@@ -473,12 +872,21 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       if (deleteId) {
         await deactivateMemory(deleteId, args.reason || 'Deactivated via user request');
         resultPayload = {
+          success: true,
+          status: 'ok',
+          isDuplicate: false,
+          idempotencyKey: idempotency?.key,
           deleted: true,
           memoryId: deleteId,
           message: `Got it. I've deactivated that memory.`
         };
+        if (idempotency?.key) {
+          recordIdempotency(idempotency.key, resultPayload);
+        }
       } else {
         resultPayload = {
+          success: false,
+          status: 'not_found',
           deleted: false,
           message: `I couldn't locate that specific memory to delete.`
         };
@@ -486,15 +894,49 @@ export async function executeClientToolCall(functionName, args = {}, projectCont
       break;
     }
 
-    default:
-      resultPayload = { found: false, error: `Tool ${functionName} not implemented` };
+      default:
+        resultPayload = { success: false, status: 'error', found: false, error: `Tool ${functionName} not implemented` };
+    }
+
+    return resultPayload;
+  };
+
+  // 3. Execute with Timeout and In-Flight Concurrency Tracking
+  let executionPromise;
+  if (toolMeta.type === 'WRITE' && idempotencyKey) {
+    executionPromise = withToolTimeout(executeInternal, functionName, TOOL_TIMEOUT_MS);
+    inFlightWritePromises.set(idempotencyKey, executionPromise);
+  } else {
+    executionPromise = withToolTimeout(executeInternal, functionName, TOOL_TIMEOUT_MS);
   }
 
-  const durationMs = Date.now() - startTime;
-  return {
-    ...resultPayload,
-    _executionDurationMs: durationMs
-  };
+  let finalPayload = null;
+  try {
+    finalPayload = await executionPromise;
+    if (finalPayload?.success === false && (finalPayload?.error || finalPayload?.status === 'error')) {
+      circuitBreaker.recordFailure(functionName);
+    } else {
+      circuitBreaker.recordSuccess(functionName);
+    }
+  } catch (err) {
+    circuitBreaker.recordFailure(functionName);
+    finalPayload = {
+      success: false,
+      status: 'error',
+      error: err.message || 'Tool execution failed'
+    };
+  } finally {
+    if (idempotencyKey) {
+      inFlightWritePromises.delete(idempotencyKey);
+    }
+  }
+
+  finalPayload._executionDurationMs = Date.now() - startTime;
+  if (idempotencyKey && finalPayload.success && !finalPayload.isDuplicate) {
+    recordIdempotency(idempotencyKey, finalPayload);
+  }
+
+  return validateToolResultContract(finalPayload, functionName, correlationId);
 }
 
 /**

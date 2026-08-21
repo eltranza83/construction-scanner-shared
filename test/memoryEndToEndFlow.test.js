@@ -9,6 +9,7 @@ import {
   MEMORY_STORAGE_KEY,
   MEMORY_SCOPES
 } from '../src/services/memoryService.js';
+import { clearIdempotencyCache } from '../src/services/aiTools.js';
 
 // Setup mock localStorage in Node test environment
 if (typeof globalThis.localStorage === 'undefined') {
@@ -24,6 +25,7 @@ if (typeof globalThis.localStorage === 'undefined') {
 describe('SiteTactix Second Brain — End-to-End Validation Suite (Scenarios 1 to 8)', () => {
   beforeEach(() => {
     localStorage.clear();
+    clearIdempotencyCache();
   });
 
   test('1. Save & Verify Storage (A & B): "Remember that painter for Lot 3 likes cash"', async () => {

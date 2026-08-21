@@ -4,7 +4,7 @@
  * No brittle hardcoded if/else rules or regex catchphrases.
  */
 import { determineTaskModel } from '../config/aiConfig.js';
-import { executeClientToolCall } from './aiTools.js';
+import { executeClientToolCall, circuitBreaker } from './aiTools.js';
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
 import { searchMemories, formatMemoriesForPrompt } from './memoryService.js';
@@ -36,6 +36,7 @@ export function playChimeAlert() {
 
 export function loadGlobalSiteSetupProtocol(defaultProtocol = {}) {
   try {
+    if (typeof localStorage === 'undefined') return defaultProtocol;
     const raw = localStorage.getItem(GLOBAL_SITE_SETUP_KEY);
     if (!raw) return defaultProtocol;
     const parsed = JSON.parse(raw);
@@ -48,6 +49,7 @@ export function loadGlobalSiteSetupProtocol(defaultProtocol = {}) {
 
 export function saveGlobalSiteSetupProtocol(protocol) {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(GLOBAL_SITE_SETUP_KEY, JSON.stringify(protocol));
   } catch (e) {
     console.error('Error saving global site setup protocol:', e);
@@ -56,6 +58,7 @@ export function saveGlobalSiteSetupProtocol(protocol) {
 
 export function resetGlobalSiteSetupProtocol(defaultProtocol = {}) {
   try {
+    if (typeof localStorage === 'undefined') return defaultProtocol;
     localStorage.removeItem(GLOBAL_SITE_SETUP_KEY);
     return defaultProtocol;
   } catch (e) {
@@ -66,6 +69,7 @@ export function resetGlobalSiteSetupProtocol(defaultProtocol = {}) {
 
 export function loadGlobalPhases(defaultPhases = []) {
   try {
+    if (typeof localStorage === 'undefined') return defaultPhases;
     const raw = localStorage.getItem(GLOBAL_PHASES_STORAGE_KEY);
     if (!raw) return defaultPhases;
     const parsed = JSON.parse(raw);
@@ -78,6 +82,7 @@ export function loadGlobalPhases(defaultPhases = []) {
 
 export function saveGlobalPhases(phases) {
   try {
+    if (typeof localStorage === 'undefined') return;
     localStorage.setItem(GLOBAL_PHASES_STORAGE_KEY, JSON.stringify(phases));
   } catch (e) {
     console.error('Error saving global phases:', e);
@@ -86,6 +91,7 @@ export function saveGlobalPhases(phases) {
 
 export function resetGlobalPhases(defaultPhases = []) {
   try {
+    if (typeof localStorage === 'undefined') return defaultPhases;
     localStorage.removeItem(GLOBAL_PHASES_STORAGE_KEY);
     return defaultPhases;
   } catch (e) {
@@ -426,9 +432,151 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - Seamlessly support English and Spanish based on user input.`;
 }
 
-function formatToolResultsHumanReadable(toolTelemetryList) {
+export function formatUserFriendlyToolError(toolName) {
+  if (toolName === 'get_weather_for_jobsite') return 'The jobsite weather forecast service was temporarily unavailable.';
+  if (toolName === 'get_drive_files') return 'Google Drive document search was temporarily unreachable.';
+  if (toolName === 'save_memory' || toolName === 'update_memory') return 'Memory database sync was temporarily unavailable.';
+  if (toolName === 'search_receipts' || toolName === 'get_subcontractor_balance') return 'Financial ledger lookup was temporarily unavailable.';
+  return 'The requested tool action was temporarily unavailable.';
+}
+
+export function formatToolResultsForSynthesis(toolTelemetryList = []) {
+  if (!Array.isArray(toolTelemetryList) || toolTelemetryList.length === 0) {
+    return 'No tool calls were executed.';
+  }
+
+  return toolTelemetryList.map((t, i) => {
+    const classification = t.toolType || (t.name.startsWith('save_') || t.name.startsWith('update_') || t.name.startsWith('delete_') ? 'WRITE' : 'READ');
+    const sourceTag = t.source ? `[SOURCE: ${t.source}]` : '[SOURCE: Local Project Data]';
+    const statusTag = t.status ? `[STATUS: ${String(t.status).toUpperCase()}]` : (t.success ? '[STATUS: OK]' : '[STATUS: ERROR]');
+    const dupTag = t.isDuplicate ? ' (Deduplicated idempotent write)' : '';
+
+    if (t.success) {
+      const dataPayload = t.data !== undefined ? t.data : t.result;
+      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}${dupTag}: SUCCESS\nStructured Data: ${JSON.stringify(dataPayload)}`;
+    } else {
+      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}: FAILED\nReason: ${t.error || 'Temporary service error'}`;
+    }
+  }).join('\n\n');
+}
+
+/**
+ * Multi-Domain Grounding & Anti-Hallucination Guard
+ * Cross-checks currency values, numerical figures, contractor entities, and filenames
+ * against live project data and verified tool outputs.
+ */
+export function verifyResponseGrounding(synthesizedText = '', projectContext = {}, toolResults = []) {
+  if (!synthesizedText || typeof synthesizedText !== 'string') {
+    return {
+      status: 'fully_grounded',
+      checkedClaimsCount: 0,
+      supportedClaims: [],
+      unsupportedClaims: [],
+      unsupportedEntities: [],
+      unsupportedFiles: []
+    };
+  }
+
+  // 1. Gather all verified ground truth strings
+  const groundTruthTokens = [];
+
+  for (const t of (toolResults || [])) {
+    if (t.data) groundTruthTokens.push(JSON.stringify(t.data));
+    if (t.result) groundTruthTokens.push(JSON.stringify(t.result));
+    if (t.files) groundTruthTokens.push(JSON.stringify(t.files));
+  }
+
+  if (projectContext.dashboardData) groundTruthTokens.push(JSON.stringify(projectContext.dashboardData));
+  if (projectContext.dashData) groundTruthTokens.push(JSON.stringify(projectContext.dashData));
+  if (projectContext.driveTree) groundTruthTokens.push(JSON.stringify(projectContext.driveTree));
+  if (projectContext.driveData) groundTruthTokens.push(JSON.stringify(projectContext.driveData));
+  if (projectContext.projectSpecs) groundTruthTokens.push(JSON.stringify(projectContext.projectSpecs));
+  if (projectContext.memoriesData) groundTruthTokens.push(JSON.stringify(projectContext.memoriesData));
+  if (projectContext.items) groundTruthTokens.push(JSON.stringify(projectContext.items));
+
+  const groundTruth = groundTruthTokens.join(' ').toLowerCase();
+
+  const supportedClaims = [];
+  const unsupportedClaims = [];
+  const unsupportedEntities = [];
+  const unsupportedFiles = [];
+  let checkedCount = 0;
+
+  // 2. Financial / Currency Validation ($X,XXX or $XXX)
+  const currencyRegex = /\$([0-9]{1,3}(?:,[0-9]{3})*(?:\.[0-9]{2})?|[0-9]+(?:\.[0-9]{2})?)/g;
+  const currencyMatches = [...synthesizedText.matchAll(currencyRegex)];
+
+  for (const m of currencyMatches) {
+    checkedCount++;
+    const rawVal = m[0]; // e.g. "$4,000"
+    const rawNum = m[1].replace(/,/g, ''); // "4000"
+    const formattedWithComma = parseFloat(rawNum).toLocaleString('en-US'); // "4,000"
+
+    const isSupported =
+      groundTruth.includes(rawVal.toLowerCase()) ||
+      groundTruth.includes(rawNum) ||
+      groundTruth.includes(formattedWithComma);
+
+    if (isSupported) {
+      supportedClaims.push(rawVal);
+    } else {
+      unsupportedClaims.push(rawVal);
+    }
+  }
+
+  // 3. Document / Blueprint File Claims (*.pdf, *.dwg, etc.)
+  const fileRegex = /\b([a-zA-Z0-9_\-]+\.(?:pdf|dwg|png|jpg|docx|xlsx|csv))\b/gi;
+  const fileMatches = [...synthesizedText.matchAll(fileRegex)];
+
+  for (const fm of fileMatches) {
+    checkedCount++;
+    const fileName = fm[1];
+    if (groundTruth.includes(fileName.toLowerCase())) {
+      supportedClaims.push(fileName);
+    } else {
+      unsupportedClaims.push(fileName);
+      unsupportedFiles.push(fileName);
+    }
+  }
+
+  // 4. Contractor / Vendor Entity Claims
+  const vendorRegex = /\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*\s+(?:Electric|Plumbing|Framing|Roofing|Masonry|Concrete|HVAC|Supply|Pros|Masters|Services|LLC|Inc|Corp|Contractors?))\b/g;
+  const vendorMatches = [...synthesizedText.matchAll(vendorRegex)];
+
+  for (const vm of vendorMatches) {
+    checkedCount++;
+    const vendorName = vm[1].trim();
+    if (groundTruth.includes(vendorName.toLowerCase())) {
+      supportedClaims.push(vendorName);
+    } else {
+      unsupportedClaims.push(vendorName);
+      unsupportedEntities.push(vendorName);
+    }
+  }
+
+  let status = 'fully_grounded';
+  if (unsupportedClaims.length > 0) {
+    status = supportedClaims.length > 0 ? 'partially_grounded' : 'unsupported_claims_detected';
+  }
+
+  return {
+    status,
+    checkedClaimsCount: checkedCount,
+    supportedClaims,
+    unsupportedClaims,
+    unsupportedEntities,
+    unsupportedFiles
+  };
+}
+
+export function formatToolResultsHumanReadable(toolTelemetryList) {
   const parts = [];
   for (const t of (toolTelemetryList || [])) {
+    if (!t.success) {
+      parts.push(`(Note: ${t.error || formatUserFriendlyToolError(t.name)})`);
+      continue;
+    }
+
     const res = t.result;
     if (!res) continue;
 
@@ -436,15 +584,18 @@ function formatToolResultsHumanReadable(toolTelemetryList) {
       if (res.current) {
         parts.push(`The current weather at the jobsite is ${res.current.temperature_2m || res.current.temp || 75}°F${res.current.condition ? `, ${res.current.condition}` : ''}.`);
       }
+    } else if (t.name === 'get_subcontractor_balance' || t.name === 'get_vendor_history') {
+      if (res.found && res.results?.length > 0) {
+        const item = res.results[0];
+        parts.push(`For ${item.phaseName || item.contractor}: Quote is $${item.quote?.toLocaleString()}, Total Paid is $${item.totalPaid?.toLocaleString()}, and Remaining Balance owed is $${item.remainingBalance?.toLocaleString()}.`);
+      } else if (res.message) {
+        parts.push(res.message);
+      }
     } else if (t.name === 'get_project_schedule') {
       if (res.items && res.items.length > 0) {
         parts.push(`There are ${res.totalItems} active checklist items on the project schedule.`);
       }
-    } else if (t.name === 'save_memory') {
-      if (res.message) {
-        parts.push(res.message);
-      }
-    } else if (t.name === 'update_memory' || t.name === 'delete_memory') {
+    } else if (t.name === 'save_memory' || t.name === 'update_memory' || t.name === 'delete_memory') {
       if (res.message) {
         parts.push(res.message);
       }
@@ -482,6 +633,7 @@ export async function askGeminiBrain(
   forceDeepReasoning = false
 ) {
   const clientStartTime = Date.now();
+  const correlationId = `corr_${clientStartTime}_${Math.random().toString(36).slice(2, 8)}`;
   const projectId = projectIdOverride || activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
   const dashData = dashboardOverride || loadProjectDashboard(projectId);
   const driveData = driveTreeOverride || loadDriveTree(projectId);
@@ -745,51 +897,192 @@ export async function askGeminiBrain(
     if (apiRes.ok) {
       const data = await apiRes.json();
 
-      // If Gemini requested a tool execution (e.g. weather, memory)
+      // If Gemini requested a tool execution (e.g. weather, memory, balance lookup)
       if (data && data.toolCalls && data.toolCalls.length > 0) {
         for (const tc of data.toolCalls) {
+          const toolStartTime = Date.now();
           try {
-            const result = await executeClientToolCall(tc.name, tc.args || {}, projectContext);
-            toolTelemetryList.push({
-              name: tc.name,
-              args: tc.args,
-              result
-            });
+            const result = await executeClientToolCall(tc.name, tc.args || {}, projectContext, correlationId);
+            const durationMs = result._executionDurationMs || (Date.now() - toolStartTime);
+
+            if (result && (result.error || result.success === false)) {
+              toolTelemetryList.push({
+                name: tc.name,
+                args: tc.args,
+                toolType: result.toolType || (tc.name.startsWith('save_') || tc.name.startsWith('update_') || tc.name.startsWith('delete_') ? 'WRITE' : 'READ'),
+                source: result.source || 'Local Project Data',
+                status: 'error',
+                success: false,
+                isDuplicate: false,
+                durationMs,
+                error: result.error || formatUserFriendlyToolError(tc.name)
+              });
+            } else {
+              toolTelemetryList.push({
+                name: tc.name,
+                args: tc.args,
+                toolType: result.toolType || (tc.name.startsWith('save_') || tc.name.startsWith('update_') || tc.name.startsWith('delete_') ? 'WRITE' : 'READ'),
+                source: result.source || 'Local Project Data',
+                status: result.status || 'ok',
+                success: true,
+                isDuplicate: Boolean(result.isDuplicate),
+                idempotencyKey: result.idempotencyKey || null,
+                durationMs,
+                data: result.data !== undefined ? result.data : result,
+                result
+              });
+            }
           } catch (tErr) {
+            const friendlyError = formatUserFriendlyToolError(tc.name);
             toolTelemetryList.push({
               name: tc.name,
               args: tc.args,
-              error: tErr.message
+              toolType: tc.name.startsWith('save_') || tc.name.startsWith('update_') || tc.name.startsWith('delete_') ? 'WRITE' : 'READ',
+              source: 'Local Project Data',
+              status: 'error',
+              success: false,
+              isDuplicate: false,
+              durationMs: Date.now() - toolStartTime,
+              error: friendlyError
             });
           }
         }
 
-        const sourcesUsed = [];
+        // Collect exact provenance from tools and grounded slices
+        const sourcesUsedSet = new Set();
+        for (const t of toolTelemetryList) {
+          if (t.source) sourcesUsedSet.add(t.source);
+        }
         if (dashData && (dashData.subcontractors?.length > 0 || dashData.phases?.length > 0 || dashData.projectInfo?.budgetGross)) {
-          sourcesUsed.push('Google Sheets');
+          sourcesUsedSet.add('Google Sheets');
         }
         if (memoriesData && memoriesData.length > 0) {
-          sourcesUsed.push(`Memory Vault (${memoriesData.length} active)`);
+          sourcesUsedSet.add(`Memory Vault (${memoriesData.length} active)`);
         }
         if (driveData && (driveData.directFiles?.length > 0 || driveData.subfolders?.length > 0)) {
-          sourcesUsed.push('Google Drive');
+          sourcesUsedSet.add('Google Drive');
+        }
+        const sourcesUsed = Array.from(sourcesUsedSet);
+
+        const toolsSucceeded = toolTelemetryList.filter(t => t.success).map(t => t.name);
+        const toolsFailed = toolTelemetryList.filter(t => !t.success).map(t => ({ name: t.name, error: t.error }));
+
+        // 2. Perform Second-Pass Multi-Intent Synthesis via Gemini Cloud AI
+        // forceNoTools: true is strictly enforced to guarantee no infinite loops
+        const synthesisPrompt = `${systemInstruction}
+
+[MULTI-INTENT TOOL EXECUTION OUTCOMES]
+The user issued a request that required tool execution and/or project data retrieval.
+Tool Outcomes:
+${formatToolResultsForSynthesis(toolTelemetryList)}
+
+SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
+1. You MUST directly address EVERY part, intent, and question in the user's original request.
+2. STRICT GROUNDING RULE: You may ONLY state financial figures, dollar amounts, contractor quotes, balances, payments, and dates that appear EXACTLY in the project manifest or tool outcomes above. Do NOT invent, assume, or estimate numbers.
+3. If a tool succeeded (e.g. saving a reminder/memory), clearly confirm it in your response.
+4. If a tool failed, clearly and concisely report what couldn't be completed (e.g. "The weather service was temporarily unavailable") without technical jargon.
+5. Provide ONE single, unified, coherent, and professional answer.`;
+
+        let synthesisText = null;
+        try {
+          const synthController = new AbortController();
+          const synthTimeoutId = setTimeout(() => synthController.abort(), 15000);
+
+          const synthRes = await fetch('/api/ask-brain', {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+              contents,
+              systemInstruction: synthesisPrompt,
+              query,
+              forceDeepReasoning: true,
+              forceNoTools: true,
+              apiKey: effectiveKey
+            }),
+            signal: synthController.signal
+          });
+          clearTimeout(synthTimeoutId);
+
+          if (synthRes.ok) {
+            const synthData = await synthRes.json();
+            if (synthData?.text) {
+              synthesisText = synthData.text.trim();
+            }
+          }
+        } catch (sErr) {
+          console.warn('[BuilderBrain] Second-pass synthesis request failed, using grounded fallback combiner:', sErr);
         }
 
-        const cleanSummary = formatToolResultsHumanReadable(toolTelemetryList);
-        if (cleanSummary) {
+        if (synthesisText) {
+          const groundingReport = verifyResponseGrounding(synthesisText, projectContext, toolTelemetryList);
+
           return {
-            text: cleanSummary,
+            text: synthesisText,
             telemetry: {
-              modelUsed: data.telemetry?.modelUsed || determineTaskModel(query, forceDeepReasoning),
-              source: 'Gemini Cloud AI',
-              intent: 'Tool Augmented Response',
+              schemaVersion: '1.0',
+              correlationId,
+              modelUsed: data.telemetry?.modelUsed || determineTaskModel(query, true),
+              source: 'Gemini Cloud AI (Two-Pass Orchestration)',
+              intent: 'Multi-Intent Tool Synthesis',
               durationMs: Date.now() - clientStartTime,
-              sourcesUsed: sourcesUsed,
-              memoriesGroundedCount: memoriesData?.length || 0,
-              toolsExecuted: toolTelemetryList
+              intentsCount: toolTelemetryList.length + (query.toLowerCase().includes('how much') || query.toLowerCase().includes('what') || query.toLowerCase().includes('who') ? 1 : 0),
+              toolsRequested: data.toolCalls.map(t => t.name),
+              toolsExecuted: toolsSucceeded,
+              toolsFailed: toolsFailed,
+              circuitBreakerStatus: {
+                weather: circuitBreaker.getStatus('get_weather_for_jobsite')
+              },
+              tools: toolTelemetryList.map(t => ({
+                schemaVersion: '1.0',
+                correlationId,
+                name: t.name,
+                type: t.toolType,
+                source: t.source,
+                status: t.status,
+                durationMs: t.durationMs,
+                isDuplicate: t.isDuplicate,
+                error: t.error || null
+              })),
+              grounding: groundingReport,
+              groundingStatus: groundingReport.status,
+              synthesisMode: 'cloud_synthesis',
+              sourcesUsed,
+              memoriesGroundedCount: memoriesData?.length || 0
             }
           };
         }
+
+        // Grounded fallback if synthesis network failed
+        const cleanSummary = formatToolResultsHumanReadable(toolTelemetryList);
+        const fallbackGrounding = verifyResponseGrounding(cleanSummary || '', projectContext, toolTelemetryList);
+
+        return {
+          text: cleanSummary || 'Action completed.',
+          telemetry: {
+            modelUsed: data.telemetry?.modelUsed || determineTaskModel(query, forceDeepReasoning),
+            source: 'Gemini Cloud AI',
+            intent: 'Tool Augmented Response',
+            durationMs: Date.now() - clientStartTime,
+            intentsCount: toolTelemetryList.length,
+            toolsRequested: data.toolCalls.map(t => t.name),
+            toolsExecuted: toolsSucceeded,
+            toolsFailed: toolsFailed,
+            tools: toolTelemetryList.map(t => ({
+              name: t.name,
+              type: t.toolType,
+              source: t.source,
+              status: t.status,
+              durationMs: t.durationMs,
+              isDuplicate: t.isDuplicate,
+              error: t.error || null
+            })),
+            grounding: fallbackGrounding,
+            groundingStatus: fallbackGrounding.status,
+            synthesisMode: 'grounded_fallback',
+            sourcesUsed,
+            memoriesGroundedCount: memoriesData?.length || 0
+          }
+        };
       }
 
       if (data && data.text) {

@@ -18,10 +18,10 @@ function getFirebaseAppInstance() {
 
   const firebaseConfig = {
     apiKey,
-    authDomain: localStorage.getItem('jobscan_firebase_auth_domain') || `${projectId}.firebaseapp.com`,
+    authDomain: getStoredConfigValue('jobscan_firebase_auth_domain', `${projectId}.firebaseapp.com`),
     projectId,
-    storageBucket: localStorage.getItem('jobscan_firebase_storage_bucket') || `${projectId}.appspot.com`,
-    messagingSenderId: localStorage.getItem('jobscan_firebase_messaging_sender_id') || '',
+    storageBucket: getStoredConfigValue('jobscan_firebase_storage_bucket', `${projectId}.appspot.com`),
+    messagingSenderId: getStoredConfigValue('jobscan_firebase_messaging_sender_id', ''),
     appId: getStoredConfigValue(STORAGE_KEYS.firebaseAppId, DEFAULT_FIREBASE_CONFIG.appId)
   };
 

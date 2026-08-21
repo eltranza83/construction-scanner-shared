@@ -33,6 +33,7 @@ export function isBuiltInAdmin(email) {
 }
 
 export function getStoredConfigValue(storageKey, fallback) {
+  if (typeof localStorage === 'undefined') return fallback;
   const currentVal = localStorage.getItem(storageKey);
   if (currentVal) return currentVal;
   // Fallback to legacy key if exists
