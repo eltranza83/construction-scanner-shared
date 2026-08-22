@@ -1569,6 +1569,24 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                             </div>
                           )}
 
+                          {/* Cognitive Initiative Telemetry */}
+                          {m.telemetry.cognitiveInitiative && (
+                            <div style={{ margin: '4px 0', fontSize: '0.68rem', color: '#c084fc', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800 }}>⚡ Initiative:</span>
+                              <span style={{ backgroundColor: 'rgba(192, 132, 252, 0.15)', border: '1px solid rgba(192, 132, 252, 0.3)', padding: '1px 5px', borderRadius: '3px' }}>
+                                Intent: {m.telemetry.cognitiveInitiative.intentType || 'direct_query'}
+                              </span>
+                              <span style={{ backgroundColor: 'rgba(192, 132, 252, 0.15)', border: '1px solid rgba(192, 132, 252, 0.3)', padding: '1px 5px', borderRadius: '3px' }}>
+                                Score: {m.telemetry.cognitiveInitiative.score} (Gate: {m.telemetry.cognitiveInitiative.threshold || 0.70})
+                              </span>
+                              {m.telemetry.cognitiveInitiative.warranted && (
+                                <span style={{ backgroundColor: 'rgba(52, 211, 153, 0.15)', border: '1px solid rgba(52, 211, 153, 0.3)', color: '#6ee7b7', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>
+                                  💡 Offered: {m.telemetry.cognitiveInitiative.domain}
+                                </span>
+                              )}
+                            </div>
+                          )}
+
                           {m.telemetry.toolsExecuted && m.telemetry.toolsExecuted.length > 0 ? (
                             <div style={{ marginTop: '5px', backgroundColor: 'rgba(0, 0, 0, 0.45)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                               <div style={{ fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>
