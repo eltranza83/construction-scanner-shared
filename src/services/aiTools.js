@@ -58,6 +58,11 @@ export const TOOL_REGISTRY = {
     source: 'Field Reminders (SiteTactix App)',
     description: 'Retrieves upcoming field milestones and trade calls from local app storage.'
   },
+  get_municipal_inspections: {
+    type: 'READ',
+    source: 'Municipal Inspections',
+    description: 'Retrieves the 6-stage municipal building inspection checklist and passed stages.'
+  },
   get_drive_files: {
     type: 'READ',
     source: 'Google Drive',
@@ -557,6 +562,27 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           status: i.status,
           notes: i.notes,
           targetDate: i.targetDate || null
+        }))
+      };
+      break;
+    }
+
+    case 'get_municipal_inspections': {
+      const inspections = projectContext?.inspectionsData || [];
+      const stageId = (args.stageId || '').toLowerCase();
+      const filtered = stageId
+        ? inspections.filter(s => (s.id || '').toLowerCase().includes(stageId) || (s.title || '').toLowerCase().includes(stageId))
+        : inspections;
+
+      resultPayload = {
+        found: true,
+        totalStages: inspections.length,
+        stages: filtered.map(s => ({
+          id: s.id,
+          title: s.title,
+          isPassed: Boolean(s.isPassed),
+          progress: s.progress || 0,
+          pendingItemsCount: Array.isArray(s.items) ? s.items.filter(it => !it.checked).length : 0
         }))
       };
       break;

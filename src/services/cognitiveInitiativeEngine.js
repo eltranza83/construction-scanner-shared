@@ -255,8 +255,8 @@ export function evaluateCognitiveInitiative({
       relevance: 0.90,
       suggestionText: 'Want me to check if any municipal inspections or punch items are pending for Lot 3?',
       suggestedAction: {
-        toolName: 'get_project_schedule',
-        args: { category: 'all' },
+        toolName: 'get_municipal_inspections',
+        args: {},
         provenanceSource: 'Municipal Inspections'
       },
       suppressData: ['grossBudget', 'workingCapital', 'subcontractorBalances']
@@ -273,8 +273,8 @@ export function evaluateCognitiveInitiative({
       relevance: 0.95,
       suggestionText: `Since the ${trade} is wrapping up, want me to verify the inspection status?`,
       suggestedAction: {
-        toolName: 'get_project_schedule',
-        args: { category: 'reminder' },
+        toolName: 'get_municipal_inspections',
+        args: { stageId: trade },
         provenanceSource: 'Municipal Inspections'
       },
       suppressData: ['grossBudget', 'workingCapital']

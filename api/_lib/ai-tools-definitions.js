@@ -42,12 +42,23 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'get_project_schedule',
-    description: 'Retrieve upcoming field reminders, trade calls, site watchouts, and inspection milestones.',
+    description: 'Retrieve upcoming field reminders, trade calls, site watchouts, and in-app milestone tasks.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        category: { type: 'STRING', description: 'Filter category: reminder, trade_call, watchout, or inspection' },
+        category: { type: 'STRING', description: 'Filter category: reminder, trade_call, watchout, or all' },
         projectId: { type: 'STRING', description: 'Optional project ID' }
+      }
+    }
+  },
+  {
+    name: 'get_municipal_inspections',
+    description: 'Retrieve the 6-stage city building inspection checklist, passed stages, and pending inspection items.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        stageId: { type: 'STRING', description: 'Optional inspection stage filter (e.g., foundation, framing, rough_in, final)' },
+        projectId: { type: 'STRING', description: 'Optional project ID or lot identifier' }
       }
     }
   },

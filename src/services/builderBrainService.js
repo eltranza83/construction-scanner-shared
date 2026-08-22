@@ -1056,11 +1056,20 @@ export async function askGeminiBrain(
       const provenanceSource = toolRes.source || action.provenanceSource || 'Municipal Inspections';
       
       let replyText = '';
-      if (action.toolName === 'get_project_schedule') {
+      if (action.toolName === 'get_municipal_inspections') {
+        const stages = toolRes.stages || [];
+        const pendingStages = stages.filter(s => !s.isPassed);
+        if (pendingStages.length > 0) {
+          const stageList = pendingStages.slice(0, 3).map(s => `- ${s.title} (${s.pendingItemsCount || 0} pending items)`).join('\n');
+          replyText = `Here is the current municipal inspection status for ${activeProjectName}:\n${stageList}`;
+        } else {
+          replyText = `All municipal inspection stages are currently marked passed for ${activeProjectName}.`;
+        }
+      } else if (action.toolName === 'get_project_schedule') {
         const items = toolRes.items || [];
         if (items.length > 0) {
           const itemList = items.slice(0, 3).map(i => `- ${i.title || i.phase || i.name}`).join('\n');
-          replyText = `Here is what is currently active for ${activeProjectName}:\n${itemList}`;
+          replyText = `Here is what is currently active in field reminders for ${activeProjectName}:\n${itemList}`;
         } else {
           replyText = `Everything is currently up to date on ${activeProjectName} with no pending items.`;
         }
