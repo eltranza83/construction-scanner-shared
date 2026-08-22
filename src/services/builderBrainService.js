@@ -20,6 +20,34 @@ import {
   PREFERENCE_SCOPES
 } from './userPreferenceEngine.js';
 
+import {
+  evaluateCognitiveInitiative,
+  resolvePendingSuggestionConfirmation,
+  recordSuggestionOutcome,
+  isConversationEnding,
+  isUserCorrectingInformation,
+  INITIATIVE_OUTCOMES,
+  DEFAULT_INITIATIVE_CONFIG
+} from './cognitiveInitiativeEngine.js';
+
+let _activeSessionCognitiveState = {
+  turnIndex: 0,
+  lastSuggestionTurn: -999,
+  pendingProactiveSuggestion: null
+};
+
+export function getActiveSessionCognitiveState() {
+  return _activeSessionCognitiveState;
+}
+
+export function resetActiveSessionCognitiveState() {
+  _activeSessionCognitiveState = {
+    turnIndex: 0,
+    lastSuggestionTurn: -999,
+    pendingProactiveSuggestion: null
+  };
+}
+
 
 
 const SPECS_STORAGE_PREFIX = 'jobscan_project_specs_';
@@ -473,7 +501,14 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
      * "Google Drive": Files, plans, blueprints, permits.
      * "Municipal Inspections": 6-stage city building inspection checklist.
      * "Weather API": Real-time jobsite weather.
-   - Seamlessly support English and Spanish based on user input.`;
+   - Seamlessly support English and Spanish based on user input.
+
+13. COGNITIVE INITIATIVE & PROACTIVE ASSISTANT BEHAVIOR:
+   - Understand context first: Helpful when needed, proactive when useful, quiet when not.
+   - If the user shares an observation (e.g. "I'm heading over to Lot 3" or "The electrician is finishing today"), acknowledge warmly and, if genuinely useful, offer AT MOST ONE natural, conversational next step as a brief question.
+   - NEVER use robotic alert formats like "Suggestion:" or "Proactive Alert:". Sound like a competent human assistant.
+   - If the user confirms a suggestion ("yeah", "sure", "go ahead", "check it"), execute the action immediately without asking twice.
+   - If the user is concluding ("thanks", "got it", "that's all"), acknowledge cleanly without unsolicited suggestions or data dumps.`;
 }
 
 export function formatUserFriendlyToolError(toolName) {
@@ -1008,7 +1043,103 @@ export async function askGeminiBrain(
     }
   }
 
-  // 1. DIRECT EXPLICIT MEMORY COMMAND PROCESSING
+  // 1.0. COGNITIVE INITIATIVE PENDING CONFIRMATION RESOLVER
+  _activeSessionCognitiveState.turnIndex++;
+  const pendingCheck = resolvePendingSuggestionConfirmation(query, _activeSessionCognitiveState);
+  if (pendingCheck && pendingCheck.isConfirmed) {
+    recordSuggestionOutcome(userId, pendingCheck.domain, INITIATIVE_OUTCOMES.ACCEPTED, pendingCheck.originalSuggestion);
+    const action = pendingCheck.pendingAction;
+    _activeSessionCognitiveState.pendingProactiveSuggestion = null;
+
+    try {
+      const toolRes = await executeClientToolCall(action.toolName, action.args || {}, projectContext, correlationId);
+      const provenanceSource = toolRes.source || action.provenanceSource || 'Municipal Inspections';
+      
+      let replyText = '';
+      if (action.toolName === 'get_project_schedule') {
+        const items = toolRes.items || [];
+        if (items.length > 0) {
+          const itemList = items.slice(0, 3).map(i => `- ${i.title || i.phase || i.name}`).join('\n');
+          replyText = `Here is what is currently active for ${activeProjectName}:\n${itemList}`;
+        } else {
+          replyText = `Everything is currently up to date on ${activeProjectName} with no pending items.`;
+        }
+      } else if (action.toolName === 'get_weather_for_jobsite') {
+        replyText = `The current forecast for ${activeProjectName} shows ${toolRes.forecast || toolRes.condition || 'clear conditions'}.`;
+      } else {
+        replyText = `Done. Here is the verified status for ${activeProjectName}.`;
+      }
+
+      return {
+        text: replyText,
+        telemetry: {
+          modelUsed: 'Cognitive Action Dispatcher',
+          source: provenanceSource,
+          intent: 'Proactive Action Confirmed',
+          durationMs: Date.now() - clientStartTime,
+          sourcesUsed: [provenanceSource],
+          toolsExecuted: [{ name: action.toolName, args: action.args, source: provenanceSource, result: toolRes }]
+        }
+      };
+    } catch (actErr) {
+      console.warn('[BuilderBrain] Proactive action execution failed:', actErr);
+    }
+  } else if (pendingCheck && pendingCheck.isRejected) {
+    recordSuggestionOutcome(userId, pendingCheck.domain, INITIATIVE_OUTCOMES.REJECTED);
+    _activeSessionCognitiveState.pendingProactiveSuggestion = null;
+    return {
+      text: "Understood. I won't check that.",
+      telemetry: {
+        modelUsed: 'Cognitive Engine',
+        source: 'User Preference Engine',
+        intent: 'Proactive Suggestion Rejected',
+        durationMs: Date.now() - clientStartTime,
+        sourcesUsed: []
+      }
+    };
+  }
+
+  // 1.1. CONVERSATION ENDING SIGN-OFF
+  if (isConversationEnding(query)) {
+    _activeSessionCognitiveState.pendingProactiveSuggestion = null;
+    return {
+      text: `You're welcome. Let me know when you need anything on ${activeProjectName}.`,
+      telemetry: {
+        modelUsed: 'Cognitive Engine',
+        source: 'Conversational State',
+        intent: 'Sign Off',
+        durationMs: Date.now() - clientStartTime,
+        sourcesUsed: []
+      }
+    };
+  }
+
+  // 1.2. EVALUATE COGNITIVE INITIATIVE
+  const cognitiveDecision = evaluateCognitiveInitiative({
+    query,
+    conversationHistory: contents,
+    context: projectContext,
+    preferences: userPreferences,
+    sessionState: _activeSessionCognitiveState
+  });
+
+  if (cognitiveDecision.warranted) {
+    _activeSessionCognitiveState.pendingProactiveSuggestion = {
+      id: `sug_${Date.now()}`,
+      domain: cognitiveDecision.domain,
+      topic: cognitiveDecision.topic,
+      suggestionText: cognitiveDecision.suggestionText,
+      suggestedAction: cognitiveDecision.suggestedAction
+    };
+    _activeSessionCognitiveState.lastSuggestionTurn = _activeSessionCognitiveState.turnIndex;
+  } else {
+    if (_activeSessionCognitiveState.pendingProactiveSuggestion) {
+      recordSuggestionOutcome(userId, _activeSessionCognitiveState.pendingProactiveSuggestion.domain, INITIATIVE_OUTCOMES.IGNORED);
+      _activeSessionCognitiveState.pendingProactiveSuggestion = null;
+    }
+  }
+
+  // 1.3. DIRECT EXPLICIT MEMORY COMMAND PROCESSING
   const qTrim = query.trim();
   const rememberMatch = qTrim.match(/^(?:i need you to |please )?remember (?:that )?(.+)$/i) 
     || qTrim.match(/^(?:make a note|take note|save (?:this )?(?:for later|to memory)?|keep (?:this )?in mind)(?: that|:)? (.+)$/i);
@@ -1304,16 +1435,24 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
       }
 
       if (data && data.text) {
-        const sourcesUsed = detectGroundedSourcesUsed(query, data.text, projectContext);
+        let finalReply = data.text.trim();
+
+        // If cognitive initiative determined a high-value suggestion is warranted on an observation
+        if (cognitiveDecision.warranted && cognitiveDecision.suggestionText && !finalReply.includes('?') && !finalReply.includes(cognitiveDecision.suggestionText)) {
+          finalReply = `${finalReply} ${cognitiveDecision.suggestionText}`;
+        }
+
+        const sourcesUsed = detectGroundedSourcesUsed(query, finalReply, projectContext);
 
         return {
-          text: data.text.trim(),
+          text: finalReply,
           telemetry: {
             modelUsed: data.telemetry?.modelUsed || determineTaskModel(query, forceDeepReasoning),
             source: 'Gemini Cloud AI',
             intent: data.telemetry?.intent || (forceDeepReasoning ? 'Forced Deep Reasoning' : 'Standard Response'),
             durationMs: Date.now() - clientStartTime,
             sourcesUsed: sourcesUsed,
+            cognitiveInitiative: cognitiveDecision,
             memoriesGroundedCount: memoriesData?.length || 0,
             toolsExecuted: []
           }
