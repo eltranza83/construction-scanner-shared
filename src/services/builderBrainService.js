@@ -339,8 +339,9 @@ CURRENT PROJECT CONTEXT:
 LIVE PROJECT DATA MODULE MANIFEST FOR "${activeProjectName}":
 
 ======================================================================
-[MODULE 1: LIVE FINANCIAL SPREADSHEET] -> STATUS: LOADED & ACTIVE
+[MODULE 1: LIVE FINANCIAL SPREADSHEET (Summary_Dashboard)] -> SOURCE: Google Sheets (Project Financials)
 ======================================================================
+(NOTE: Contains ONLY financial numbers, budgets, draws paid, hard costs, and subcontractor payments. Does NOT contain calendar reminders or schedules.)
 - Gross Budget: ${grossBudget}
 - Hard Cost Build Budget: ${buildBudget}
 - Total Draws Paid / Total Spent To Date: ${totalSpent}
@@ -350,37 +351,39 @@ SUBCONTRACTOR CONTRACTS, PAYMENTS & REMAINING BALANCES:
 ${phaseRecords}
 
 ======================================================================
-[MODULE 2: SITE SETUP & LOT MOBILIZATION] -> STATUS: LOADED & ACTIVE
+[MODULE 2: SITE SETUP & LOT MOBILIZATION] -> SOURCE: Site Setup Checklist Database
 ======================================================================
 ${siteSetupRecords}
 
 ======================================================================
-[MODULE 3: MUNICIPAL INSPECTION PROTOCOLS (6 BUILD STAGES)] -> STATUS: LOADED & ACTIVE
+[MODULE 3: MUNICIPAL INSPECTION PROTOCOLS (6 BUILD STAGES)] -> SOURCE: Municipal Inspections
 ======================================================================
 ${inspectionRecords}
 
 ======================================================================
-[MODULE 4: HOMEOWNER FINISH SPECIFICATIONS] -> STATUS: LOADED & ACTIVE
+[MODULE 4: HOMEOWNER FINISH SPECIFICATIONS] -> SOURCE: Homeowner Specifications
 ======================================================================
 ${specRecords}
 
 ======================================================================
-[MODULE 5: PENDING FIELD REMINDERS] -> STATUS: LOADED & ACTIVE
+[MODULE 5: PENDING FIELD REMINDERS] -> SOURCE: Field Reminders (SiteTactix App)
 ======================================================================
+(NOTE: In-app task and reminder list stored locally in SiteTactix app.)
 ${reminderRecords}
 
 ======================================================================
-[MODULE 6: GOOGLE DRIVE FOLDER & FILE TREE] -> STATUS: LOADED (METADATA & DIRECTORY HIERARCHY ONLY - INTERNAL DOCUMENT CONTENTS NOT EXTRACTED)
+[MODULE 6: GOOGLE DRIVE FOLDER & FILE TREE] -> SOURCE: Google Drive
 ======================================================================
 ${driveRecords}
 
 ======================================================================
-[MODULE 7: PERSISTENT BUSINESS & SITE MEMORIES (SECOND BRAIN)] -> STATUS: LOADED & ACTIVE
+[MODULE 7: PERSISTENT BUSINESS & SITE MEMORIES (SECOND BRAIN)] -> SOURCE: J.A.R.V.I.S. Memory (Persistent Vault)
 ======================================================================
+(NOTE: Verbal builder notes, contractor preferences, and site facts stored in Firestore /memories.)
 ${memoryRecords}
 
 ======================================================================
-[MODULE 8: USER PREFERENCES & INTERACTION STYLE (LEARNED & CONFIGURED)] -> STATUS: ACTIVE
+[MODULE 8: USER PREFERENCES & INTERACTION STYLE (LEARNED & CONFIGURED)] -> SOURCE: J.A.R.V.I.S. Memory (Persistent Vault)
 ======================================================================
 ${userPreferencesPrompt || 'Default: Concise, professional builder co-pilot.'}
 
@@ -458,6 +461,18 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
      * When the user explicitly requests a comprehensive breakdown (e.g. "Give me a full breakdown", "Provide a comprehensive status report"), deliver the complete detailed report rather than being artificially brief.
    - CONCISE BY DEFAULT, BUT COMPLETE FOR THE TOPIC:
      * Answer the requested question completely and accurately, then stop. Do NOT volunteer unsolicited next steps or unrequested background history.
+
+11. VOICE-FIRST RESPONSE CODES (NO ASTERISKS / NATURAL VOICE):
+   - Output clean plain text. Do not emit markdown formatting symbols like asterisks.
+
+12. STRICT TRUTHFUL DATA PROVENANCE & ATTRIBUTION:
+   - Always attribute facts to their TRUE originating system:
+     * "Google Sheets (Project Financials)" or "Google Sheets (Subcontractor Ledger)": Contains ONLY financial numbers, budgets, payments, and trade balances. You are STRICTLY FORBIDDEN from stating or implying that Google Sheets contains calendar reminders, dates, or schedules.
+     * "Field Reminders (SiteTactix App)": In-app task list.
+     * "J.A.R.V.I.S. Memory (Persistent Vault)": Verbal builder notes and contractor preferences in Firestore.
+     * "Google Drive": Files, plans, blueprints, permits.
+     * "Municipal Inspections": 6-stage city building inspection checklist.
+     * "Weather API": Real-time jobsite weather.
    - Seamlessly support English and Spanish based on user input.`;
 }
 
@@ -487,6 +502,88 @@ export function formatToolResultsForSynthesis(toolTelemetryList = []) {
       return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}: FAILED\nReason: ${t.error || 'Temporary service error'}`;
     }
   }).join('\n\n');
+}
+
+/**
+ * Granular & Truthful Grounded Source Provenance Detector
+ * Resolves exact originating systems based on the user's query, synthesized answer, and context.
+ */
+export function detectGroundedSourcesUsed(query = '', answerText = '', context = {}) {
+  const sources = new Set();
+  const q = String(query).toLowerCase();
+  const a = String(answerText).toLowerCase();
+
+  // 1. Casual greetings / chit-chat -> No data source used
+  if (/^(what'?s up|hey|hello|good (morning|afternoon|evening)|how'?s it going|how are you)[\s!.,?]*$/i.test(q.trim())) {
+    return [];
+  }
+
+  // 2. Google Sheets: Subcontractor Ledger or Project Financials
+  const isBalanceOrCostQuery = /\$|\b(budget|gross budget|build budget|hard cost|draw|draws|spent|paid|owe|balance|cost|expense|receipt|invoice|contract|payment)\b/i.test(q);
+  const isFinanceAnswer = /\$|\b(gross budget|working capital|draws paid|remaining balance|quoted|contract balance)\b/i.test(a);
+
+  if (isBalanceOrCostQuery || isFinanceAnswer) {
+    if (/\b(electrician|plumber|framing|drywall|painter|hvac|concrete|roofing|subcontractor|sub|payee|contractor|owe|balance)\b/i.test(q) || /\b(subcontractor|ledger|remaining balance|owed)\b/i.test(a)) {
+      sources.add('Google Sheets (Subcontractor Ledger)');
+    } else {
+      sources.add('Google Sheets (Project Financials)');
+    }
+  }
+
+  // 3. J.A.R.V.I.S. Memory (Persistent Vault)
+  if (
+    /\b(remember|memory|note|preference|told you|saved note|said about|likes to|prefers)\b/i.test(q) ||
+    /\b(saved memor|memory vault|you told me|remembered|saved note)\b/i.test(a)
+  ) {
+    sources.add('J.A.R.V.I.S. Memory (Persistent Vault)');
+  }
+
+  // 4. Field Reminders (SiteTactix App)
+  if (
+    /\b(reminder|pending reminder|field reminder|task list|to-do|todo|scheduled for tomorrow|remind me)\b/i.test(q) ||
+    /\b(field reminder|pending reminder|no specific reminder|reminder list)\b/i.test(a)
+  ) {
+    if (/\b(field reminder|pending reminder|app reminder|task list|reminder)s?\b/i.test(a) || /\b(field reminder|reminder list|task list)\b/i.test(q)) {
+      sources.add('Field Reminders (SiteTactix App)');
+    }
+    if (/\b(saved memor|memory vault)\b/i.test(a)) {
+      sources.add('J.A.R.V.I.S. Memory (Persistent Vault)');
+    }
+  }
+
+  // 5. Municipal Inspections
+  if (
+    /\b(inspection|inspector|passed|failed|permit|municipal|city|stage|foundation inspection|framing inspection|plumbing inspection)\b/i.test(q) ||
+    /\b(inspection stage|municipal inspection|inspections passed)\b/i.test(a)
+  ) {
+    sources.add('Municipal Inspections');
+  }
+
+  // 6. Google Drive
+  if (
+    /\b(file|folder|document|pdf|blueprint|plan|drive|google drive|upload|drawing)\b/i.test(q) ||
+    /\b(google drive|drive folder|drive tree|pdf)\b/i.test(a)
+  ) {
+    sources.add('Google Drive');
+  }
+
+  // 7. Homeowner Specifications
+  if (
+    /\b(spec|specification|finish|fixture|paint color|appliance|cabinet|hardware)\b/i.test(q) ||
+    /\b(homeowner specification|finish spec)\b/i.test(a)
+  ) {
+    sources.add('Homeowner Specifications');
+  }
+
+  // 8. Site Setup Checklist Database
+  if (
+    /\b(site setup|mobilization|silt fence|dumpster|porta potty|temp power|temp water)\b/i.test(q) ||
+    /\b(site setup|mobilization checklist)\b/i.test(a)
+  ) {
+    sources.add('Site Setup Checklist Database');
+  }
+
+  return Array.from(sources);
 }
 
 /**
@@ -1078,19 +1175,10 @@ export async function askGeminiBrain(
           }
         }
 
-        // Collect exact provenance from tools and grounded slices
+        // Collect exact provenance strictly from executed tools
         const sourcesUsedSet = new Set();
         for (const t of toolTelemetryList) {
           if (t.source) sourcesUsedSet.add(t.source);
-        }
-        if (dashData && (dashData.subcontractors?.length > 0 || dashData.phases?.length > 0 || dashData.projectInfo?.budgetGross)) {
-          sourcesUsedSet.add('Google Sheets');
-        }
-        if (memoriesData && memoriesData.length > 0) {
-          sourcesUsedSet.add(`Memory Vault (${memoriesData.length} active)`);
-        }
-        if (driveData && (driveData.directFiles?.length > 0 || driveData.subfolders?.length > 0)) {
-          sourcesUsedSet.add('Google Drive');
         }
         const sourcesUsed = Array.from(sourcesUsedSet);
 
@@ -1216,16 +1304,7 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
       }
 
       if (data && data.text) {
-        const sourcesUsed = [];
-        if (dashData && (dashData.subcontractors?.length > 0 || dashData.phases?.length > 0 || dashData.projectInfo?.budgetGross)) {
-          sourcesUsed.push('Google Sheets');
-        }
-        if (memoriesData && memoriesData.length > 0) {
-          sourcesUsed.push(`Memory Vault (${memoriesData.length} active)`);
-        }
-        if (driveData && (driveData.directFiles?.length > 0 || driveData.subfolders?.length > 0)) {
-          sourcesUsed.push('Google Drive');
-        }
+        const sourcesUsed = detectGroundedSourcesUsed(query, data.text, projectContext);
 
         return {
           text: data.text.trim(),

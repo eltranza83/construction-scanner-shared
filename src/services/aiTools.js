@@ -30,42 +30,42 @@ export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 export const TOOL_REGISTRY = {
   get_weather_for_jobsite: {
     type: 'READ',
-    source: 'Open-Meteo Weather API',
+    source: 'Weather API',
     description: 'Fetches real-time weather observations for jobsite coordinates.'
   },
   get_subcontractor_balance: {
     type: 'READ',
-    source: 'Google Sheets: Summary_Dashboard & Subcontractor Schedule',
+    source: 'Google Sheets (Subcontractor Ledger)',
     description: 'Retrieves contract quote, amount paid, and remaining balance owed.'
   },
   get_vendor_history: {
     type: 'READ',
-    source: 'Google Sheets: Payment Ledger',
+    source: 'Google Sheets (Subcontractor Ledger)',
     description: 'Retrieves line-item payment records for a subcontractor.'
   },
   search_receipts: {
     type: 'READ',
-    source: 'Google Sheets & Extracted Receipt Vault',
+    source: 'Google Sheets (Receipts & Expenses)',
     description: 'Searches recorded receipts by payee, description, or amount.'
   },
   get_project_budget: {
     type: 'READ',
-    source: 'Google Sheets: Summary_Dashboard',
+    source: 'Google Sheets (Project Financials)',
     description: 'Fetches overall project budget, spending, and variance.'
   },
   get_project_schedule: {
     type: 'READ',
-    source: 'Google Sheets: Summary_Dashboard Schedule & Reminders',
-    description: 'Retrieves upcoming field milestones and trade calls.'
+    source: 'Field Reminders (SiteTactix App)',
+    description: 'Retrieves upcoming field milestones and trade calls from local app storage.'
   },
   get_drive_files: {
     type: 'READ',
-    source: 'Google Drive File Tree',
+    source: 'Google Drive',
     description: 'Searches project blueprints, permits, and engineering files.'
   },
   get_homeowner_specs: {
     type: 'READ',
-    source: 'Homeowner Specifications & Finishes Sheet',
+    source: 'Homeowner Specifications',
     description: 'Retrieves finish, fixture, and paint specifications.'
   },
   get_site_setup: {
@@ -75,57 +75,57 @@ export const TOOL_REGISTRY = {
   },
   get_site_setup_protocol: {
     type: 'READ',
-    source: 'Site Setup Protocol Database',
+    source: 'Site Setup Checklist Database',
     description: 'Retrieves safety, dumpster, porta-potty, and staging checklist.'
   },
   search_memories: {
     type: 'READ',
-    source: 'Firestore: /memories (Persistent Memory Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     description: 'Searches contextual notes, contractor preferences, and business facts.'
   },
   list_memories: {
     type: 'READ',
-    source: 'Firestore: /memories (Persistent Memory Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     description: 'Lists all active memories for the project or user.'
   },
   save_memory: {
     type: 'WRITE',
-    source: 'Firestore: /memories (Persistent Memory Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'auto_safe',
     description: 'Stores a verified fact, preference, or reminder in the persistent vault.'
   },
   update_memory: {
     type: 'WRITE',
-    source: 'Firestore: /memories (Persistent Memory Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'explicit',
     description: 'Modifies an existing memory note in the vault.'
   },
   delete_memory: {
     type: 'WRITE',
-    source: 'Firestore: /memories (Persistent Memory Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'explicit',
     description: 'Deactivates a memory record.'
   },
   list_user_preferences: {
     type: 'READ',
-    source: 'Firestore: /user_preferences (User Preference Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     description: 'Lists all learned and configured user communication preferences.'
   },
   confirm_user_preference: {
     type: 'WRITE',
-    source: 'Firestore: /user_preferences (User Preference Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'auto_safe',
     description: 'Promotes an observed candidate to an active user preference.'
   },
   deactivate_user_preference: {
     type: 'WRITE',
-    source: 'Firestore: /user_preferences (User Preference Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'explicit',
     description: 'Deactivates or forgets a specific learned communication preference.'
   },
   reset_user_preferences: {
     type: 'WRITE',
-    source: 'Firestore: /user_preferences (User Preference Vault)',
+    source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'explicit',
     description: 'Purges all learned communication preferences for the user.'
   }
