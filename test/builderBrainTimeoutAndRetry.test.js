@@ -47,6 +47,8 @@ describe('SiteTactix BuilderBrain Timeout, Automatic Retry & First-Person Phrasi
     assert.equal(attemptCount, 2, 'Must have attempted retry on initial failure');
     assert.ok(res.text.includes('$15,000'), 'Must recover and return successful response');
     assert.equal(res.telemetry?.source, 'Gemini Cloud AI');
+    assert.equal(res.telemetry?.latencyMetrics?.retryOccurred, true, 'latencyMetrics must flag retry');
+    assert.equal(res.telemetry?.latencyMetrics?.latencyHealth, 'RECOVERED_RETRY_UX_WARNING', 'latencyMetrics must flag UX warning');
   });
 
   test('2. Exhausted timeout gracefully switches to local mode with accurate message', async () => {

@@ -1587,6 +1587,29 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                             </div>
                           )}
 
+                          {/* Latency Instrumentation Breakdown */}
+                          {m.telemetry.latencyMetrics && (
+                            <div style={{ margin: '4px 0', fontSize: '0.68rem', color: m.telemetry.latencyMetrics.retryOccurred ? '#fbbf24' : '#94a3b8', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                              <span style={{ fontWeight: 800 }}>⏱️ Latency:</span>
+                              <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '1px 5px', borderRadius: '3px' }}>
+                                Total: {m.telemetry.latencyMetrics.totalDurationMs}ms
+                              </span>
+                              <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.05)', border: '1px solid rgba(255, 255, 255, 0.1)', padding: '1px 5px', borderRadius: '3px' }}>
+                                Attempt 1: {m.telemetry.latencyMetrics.attempt1DurationMs}ms
+                              </span>
+                              {m.telemetry.latencyMetrics.retryOccurred && (
+                                <>
+                                  <span style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fde047', padding: '1px 5px', borderRadius: '3px', fontWeight: 700 }}>
+                                    🔄 Retried ({m.telemetry.latencyMetrics.retryReason}): +{m.telemetry.latencyMetrics.attempt2DurationMs}ms
+                                  </span>
+                                  <span style={{ backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '1px 5px', borderRadius: '3px' }}>
+                                    ⚠️ UX Latency Warning
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          )}
+
                           {m.telemetry.toolsExecuted && m.telemetry.toolsExecuted.length > 0 ? (
                             <div style={{ marginTop: '5px', backgroundColor: 'rgba(0, 0, 0, 0.45)', padding: '6px 8px', borderRadius: '6px', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
                               <div style={{ fontWeight: 800, color: 'var(--color-amber-400)', marginBottom: '3px', display: 'flex', alignItems: 'center', gap: '4px' }}>

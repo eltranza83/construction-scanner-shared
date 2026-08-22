@@ -1233,6 +1233,11 @@ export async function askGeminiBrain(
   // 2. REMOTE CLOUD AI INFERENCE WITH FULL GROUNDED MANIFEST (25s timeout + 1s single retry)
   const CLIENT_REQUEST_TIMEOUT_MS = 25000;
   let apiRes = null;
+  let attempt1Start = Date.now();
+  let attempt1DurationMs = 0;
+  let attempt2DurationMs = 0;
+  let retryOccurred = false;
+  let retryReason = null;
 
   try {
     const headers = { 'Content-Type': 'application/json' };
@@ -1266,9 +1271,20 @@ export async function askGeminiBrain(
         signal: controller.signal
       });
       clearTimeout(timeoutId);
+      attempt1DurationMs = Date.now() - attempt1Start;
+      if (!apiRes.ok && apiRes.status >= 500) {
+        throw new Error(`Server error ${apiRes.status}`);
+      }
     } catch (firstErr) {
+      attempt1DurationMs = Date.now() - attempt1Start;
+      retryOccurred = true;
+      retryReason = firstErr.name === 'AbortError' || attempt1DurationMs >= (CLIENT_REQUEST_TIMEOUT_MS - 500)
+        ? 'FIRST_ATTEMPT_TIMEOUT'
+        : (firstErr.message || 'FIRST_ATTEMPT_NETWORK_ERROR');
+
       // Single 1-second retry on network timeout/drop before local fallback
       await new Promise(resolve => setTimeout(resolve, 1000));
+      const attempt2Start = Date.now();
       const retryController = new AbortController();
       const retryTimeoutId = setTimeout(() => retryController.abort(), CLIENT_REQUEST_TIMEOUT_MS);
 
@@ -1279,6 +1295,7 @@ export async function askGeminiBrain(
         signal: retryController.signal
       });
       clearTimeout(retryTimeoutId);
+      attempt2DurationMs = Date.now() - attempt2Start;
     }
 
     if (apiRes.ok) {
@@ -1458,7 +1475,16 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
             groundingStatus: fallbackGrounding.status,
             synthesisMode: 'grounded_fallback',
             sourcesUsed,
-            memoriesGroundedCount: memoriesData?.length || 0
+            cognitiveInitiative: cognitiveDecision,
+            memoriesGroundedCount: memoriesData?.length || 0,
+            latencyMetrics: {
+              attempt1DurationMs,
+              attempt2DurationMs,
+              retryOccurred,
+              retryReason,
+              totalDurationMs: Date.now() - clientStartTime,
+              latencyHealth: retryOccurred ? 'RECOVERED_RETRY_UX_WARNING' : (Date.now() - clientStartTime > 5000 ? 'ELEVATED' : 'OPTIMAL')
+            }
           }
         };
       }
@@ -1483,7 +1509,15 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
             sourcesUsed: sourcesUsed,
             cognitiveInitiative: cognitiveDecision,
             memoriesGroundedCount: memoriesData?.length || 0,
-            toolsExecuted: []
+            toolsExecuted: [],
+            latencyMetrics: {
+              attempt1DurationMs,
+              attempt2DurationMs,
+              retryOccurred,
+              retryReason,
+              totalDurationMs: Date.now() - clientStartTime,
+              latencyHealth: retryOccurred ? 'RECOVERED_RETRY_UX_WARNING' : (Date.now() - clientStartTime > 5000 ? 'ELEVATED' : 'OPTIMAL')
+            }
           }
         };
       }
@@ -1504,7 +1538,15 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
         source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
         intent: 'Memory Retrieval',
         durationMs: Date.now() - clientStartTime,
-        toolsExecuted: []
+        toolsExecuted: [],
+        latencyMetrics: {
+          attempt1DurationMs,
+          attempt2DurationMs,
+          retryOccurred,
+          retryReason,
+          totalDurationMs: Date.now() - clientStartTime,
+          latencyHealth: 'OFFLINE_FALLBACK'
+        }
       }
     };
   }
@@ -1517,7 +1559,15 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
       intent: 'Local Mode Switch',
       durationMs: Date.now() - clientStartTime,
       toolsExecuted: [],
-      errorCode: lastErrorCode
+      errorCode: lastErrorCode,
+      latencyMetrics: {
+        attempt1DurationMs,
+        attempt2DurationMs,
+        retryOccurred,
+        retryReason,
+        totalDurationMs: Date.now() - clientStartTime,
+        latencyHealth: 'OFFLINE_FALLBACK'
+      }
     }
   };
 }
