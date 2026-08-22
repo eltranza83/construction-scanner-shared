@@ -497,7 +497,7 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - Always attribute facts to their TRUE originating system:
      * "Google Sheets (Project Financials)" or "Google Sheets (Subcontractor Ledger)": Contains ONLY financial numbers, budgets, payments, and trade balances. You are STRICTLY FORBIDDEN from stating or implying that Google Sheets contains calendar reminders, dates, or schedules.
      * "Field Reminders (SiteTactix App)": In-app task list.
-     * "J.A.R.V.I.S. Memory (Persistent Vault)": Verbal builder notes and contractor preferences in Firestore.
+     * "J.A.R.V.I.S. Memory (Persistent Vault)": Verbal builder notes and contractor preferences in Firestore. When speaking to the user, use natural first-person conversational phrasing (e.g. "According to my memory" or "In my notes") rather than referring to yourself in the third person.
      * "Google Drive": Files, plans, blueprints, permits.
      * "Municipal Inspections": 6-stage city building inspection checklist.
      * "Weather API": Real-time jobsite weather.
@@ -1230,11 +1230,11 @@ export async function askGeminiBrain(
     }
   }
 
-  // 2. REMOTE CLOUD AI INFERENCE WITH FULL GROUNDED MANIFEST
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+  // 2. REMOTE CLOUD AI INFERENCE WITH FULL GROUNDED MANIFEST (25s timeout + 1s single retry)
+  const CLIENT_REQUEST_TIMEOUT_MS = 25000;
+  let apiRes = null;
 
+  try {
     const headers = { 'Content-Type': 'application/json' };
     try {
       const auth = getFirebaseAuthInstance();
@@ -1247,19 +1247,39 @@ export async function askGeminiBrain(
       }
     } catch (_) {}
 
-    const apiRes = await fetch('/api/ask-brain', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
-        contents,
-        systemInstruction,
-        query,
-        forceDeepReasoning,
-        apiKey: effectiveKey
-      }),
-      signal: controller.signal
+    const reqPayload = JSON.stringify({
+      contents,
+      systemInstruction,
+      query,
+      forceDeepReasoning,
+      apiKey: effectiveKey
     });
-    clearTimeout(timeoutId);
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), CLIENT_REQUEST_TIMEOUT_MS);
+
+      apiRes = await fetch('/api/ask-brain', {
+        method: 'POST',
+        headers,
+        body: reqPayload,
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+    } catch (firstErr) {
+      // Single 1-second retry on network timeout/drop before local fallback
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      const retryController = new AbortController();
+      const retryTimeoutId = setTimeout(() => retryController.abort(), CLIENT_REQUEST_TIMEOUT_MS);
+
+      apiRes = await fetch('/api/ask-brain', {
+        method: 'POST',
+        headers,
+        body: reqPayload,
+        signal: retryController.signal
+      });
+      clearTimeout(retryTimeoutId);
+    }
 
     if (apiRes.ok) {
       const data = await apiRes.json();
@@ -1478,10 +1498,10 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
   if (memoriesData && memoriesData.length > 0) {
     const memSummary = memoriesData.map(m => `- ${m.text}`).join('\n');
     return {
-      text: `According to your saved memory:\n${memSummary}`,
+      text: `According to my memory:\n${memSummary}`,
       telemetry: {
         modelUsed: 'Local Memory Engine',
-        source: 'Persistent Memory Vault',
+        source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
         intent: 'Memory Retrieval',
         durationMs: Date.now() - clientStartTime,
         toolsExecuted: []
@@ -1490,11 +1510,11 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
   }
 
   return {
-    text: `I am temporarily unable to connect to the cloud AI assistant for open reasoning. However, all your project financials, schedule, and files for ${activeProjectName} are active locally. What specific record would you like to check?`,
+    text: `That request took longer than the expected response window, so I switched to local mode. All your project financials, schedule, and files for ${activeProjectName} are active locally. What specific record would you like to check?`,
     telemetry: {
       modelUsed: 'Local Fast Ledger Engine',
       source: 'Local Project Ledger',
-      intent: 'Offline Notice',
+      intent: 'Local Mode Switch',
       durationMs: Date.now() - clientStartTime,
       toolsExecuted: [],
       errorCode: lastErrorCode
