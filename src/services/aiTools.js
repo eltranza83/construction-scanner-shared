@@ -637,23 +637,27 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           // Update local cache with freshly fetched live content
           saveProjectPurchasingDoc(storage, target.projectId, rawDoc);
         } else if (!contentRes.success && contentRes.state === DOCUMENT_STATES.DOCUMENT_READ_ERROR) {
-          // Distinct failure state: report read error truthfully, NEVER report as empty!
-          resultPayload = {
-            found: true,
-            hasExistingDocument: true,
-            readError: true,
-            state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
-            documentId: discovery.documentId,
-            documentName: docName,
-            resourceType: target.resourceType,
-            projectId: target.projectId,
-            source: sourceLabel,
-            message: `I found the ${projLabel} Purchasing Checklist ("${docName}") in Google Drive, but I was unable to read its current contents: ${contentRes.error}`,
-            error: contentRes.error,
-            sections: [],
-            totalItems: null
-          };
-          break;
+          const hasRealLocalItems = rawDoc && (rawDoc.includes('- [ ]') || rawDoc.includes('- [x]') || rawDoc.includes('☐') || rawDoc.includes('☑'));
+          const isSessionUnconfigured = contentRes.error && contentRes.error.includes('session not connected');
+
+          if (!isSessionUnconfigured || !hasRealLocalItems) {
+            resultPayload = {
+              found: true,
+              hasExistingDocument: true,
+              readError: true,
+              state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
+              documentId: discovery.documentId,
+              documentName: docName,
+              resourceType: target.resourceType,
+              projectId: target.projectId,
+              source: sourceLabel,
+              message: `I found the ${projLabel} Purchasing Checklist ("${docName}") in Google Drive, but I was unable to read its current contents: ${contentRes.error}`,
+              error: contentRes.error,
+              sections: [],
+              totalItems: null
+            };
+            break;
+          }
         }
       }
 

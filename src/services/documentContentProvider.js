@@ -1,12 +1,12 @@
 /**
- * Google Drive Document Content Provider Interface
+ * Google Drive Document Content Provider
  * 
- * Provides unified, backend-agnostic live document read/write capabilities
- * supporting both Google OAuth Access Tokens and Apps Script Webhooks,
- * transparently handling native Google Docs and Microsoft Word .docx files.
+ * Provides clean, authoritative live document read/write capabilities
+ * directly against the Google Drive v3 REST API using active Google OAuth sessions,
+ * with optional Apps Script webhook fallback.
  * 
  * Flow:
- * Document Engine -> Document Content Provider -> Google Drive API (OAuth / Apps Script) -> Google Drive (Source of Truth)
+ * AI Tools / UI -> Document Content Provider -> Google Drive API (OAuth) -> Google Drive (Source of Truth)
  */
 
 export const DOCUMENT_STATES = {
@@ -21,13 +21,13 @@ export const DOCUMENT_STATES = {
 const GOOGLE_DRIVE_API_BASE = 'https://www.googleapis.com/drive/v3';
 const GOOGLE_DRIVE_UPLOAD_BASE = 'https://www.googleapis.com/upload/drive/v3';
 
-// In-memory / session cache keyed by (documentId + modifiedTime)
+// In-memory session cache keyed by (documentId + modifiedTime)
 const contentCache = new Map();
 
 let customContentProvider = null;
 
 /**
- * Sets a custom provider implementation (used for tests or cloud adapters)
+ * Sets a custom provider implementation (used for unit tests or cloud workers)
  */
 export function setCustomContentProvider(provider) {
   customContentProvider = provider;
@@ -71,74 +71,12 @@ function resolveGoogleAccessToken(projectContext = {}) {
 }
 
 /**
- * Extracts plain text from a .docx binary arrayBuffer
- */
-export async function extractTextFromDocx(arrayBuffer) {
-  try {
-    const bytes = new Uint8Array(arrayBuffer);
-    let offset = 0;
-    while (offset < bytes.length - 30) {
-      if (bytes[offset] === 0x50 && bytes[offset + 1] === 0x4b && bytes[offset + 2] === 0x03 && bytes[offset + 3] === 0x04) {
-        const compressionMethod = bytes[offset + 8] | (bytes[offset + 9] << 8);
-        const compressedSize = bytes[offset + 18] | (bytes[offset + 19] << 8) | (bytes[offset + 20] << 16) | (bytes[offset + 21] << 24);
-        const fileNameLength = bytes[offset + 26] | (bytes[offset + 27] << 8);
-        const extraFieldLength = bytes[offset + 28] | (bytes[offset + 29] << 8);
-
-        const fileNameBytes = bytes.subarray(offset + 30, offset + 30 + fileNameLength);
-        const fileName = new TextDecoder().decode(fileNameBytes);
-
-        const dataOffset = offset + 30 + fileNameLength + extraFieldLength;
-        const dataBytes = bytes.subarray(dataOffset, dataOffset + compressedSize);
-
-        if (fileName === 'word/document.xml') {
-          let xmlText = '';
-          if (compressionMethod === 8 && typeof DecompressionStream !== 'undefined') {
-            const ds = new DecompressionStream('deflate-raw');
-            const writer = ds.writable.getWriter();
-            writer.write(dataBytes);
-            writer.close();
-            const decompressedBuffer = await new Response(ds.readable).arrayBuffer();
-            xmlText = new TextDecoder().decode(decompressedBuffer);
-          } else {
-            xmlText = new TextDecoder().decode(dataBytes);
-          }
-
-          // Extract paragraphs and text runs
-          const paragraphs = xmlText.match(/<w:p[\s\S]*?<\/w:p>/g) || [];
-          const textLines = paragraphs.map(p => {
-            const matches = p.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g) || [];
-            return matches.map(m => m.replace(/<[^>]+>/g, '')).join('');
-          });
-
-          return textLines.filter(Boolean).join('\n');
-        }
-
-        offset = dataOffset + (compressedSize > 0 ? compressedSize : 1);
-      } else {
-        offset++;
-      }
-    }
-  } catch (err) {
-    console.warn('Docx extraction note:', err);
-  }
-
-  // Fallback to text decoding
-  const rawStr = new TextDecoder('utf-8', { fatal: false }).decode(arrayBuffer);
-  const matches = rawStr.match(/<w:t[^>]*>([\s\S]*?)<\/w:t>/g);
-  if (matches && matches.length > 0) {
-    return matches.map(m => m.replace(/<[^>]+>/g, '')).join('\n');
-  }
-  return rawStr;
-}
-
-/**
- * Fetches live document content from Google Drive with smart freshness caching.
+ * Fetches live document content directly from Google Drive with smart freshness caching.
  */
 export async function fetchDocumentContent(params = {}) {
   const {
     documentId,
-    mimeType = 'application/vnd.google-apps.document',
-    fileName = 'Document.docx',
+    fileName = 'Purchasing Checklist',
     modifiedTime = null,
     forceRefresh = false,
     projectContext = {}
@@ -153,22 +91,22 @@ export async function fetchDocumentContent(params = {}) {
     };
   }
 
-  // 1. Check custom provider override (e.g. Unit tests or custom cloud worker)
+  // 1. Custom provider override (for unit tests / mock environments)
   if (customContentProvider && typeof customContentProvider.fetchDocumentContent === 'function') {
     return await customContentProvider.fetchDocumentContent(params);
   }
 
-  // 2. Check Freshness Cache (Only use cache if it actually contains real items)
+  // 2. Freshness Cache Check (only returns cached content if it contains real data)
   const cacheKey = documentId + ':' + (modifiedTime || 'live');
   if (!forceRefresh && contentCache.has(cacheKey)) {
     const cached = contentCache.get(cacheKey);
-    if (cached?.content && (cached.content.includes('- [ ]') || cached.content.includes('- [x]'))) {
+    if (cached?.content) {
       return {
         success: true,
         state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
         content: cached.content,
         modifiedTime: cached.modifiedTime,
-        format: cached.format,
+        format: 'google_doc',
         isCached: true,
         error: null
       };
@@ -176,91 +114,47 @@ export async function fetchDocumentContent(params = {}) {
   }
 
   const accessToken = resolveGoogleAccessToken(projectContext);
-  const isDocx = fileName.toLowerCase().endsWith('.docx') || mimeType.includes('wordprocessingml');
 
-  // 3. METHOD A: Direct Google Drive REST API via OAuth Token (Preferred & Authoritative)
+  // 3. Direct Google Drive REST API via OAuth Token (Authoritative)
   if (accessToken) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-      // A1: Try Google Docs export endpoint first
-      let textContent = '';
-      let detectedFormat = isDocx ? 'docx' : 'google_doc';
-      let exportSucceeded = false;
-
-      try {
-        const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
-        const exportRes = await fetch(exportUrl, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: controller.signal
-        });
-        if (exportRes.ok) {
-          textContent = await exportRes.text();
-          detectedFormat = 'google_doc';
-          exportSucceeded = true;
-        }
-      } catch (expErr) {
-        console.warn('[DocProvider] Export text attempt note:', expErr);
-      }
-
-      if (!exportSucceeded) {
-        // A2: Fallback to binary media download and parse docx buffer
-        try {
-          const mediaUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}?alt=media`;
-          const mediaRes = await fetch(mediaUrl, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            signal: controller.signal
-          });
-
-          if (mediaRes.ok) {
-            const buf = await mediaRes.arrayBuffer();
-            textContent = await extractTextFromDocx(buf);
-            detectedFormat = 'docx';
-          } else {
-            clearTimeout(timeoutId);
-            return {
-              success: false,
-              state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
-              content: null,
-              error: `Google Drive file access returned status ${mediaRes.status}`
-            };
-          }
-        } catch (mediaErr) {
-          clearTimeout(timeoutId);
-          return {
-            success: false,
-            state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
-            content: null,
-            error: mediaErr.message || 'Google Drive file read error.'
-          };
-        }
-      }
-
+      const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
+      const exportRes = await fetch(exportUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: controller.signal
+      });
       clearTimeout(timeoutId);
 
-      const resolvedModifiedTime = modifiedTime || new Date().toISOString();
-      contentCache.set(cacheKey, {
-        content: textContent,
-        modifiedTime: resolvedModifiedTime,
-        format: detectedFormat
-      });
+      if (exportRes.ok) {
+        const textContent = await exportRes.text();
+        const resolvedModifiedTime = modifiedTime || new Date().toISOString();
 
-      if (typeof localStorage !== 'undefined') {
-        try {
-          localStorage.setItem('sitetactix_doc_cache_' + documentId, textContent);
-        } catch (_) {}
+        contentCache.set(cacheKey, {
+          content: textContent,
+          modifiedTime: resolvedModifiedTime,
+          format: 'google_doc'
+        });
+
+        return {
+          success: true,
+          state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
+          content: textContent,
+          modifiedTime: resolvedModifiedTime,
+          format: 'google_doc',
+          isCached: false,
+          error: null
+        };
+      } else {
+        return {
+          success: false,
+          state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
+          content: null,
+          error: `Google Drive returned HTTP ${exportRes.status} on document export.`
+        };
       }
-
-      return {
-        success: true,
-        state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
-        content: textContent,
-        modifiedTime: resolvedModifiedTime,
-        format: detectedFormat,
-        isCached: false,
-        error: null
-      };
     } catch (err) {
       return {
         success: false,
@@ -271,7 +165,7 @@ export async function fetchDocumentContent(params = {}) {
     }
   }
 
-  // 4. METHOD B: Google Apps Script Webhook Fallback
+  // 4. Apps Script Webhook Fallback
   const scriptUrl = projectContext?.scriptUrl ||
     (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_apps_script_url') || localStorage.getItem('jobscan_script_url') || localStorage.getItem('sitetactix_apps_script_url')) : null);
 
@@ -286,8 +180,7 @@ export async function fetchDocumentContent(params = {}) {
         body: JSON.stringify({
           action: 'read_document_text',
           fileId: documentId,
-          fileName,
-          mimeType
+          fileName
         }),
         signal: controller.signal
       });
@@ -297,54 +190,26 @@ export async function fetchDocumentContent(params = {}) {
         const resData = await response.json();
         if (resData.success) {
           const textContent = resData.content || resData.text || '';
-          const format = isDocx ? 'docx' : 'google_doc';
           const resolvedModifiedTime = resData.modifiedTime || modifiedTime || new Date().toISOString();
 
           contentCache.set(cacheKey, {
             content: textContent,
             modifiedTime: resolvedModifiedTime,
-            format
+            format: 'google_doc'
           });
-
-          if (typeof localStorage !== 'undefined') {
-            try {
-              localStorage.setItem('sitetactix_doc_cache_' + documentId, textContent);
-            } catch (_) {}
-          }
 
           return {
             success: true,
             state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
             content: textContent,
             modifiedTime: resolvedModifiedTime,
-            format,
+            format: 'google_doc',
             isCached: false,
             error: null
           };
         }
       }
     } catch (_) {}
-  }
-
-  // 5. METHOD C: Cached Local Storage Fallback
-  let localContent = typeof localStorage !== 'undefined' ? localStorage.getItem('sitetactix_doc_cache_' + documentId) : null;
-  if (!localContent && typeof localStorage !== 'undefined' && projectContext?.projectId) {
-    const cleanProj = String(projectContext.projectId).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    const storedProjDoc = localStorage.getItem('sitetactix_purchasing_doc_' + cleanProj);
-    if (storedProjDoc && (storedProjDoc.includes('- [ ]') || storedProjDoc.includes('- [x]'))) {
-      localContent = storedProjDoc;
-    }
-  }
-  if (localContent) {
-    return {
-      success: true,
-      state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
-      content: localContent,
-      modifiedTime: modifiedTime || new Date().toISOString(),
-      format: isDocx ? 'docx' : 'google_doc',
-      isCached: true,
-      error: null
-    };
   }
 
   return {
@@ -361,8 +226,7 @@ export async function fetchDocumentContent(params = {}) {
 export async function writeDocumentContent(params = {}) {
   const {
     documentId,
-    mimeType = 'application/vnd.google-apps.document',
-    fileName = 'Document.docx',
+    fileName = 'Purchasing Checklist',
     content = '',
     expectedVersion = null,
     projectContext = {}
@@ -376,14 +240,14 @@ export async function writeDocumentContent(params = {}) {
     };
   }
 
-  // 1. Custom Provider Override (e.g. Unit tests or custom cloud worker)
+  // 1. Custom Provider Override (for unit tests / mock environments)
   if (customContentProvider && typeof customContentProvider.writeDocumentContent === 'function') {
     return await customContentProvider.writeDocumentContent(params);
   }
 
   const accessToken = resolveGoogleAccessToken(projectContext);
 
-  // 2. METHOD A: Direct Google Drive API Update via OAuth
+  // 2. Direct Google Drive REST API Update via OAuth
   if (accessToken) {
     try {
       const controller = new AbortController();
@@ -408,14 +272,8 @@ export async function writeDocumentContent(params = {}) {
         contentCache.set(newCacheKey, {
           content,
           modifiedTime: updatedTime,
-          format: fileName.toLowerCase().endsWith('.docx') ? 'docx' : 'google_doc'
+          format: 'google_doc'
         });
-
-        if (typeof localStorage !== 'undefined') {
-          try {
-            localStorage.setItem('sitetactix_doc_cache_' + documentId, content);
-          } catch (_) {}
-        }
 
         return {
           success: true,
@@ -427,7 +285,7 @@ export async function writeDocumentContent(params = {}) {
     } catch (_) {}
   }
 
-  // 3. METHOD B: Apps Script Webhook
+  // 3. Apps Script Webhook Fallback
   const scriptUrl = projectContext?.scriptUrl ||
     (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_apps_script_url') || localStorage.getItem('jobscan_script_url') || localStorage.getItem('sitetactix_apps_script_url')) : null);
 
@@ -443,7 +301,6 @@ export async function writeDocumentContent(params = {}) {
           action: 'write_document_text',
           fileId: documentId,
           fileName,
-          mimeType,
           content,
           expectedVersion
         }),
@@ -460,14 +317,8 @@ export async function writeDocumentContent(params = {}) {
           contentCache.set(newCacheKey, {
             content,
             modifiedTime: updatedTime,
-            format: fileName.toLowerCase().endsWith('.docx') ? 'docx' : 'google_doc'
+            format: 'google_doc'
           });
-
-          if (typeof localStorage !== 'undefined') {
-            try {
-              localStorage.setItem('sitetactix_doc_cache_' + documentId, content);
-            } catch (_) {}
-          }
 
           return {
             success: true,
@@ -480,12 +331,6 @@ export async function writeDocumentContent(params = {}) {
     } catch (_) {}
   }
 
-  // 4. METHOD C: Offline Local Fallback
-  if (typeof localStorage !== 'undefined') {
-    try {
-      localStorage.setItem('sitetactix_doc_cache_' + documentId, content);
-    } catch (_) {}
-  }
   clearDocumentContentCache(documentId);
 
   return {
