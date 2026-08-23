@@ -185,39 +185,18 @@ export async function fetchDocumentContent(params = {}) {
       let textContent = '';
       let detectedFormat = isDocx ? 'docx' : 'google_doc';
 
-      if (!isDocx) {
-        // A1: Native Google Doc export as text/plain
-        const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
-        const res = await fetch(exportUrl, {
-          headers: { Authorization: `Bearer ${accessToken}` },
-          signal: controller.signal
-        });
+      // A1: Try Google Docs export endpoint first (works for all Google Docs and Drive-managed docx files)
+      const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
+      const exportRes = await fetch(exportUrl, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        signal: controller.signal
+      });
 
-        if (res.ok) {
-          textContent = await res.text();
-        } else if (res.status === 400 || res.status === 404) {
-          // If file is binary or export rejected, fallback to alt=media
-          const mediaUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}?alt=media`;
-          const mediaRes = await fetch(mediaUrl, {
-            headers: { Authorization: `Bearer ${accessToken}` },
-            signal: controller.signal
-          });
-          if (mediaRes.ok) {
-            const buf = await mediaRes.arrayBuffer();
-            textContent = await extractTextFromDocx(buf);
-            detectedFormat = 'docx';
-          }
-        } else {
-          clearTimeout(timeoutId);
-          return {
-            success: false,
-            state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
-            content: null,
-            error: `Google Drive API returned status ${res.status}`
-          };
-        }
+      if (exportRes.ok) {
+        textContent = await exportRes.text();
+        detectedFormat = 'google_doc';
       } else {
-        // A2: Binary .docx file download via alt=media
+        // A2: Fallback to binary alt=media download and parse docx buffer
         const mediaUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}?alt=media`;
         const mediaRes = await fetch(mediaUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -227,13 +206,14 @@ export async function fetchDocumentContent(params = {}) {
         if (mediaRes.ok) {
           const buf = await mediaRes.arrayBuffer();
           textContent = await extractTextFromDocx(buf);
+          detectedFormat = 'docx';
         } else {
           clearTimeout(timeoutId);
           return {
             success: false,
             state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
             content: null,
-            error: `Google Drive file download returned status ${mediaRes.status}`
+            error: `Google Drive read failed (export: ${exportRes.status}, media: ${mediaRes.status})`
           };
         }
       }
@@ -331,7 +311,10 @@ export async function fetchDocumentContent(params = {}) {
   let localContent = typeof localStorage !== 'undefined' ? localStorage.getItem('sitetactix_doc_cache_' + documentId) : null;
   if (!localContent && typeof localStorage !== 'undefined' && projectContext?.projectId) {
     const cleanProj = String(projectContext.projectId).trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
-    localContent = localStorage.getItem('sitetactix_purchasing_doc_' + cleanProj);
+    const storedProjDoc = localStorage.getItem('sitetactix_purchasing_doc_' + cleanProj);
+    if (storedProjDoc && (storedProjDoc.includes('- [ ]') || storedProjDoc.includes('- [x]'))) {
+      localContent = storedProjDoc;
+    }
   }
   if (localContent) {
     return {
