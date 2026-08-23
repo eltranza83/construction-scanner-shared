@@ -429,6 +429,7 @@ export function parseQuantity(rawText = '') {
       itemId: embeddedId || generateItemId(rawItem),
       itemName: rawItem,
       quantity: parseInt(qtySuffixMatch[2], 10) || 1,
+      hasExplicitQuantity: true,
       status: status,
       notes: additionalNotes
     };
@@ -442,6 +443,7 @@ export function parseQuantity(rawText = '') {
       itemId: embeddedId || generateItemId(rawItem),
       itemName: rawItem,
       quantity: qty,
+      hasExplicitQuantity: true,
       status: status,
       notes: ''
     };
@@ -454,6 +456,7 @@ export function parseQuantity(rawText = '') {
       itemId: embeddedId || generateItemId(rawItem),
       itemName: rawItem,
       quantity: parseInt(numPrefixMatch[1], 10) || 1,
+      hasExplicitQuantity: true,
       status: status,
       notes: ''
     };
@@ -463,7 +466,8 @@ export function parseQuantity(rawText = '') {
   return {
     itemId: embeddedId || generateItemId(cleaned),
     itemName: cleaned,
-    quantity: 1,
+    quantity: null,
+    hasExplicitQuantity: false,
     status: status,
     notes: ''
   };
@@ -564,6 +568,7 @@ export function parseGoogleDocPurchasingStructure(docData) {
           itemName: parsed.itemName,
           normalizedName: parsed.itemName.toLowerCase().replace(/[^a-z0-9]/g, ''),
           quantity: parsed.quantity,
+          hasExplicitQuantity: parsed.hasExplicitQuantity,
           status: parsed.status || 'active',
           notes: parsed.notes || '',
           isPurchased: isPurchased,
@@ -595,7 +600,7 @@ export function calculateSectionInsertion(docStructure, itemInput, quantityOrCat
 
   const parsedItem = parseQuantity(itemInput);
   const effectiveItemId = itemIdOverride || parsedItem.itemId;
-  const finalQuantity = Math.max(quantity, parsedItem.quantity);
+  const finalQuantity = Math.max(quantity || 1, parsedItem.quantity || 1);
   const targetCategory = classifyTradeCategory(parsedItem.itemName, categoryOverride);
   let targetSection = docStructure.sections.find(s => (s.sectionId || s.categoryId) === targetCategory.id);
 
@@ -611,7 +616,8 @@ export function calculateSectionInsertion(docStructure, itemInput, quantityOrCat
     );
 
     if (existingItem) {
-      const updatedQty = existingItem.quantity + finalQuantity;
+      const existingQty = existingItem.quantity || 1;
+      const updatedQty = existingQty + finalQuantity;
       const notesSuffix = existingItem.notes ? ` ${existingItem.notes}` : '';
       const updatedLine = `- [${existingItem.isPurchased ? 'x' : ' '}] ${existingItem.itemName} — Qty: ${updatedQty}${notesSuffix}`;
 
@@ -627,7 +633,7 @@ export function calculateSectionInsertion(docStructure, itemInput, quantityOrCat
           endIndex: existingItem.endIndex
         },
         replacementText: updatedLine,
-        message: `Updated ${existingItem.itemName} from ${existingItem.quantity} to ${updatedQty} under ${targetCategory.title}.`
+        message: `Updated ${existingItem.itemName} from ${existingQty} to ${updatedQty} under ${targetCategory.title}.`
       };
     }
   }
@@ -737,7 +743,8 @@ export function queryPurchasingList(docStructure, options = {}) {
         items: items.map(it => ({
           id: it.itemId,
           name: it.itemName,
-          quantity: it.quantity,
+          quantity: it.hasExplicitQuantity ? it.quantity : null,
+          hasExplicitQuantity: Boolean(it.hasExplicitQuantity),
           status: it.status || 'active',
           notes: it.notes || '',
           isPurchased: it.isPurchased
