@@ -158,19 +158,21 @@ export async function fetchDocumentContent(params = {}) {
     return await customContentProvider.fetchDocumentContent(params);
   }
 
-  // 2. Check Freshness Cache
+  // 2. Check Freshness Cache (Only use cache if it actually contains real items)
   const cacheKey = documentId + ':' + (modifiedTime || 'live');
   if (!forceRefresh && contentCache.has(cacheKey)) {
     const cached = contentCache.get(cacheKey);
-    return {
-      success: true,
-      state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
-      content: cached.content,
-      modifiedTime: cached.modifiedTime,
-      format: cached.format,
-      isCached: true,
-      error: null
-    };
+    if (cached?.content && (cached.content.includes('- [ ]') || cached.content.includes('- [x]'))) {
+      return {
+        success: true,
+        state: DOCUMENT_STATES.DOCUMENT_READ_SUCCESS,
+        content: cached.content,
+        modifiedTime: cached.modifiedTime,
+        format: cached.format,
+        isCached: true,
+        error: null
+      };
+    }
   }
 
   const accessToken = resolveGoogleAccessToken(projectContext);

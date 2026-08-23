@@ -194,7 +194,7 @@ export function discoverAndBindProjectDocument(storageOrAdapter, projectId = 'de
       isBound: true,
       isBoundDurable: true,
       candidateCount: 1,
-      content: currentDoc || null
+      content: (currentDoc && (currentDoc.includes('- [ ]') || currentDoc.includes('- [x]'))) ? currentDoc : null
     };
   }
 
@@ -222,7 +222,7 @@ export function discoverAndBindProjectDocument(storageOrAdapter, projectId = 'de
       isBound: true,
       isBoundDurable: true,
       candidateCount: 1,
-      content: currentDoc
+      content: (currentDoc && (currentDoc.includes('- [ ]') || currentDoc.includes('- [x]'))) ? currentDoc : null
     };
   }
 
