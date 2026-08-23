@@ -14,6 +14,8 @@
  * - Conflict Protection (custom project quantities & notes are strictly preserved).
  */
 
+import { discoverAndBindProjectDocument } from './projectDocumentBindingService.js';
+
 export const RESOURCE_TYPES = {
   PURCHASING_MASTER: 'purchasing_master',
   PROJECT_PURCHASING: 'project_purchasing'
@@ -173,31 +175,43 @@ export class LocalStoragePurchasingAdapter {
     this.auditKey = 'sitetactix_purchasing_audit_log';
   }
 
-  getProjectKey(projectId) {
-    const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+  getProjectKey(projectId, docType = 'purchasing_checklist') {
+    const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9]+/g, '_');
+    if (docType && docType !== 'purchasing_checklist' && docType !== 'project_purchasing') {
+      return `sitetactix_${docType}_doc_${cleanId}`;
+    }
     return `sitetactix_purchasing_doc_${cleanId}`;
   }
 
-  getMasterDocument(defaultDoc = null) {
-    const stored = this.storage?.getItem ? this.storage.getItem(this.masterKey) : null;
-    return stored || defaultDoc || DEFAULT_MASTER_TEMPLATE_DOC;
+  getMasterKey(docType = 'purchasing_checklist') {
+    if (docType && docType !== 'purchasing_checklist' && docType !== 'purchasing_master') {
+      return `sitetactix_${docType}_master_doc`;
+    }
+    return this.masterKey;
   }
 
-  saveMasterDocument(content) {
+  getMasterDocument(defaultDoc = null, docType = 'purchasing_checklist') {
+    const key = this.getMasterKey(docType);
+    const stored = this.storage?.getItem ? this.storage.getItem(key) : null;
+    return stored || defaultDoc || (docType === 'purchasing_checklist' ? DEFAULT_MASTER_TEMPLATE_DOC : '');
+  }
+
+  saveMasterDocument(content, docType = 'purchasing_checklist') {
+    const key = this.getMasterKey(docType);
     if (this.storage?.setItem) {
-      this.storage.setItem(this.masterKey, content);
+      this.storage.setItem(key, content);
     }
     return content;
   }
 
-  getProjectDocument(projectId, defaultDoc = null) {
-    const key = this.getProjectKey(projectId);
+  getProjectDocument(projectId, defaultDoc = null, docType = 'purchasing_checklist') {
+    const key = this.getProjectKey(projectId, docType);
     const stored = this.storage?.getItem ? this.storage.getItem(key) : null;
-    return stored || defaultDoc || getDefaultProjectDoc(projectId);
+    return stored || defaultDoc || (docType === 'purchasing_checklist' ? getDefaultProjectDoc(projectId) : '');
   }
 
-  saveProjectDocument(projectId, content) {
-    const key = this.getProjectKey(projectId);
+  saveProjectDocument(projectId, content, docType = 'purchasing_checklist') {
+    const key = this.getProjectKey(projectId, docType);
     if (this.storage?.setItem) {
       this.storage.setItem(key, content);
     }
@@ -969,100 +983,9 @@ export function cloneMasterToNewProject(storageOrAdapter, newProjectId) {
 }
 
 /**
- * Scans projectContext driveTree or storage metadata to discover and bind
- * the authoritative Google Drive purchasing checklist document for a project.
+ * Discovers and binds the authoritative Google Drive purchasing checklist document for a project.
+ * Delegated to the generalized Second Brain Document Binding Engine.
  */
-export function discoverAndBindProjectPurchasingDoc(storageOrAdapter, projectId = 'default', projectContext = {}) {
-  if (!projectId || projectId === 'master') {
-    return { found: false, documentId: null, fileName: null, folderName: null, content: null };
-  }
-
-  const adapter = resolvePurchasingAdapter(storageOrAdapter);
-  const currentDoc = adapter.getProjectDocument(projectId, '');
-
-  // 1. Check if document already has an embedded DocumentId tag
-  const existingIdMatch = currentDoc.match(/DocumentId:\s*([^\s\n]+)/i);
-  const existingNameMatch = currentDoc.match(/DocumentName:\s*([^\n]+)/i);
-  if (existingIdMatch) {
-    return {
-      found: true,
-      documentId: existingIdMatch[1].trim(),
-      fileName: existingNameMatch ? existingNameMatch[1].trim() : 'Purchasing Checklist',
-      folderName: 'Google Doc Purchasing List',
-      content: currentDoc
-    };
-  }
-
-  // 2. Scan driveTree / files in projectContext for designated purchasing checklist
-  const driveTree = projectContext?.driveTree || projectContext?.currentLiveTree || projectContext?.dashboardData?.driveTree || null;
-  let matchedFile = null;
-  let matchedFolder = null;
-
-  if (driveTree) {
-    if (Array.isArray(driveTree.subfolders)) {
-      for (const sub of driveTree.subfolders) {
-        const folderName = (sub.folderName || sub.name || '').toLowerCase();
-        const isPurchasingFolder = folderName.includes('purchasing') || folderName.includes('checklist') || folderName.includes('materials');
-        
-        if (Array.isArray(sub.files)) {
-          for (const file of sub.files) {
-            const fileName = (file.name || file.title || '').toLowerCase();
-            const isPurchasingFile = fileName.includes('purchasing') || fileName.includes('checklist');
-            
-            if (isPurchasingFolder || isPurchasingFile) {
-              matchedFile = file;
-              matchedFolder = sub.folderName || sub.name || 'Google Doc Purchasing List';
-              break;
-            }
-          }
-        }
-        if (matchedFile) break;
-      }
-    }
-
-    if (!matchedFile && Array.isArray(driveTree.directFiles)) {
-      for (const file of driveTree.directFiles) {
-        const fileName = (file.name || file.title || '').toLowerCase();
-        if (fileName.includes('purchasing') || fileName.includes('checklist')) {
-          matchedFile = file;
-          matchedFolder = 'Google Drive';
-          break;
-        }
-      }
-    }
-  }
-
-  // 3. If matched, bind document metadata into the project purchasing document
-  if (matchedFile && matchedFile.id) {
-    const docId = matchedFile.id;
-    const docName = matchedFile.name || 'Purchasing Checklist.docx';
-    const folderName = matchedFolder || 'Google Doc Purchasing List';
-
-    let boundContent = currentDoc;
-    if (!boundContent || boundContent === getDefaultProjectDoc(projectId)) {
-      boundContent = `# Master Fixtures & Hardware Purchasing Checklist - Project ${projectId}\nDocumentId: ${docId}\nDocumentName: ${docName}\n\n<!-- section: quartz -->\n## 1. Quartz Hardware\n\n<!-- section: electrical -->\n## 2. Electrical Hardware Fixtures\n\n<!-- section: plumbing -->\n## 3. Plumbing Hardware Fixtures\n`;
-    } else {
-      if (!boundContent.includes(`DocumentId: ${docId}`)) {
-        boundContent = boundContent.replace(/^(# Master Fixtures & Hardware Purchasing Checklist.*?\n)/m, `$1DocumentId: ${docId}\nDocumentName: ${docName}\n`);
-      }
-    }
-
-    adapter.saveProjectDocument(projectId, boundContent);
-
-    return {
-      found: true,
-      documentId: docId,
-      fileName: docName,
-      folderName: folderName,
-      content: boundContent
-    };
-  }
-
-  return {
-    found: false,
-    documentId: null,
-    fileName: null,
-    folderName: null,
-    content: currentDoc || null
-  };
+export function discoverAndBindProjectPurchasingDoc(storageOrAdapter, projectId = 'default', projectContext = {}, options = {}) {
+  return discoverAndBindProjectDocument(storageOrAdapter, projectId, 'purchasing_checklist', projectContext, options);
 }
