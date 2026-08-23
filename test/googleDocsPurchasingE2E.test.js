@@ -1,4 +1,4 @@
-﻿import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 if (typeof globalThis.localStorage === 'undefined') {
@@ -130,7 +130,7 @@ describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', 
 
     const res = await askGeminiBrain('What do I still need for the plumber?', [], 'Lot 3');
     assert.ok(res.text.includes('soap dispenser'));
-    assert.equal(res.telemetry?.toolsExecuted[0], 'get_purchasing_list');
+    assert.equal(res.telemetry?.toolsExecuted[0]?.name || res.telemetry?.toolsExecuted[0], 'get_purchasing_list');
     assert.ok(res.telemetry?.sourcesUsed.includes('Google Docs (Master Purchasing Checklist)'));
   });
 });

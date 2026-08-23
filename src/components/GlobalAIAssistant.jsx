@@ -1619,7 +1619,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                               {m.telemetry.toolsExecuted.map((t, tIdx) => (
                                 <div key={tIdx} style={{ fontSize: '0.70rem', fontFamily: 'monospace', marginTop: '3px', paddingBottom: '3px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                    <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {t.name}</span>
+                                    <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {typeof t === 'string' ? t : (t.name || t.tool || 'Tool')}</span>
                                     {t.result?._executionDurationMs !== undefined && (
                                       <span style={{ color: '#86efac' }}>{t.result._executionDurationMs}ms</span>
                                     )}
@@ -2398,7 +2398,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                         {log.toolsExecuted.map((t, tIdx) => (
                           <div key={tIdx} style={{ fontSize: '0.70rem', fontFamily: 'monospace', color: 'var(--color-zinc-300)', marginTop: '4px', paddingBottom: '4px', borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
                             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                              <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {t.name}</span>
+                              <span style={{ color: '#67e8f9', fontWeight: 700 }}>⚡ {typeof t === 'string' ? t : (t.name || t.tool || 'Tool')}</span>
                               <span style={{ color: 'var(--color-zinc-400)' }}>Args: {JSON.stringify(t.args || {})}</span>
                             </div>
                             {t.result && (
