@@ -812,7 +812,8 @@ export async function askGeminiBrain(
   messages = [],
   driveTreeOverride = null,
   fileAttachment = null,
-  forceDeepReasoning = false
+  forceDeepReasoning = false,
+  googleTokenOverride = null
 ) {
   const clientStartTime = Date.now();
   const correlationId = `corr_${clientStartTime}_${Math.random().toString(36).slice(2, 8)}`;
@@ -899,9 +900,12 @@ export async function askGeminiBrain(
     console.warn('[BuilderBrain] Failed to load user preferences:', pErr);
   }
 
+  const accessToken = googleTokenOverride || (typeof window !== 'undefined' ? (localStorage.getItem('jobscan_google_token') || localStorage.getItem('google_access_token') || localStorage.getItem('gdrive_token')) : null);
+
   const projectContext = {
     projectId,
     userId,
+    accessToken,
     activeProjectName,
     items: reminders,
     pendingR,

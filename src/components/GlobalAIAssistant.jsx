@@ -601,7 +601,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       const currentDashboard = loadProjectDashboard(projectId);
-      const answerPayload = await askGeminiBrain(query, [], projectName, apiKey, currentDashboard, projectId, messages, currentLiveTree, fileAttachment, forceDeepReasoning);
+      const answerPayload = await askGeminiBrain(query, [], projectName, apiKey, currentDashboard, projectId, messages, currentLiveTree, fileAttachment, forceDeepReasoning, googleToken);
       const answer = typeof answerPayload === 'object' && answerPayload.text !== undefined ? answerPayload.text : String(answerPayload || '');
       const telemetry = typeof answerPayload === 'object' && answerPayload.telemetry ? answerPayload.telemetry : null;
 
