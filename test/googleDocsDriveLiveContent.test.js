@@ -1,4 +1,4 @@
-﻿import { test, describe, beforeEach, afterEach } from 'node:test';
+import { test, describe, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 if (typeof globalThis.localStorage === 'undefined') {
@@ -310,5 +310,61 @@ describe('Google Drive Live Content Reader & Safe Write-Back Suite', () => {
 
     const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
     assert.equal(res.source, 'Google Docs (Lot 3 Purchasing Checklist)');
+  });
+
+  test('9. Native Google Docs Export Format: Successfully extracts all 20 items from unicode checkboxes (☐/☑) and numbered headings', async () => {
+    driveStore['file_lot3_docx'] = {
+      content: `Applicable to all lots and standard builds.
+
+1. Quartz Hardware
+☐ Electrical pass-through caps
+☐ Sinks
+
+2. Electrical Hardware Fixtures
+☐ Security lights
+☐ Contractor's doorbell chime kit
+☐ Smart doorbell
+☐ Front porch hanging light
+☐ Exterior column lights
+☐ Garage ceiling lights with the cap to install it
+☐ Vanity lights
+☐ Smart switches
+☐ Extension rods
+☐ Ceiling fans
+
+3. Plumbing Hardware Fixtures
+☐ Soap dispenser
+☐ Garbage disposal power button
+☐ Garbage disposal
+☐ Water heater with the water heater stand and tray
+☐ Shower kits
+☐ Toilets
+☐ Rough-in shower valves
+☐ Faucets
+`,
+      modifiedTime: '2026-08-23T18:00:00Z',
+      mimeType: 'application/vnd.google-apps.document',
+      fileName: 'Purchasing Checklist.docx'
+    };
+
+    const projectContext = {
+      activeProjectName: 'Lot 3',
+      projectId: 'lot_3',
+      driveTree: {
+        subfolders: [{
+          folderName: 'Google Doc Purchasing List',
+          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
+        }]
+      }
+    };
+
+    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
+    assert.equal(res.found, true);
+    assert.equal(res.sections.length, 3);
+    const totalItems = res.sections.reduce((sum, s) => sum + s.items.length, 0);
+    assert.equal(totalItems, 20);
+    assert.ok(res.sections[0].items.some(i => i.name.includes('Electrical pass-through caps')));
+    assert.ok(res.sections[1].items.some(i => i.name.includes('Ceiling fans')));
+    assert.ok(res.sections[2].items.some(i => i.name.includes('Toilets')));
   });
 });

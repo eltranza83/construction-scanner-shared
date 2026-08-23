@@ -504,6 +504,11 @@ export function parseGoogleDocPurchasingStructure(docData) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 
+    // Ignore document preamble / subtitles
+    if (trimmed.toLowerCase().startsWith('applicable to all') || (trimmed.toLowerCase().startsWith('project:') && !trimmed.toLowerCase().includes('checklist'))) {
+      continue;
+    }
+
     const tagMatch = trimmed.match(/<!--\s*section:\s*([a-zA-Z0-9_-]+)\s*-->/i);
     if (tagMatch) {
       pendingTagId = tagMatch[1].toLowerCase();
@@ -511,14 +516,17 @@ export function parseGoogleDocPurchasingStructure(docData) {
     }
     
     const isDocTitle = trimmed.startsWith('# ') && (trimmed.toLowerCase().includes('master') || trimmed.toLowerCase().includes('purchasing checklist') || trimmed.toLowerCase().includes('purchasing list'));
+    
+    // Comprehensive heading detection for Markdown, Numbered, and Native Google Docs headings
     const isHeading = !isDocTitle && (
       trimmed.startsWith('##') || 
-      trimmed.match(/^\d+\.\s+[A-Za-z\s&]+(?:Hardware|Fixtures|Supplies|Materials|Package|List|Notes|Gear|Wiring|Equipment)/i) ||
-      (trimmed.endsWith(':') && (trimmed.toLowerCase().includes('hardware') || trimmed.toLowerCase().includes('fixtures') || trimmed.toLowerCase().includes('plumbing') || trimmed.toLowerCase().includes('electrical') || trimmed.toLowerCase().includes('quartz') || trimmed.toLowerCase().includes('hvac')))
+      trimmed.match(/^\d+[\.\)]\s+[A-Za-z\s&]+(?:Hardware|Fixtures|Supplies|Materials|Package|List|Notes|Gear|Wiring|Equipment|Trade|Category)/i) ||
+      (trimmed.endsWith(':') && (trimmed.toLowerCase().includes('hardware') || trimmed.toLowerCase().includes('fixtures') || trimmed.toLowerCase().includes('plumbing') || trimmed.toLowerCase().includes('electrical') || trimmed.toLowerCase().includes('quartz') || trimmed.toLowerCase().includes('hvac') || trimmed.toLowerCase().includes('paint'))) ||
+      /^(?:Quartz(?:\s+Hardware)?|Electrical(?:\s+Hardware)?(?:\s+Fixtures)?|Plumbing(?:\s+Hardware)?(?:\s+Fixtures)?|HVAC(?:\s+Hardware)?(?:\s+Fixtures)?|Paint(?:\s+&\s+Drywall)?(?:\s+Supplies)?|General(?:\s+Hardware)?)$/i.test(trimmed)
     );
 
     if (isHeading || (pendingTagId && !currentSection)) {
-      const sectionIdentifier = trimmed.replace(/^[#\d.\s]+/, '').replace(/:$/, '').trim();
+      const sectionIdentifier = trimmed.replace(/^[#\d.\)\s]+/, '').replace(/:$/, '').trim();
       const stableSectionId = pendingTagId || classifyTradeCategory('', sectionIdentifier).id;
       const category = TRADE_SECTION_MAP[stableSectionId] || classifyTradeCategory('', sectionIdentifier);
 
@@ -537,11 +545,17 @@ export function parseGoogleDocPurchasingStructure(docData) {
     }
 
     if (currentSection) {
-      const isListItem = trimmed.startsWith('-') || trimmed.startsWith('*') || trimmed.startsWith('•') || trimmed.includes('[ ]') || trimmed.includes('[x]') || trimmed.includes('[X]');
+      // Check for purchased status in Unicode checkboxes (☐, ☑, ☒) and standard Markdown/ASCII brackets
+      const isPurchased = /[\u2611\u2612☑☒]/.test(trimmed) || /\[[xX]\]/.test(trimmed) || /\([xX]\)/.test(trimmed);
       
-      if (isListItem) {
-        const isPurchased = trimmed.includes('[x]') || trimmed.includes('[X]');
-        const cleanedText = trimmed.replace(/^[-*•]\s*/, '').replace(/^\[[ xX]\]\s*/, '').trim();
+      // Clean item name from all bullets and checkboxes: ☐, ☑, ☒, [ ], [], -, *, •, +, o
+      const cleanedText = trimmed
+        .replace(/^[\u2610\u2611\u2612\u25cb\u25cf\u25a2\u2751☐☑☒\-*•+o\s]+/, '')
+        .replace(/^\[[ xX]?\]\s*/, '')
+        .replace(/^\([ xX]?\)\s*/, '')
+        .trim();
+
+      if (cleanedText && !cleanedText.startsWith('#')) {
         const parsed = parseQuantity(cleanedText);
 
         currentSection.items.push({
