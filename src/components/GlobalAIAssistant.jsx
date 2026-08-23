@@ -703,16 +703,19 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:VIEW_FILE:[^\]]+\]\]/g, '').trim();
       }
 
-      // Check if user or context requested viewing / opening a file
-      const isExplicitViewCommand =
-        /^(can you\s+)?(show|open|pull up|fetch|view|display|let me see)\b/i.test(query.trim()) ||
-        /\b(pull it up|open it|show it|view it|let me view it|view this file|open this file|show this file|let me see it)\b/i.test(query.trim());
+      // Check if user explicitly requested opening/viewing a physical file/plan/blueprint in full screen
+      const isListOrDataQuery = /\b(list|purchasing|checklist|items?|balance|budget|cost|owed|money|invoice|receipts?|specs?|inspection)\b/i.test(query);
+      const isExplicitViewCommand = !isListOrDataQuery && (
+        /^(can you\s+)?(open|view|display|pull up)\s+(the\s+)?(file|document|pdf|image|plan|blueprint|permit)\b/i.test(query.trim()) ||
+        /\b(pull it up in full screen|open it in full screen|view this file in full screen|open document in full screen)\b/i.test(query.trim())
+      );
 
       const isViewIntent =
         isExplicitViewCommand ||
-        /\b(open it|show it|pull it up|view it|let me view it|see it|open that|show that|bring it up|open the file|show the file|open document|show document)\b/i.test(query.trim()) ||
-        /^(yes|yeah|sure|yep|ok|okay|please|go ahead|proceed)\b/i.test(query.trim());
-
+        (!isListOrDataQuery && (
+          /\b(open the file|show the file|open document|show document|open blueprint|show blueprint)\b/i.test(query.trim()) ||
+          /^(yes|yeah|sure|yep|ok|okay|please|go ahead|proceed)\b/i.test(query.trim())
+        ));
 
       if (targetFile && targetFile.id && !targetFile.isAmbiguous && viewFiles.length === 0 && isViewIntent) {
         viewFiles.push({
@@ -723,7 +726,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       // Contextual fallback: If Gemini's text explicitly references opening/viewing an exact Google Drive file
-      if (viewFiles.length === 0 && (isViewIntent || /\b(opened|opening|here is the file|view on your screen)\b/i.test(cleanAnswer))) {
+      if (viewFiles.length === 0 && (isViewIntent || (/\b(opened|opening|here is the file|view on your screen)\b/i.test(cleanAnswer) && !isListOrDataQuery))) {
         const allDriveFiles = [];
         if (currentLiveTree?.directFiles) allDriveFiles.push(...currentLiveTree.directFiles);
         if (currentLiveTree?.subfolders) {
@@ -746,7 +749,6 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         }
       }
 
-
       // Format inline lists with clean linebreaks
       cleanAnswer = cleanAnswer.replace(/:\s*1\.\s+/g, ':\n\n1. ');
 
@@ -760,10 +762,8 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       setMessages((prev) => [...prev, aiMsg]);
       speakText(cleanAnswer, query);
 
-
-      // Auto-open fullscreen document preview modal (Option B: strictly only when J.A.R.V.I.S. explicitly confirmed opening via action tag)
-      // When J.A.R.V.I.S. is just asking a clarifying question, the interactive card appears in the chat message for manual tap without covering the screen unprompted.
-      const isConfirmedAction = actionViewFileMatches.length > 0;
+      // Auto-open fullscreen document preview modal strictly only when explicitly confirmed action AND not a list/data query
+      const isConfirmedAction = actionViewFileMatches.length > 0 && !isListOrDataQuery;
       if (viewFiles.length > 0 && isConfirmedAction) {
         handleOpenDocumentPreview(viewFiles[0]);
       }
