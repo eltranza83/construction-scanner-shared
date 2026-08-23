@@ -519,8 +519,9 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - MASTER TEMPLATE SCOPE & AUTO-VERSIONING: When the user says "Add XYZ to the master purchasing list" or "make XYZ standard for future projects", target the Master Template. The Master version auto-increments (e.g. v1.0 -> v1.1). Confirm and ask: "Added to the Master Purchasing List (v1.1). Do you also want me to add it to existing active projects?"
    - VOICE VS UI DUAL-PAYLOAD: When reporting sync previews over voice, be concise (e.g. "I found 4 projects missing 7 Master items. Want me to sync them?"). The chat UI displays the full breakdown table.
    - MASTER ITEM REMOVAL = DEPRECATION: When an item is removed/retired from Master, call deprecate_purchasing_master_item. It marks the item as deprecated so it is excluded from future projects, while active projects keep their historical records untouched. Never delete items from active projects.
-   - DOMAIN BOUNDARIES: When the user asks purchasing questions ("what do I need to buy", "what do we still need to purchase", "what materials do we need for [trade]"), focus strictly on physical fixtures, materials, and hardware from the Google Docs Purchasing Checklist (get_purchasing_list). Do NOT dump contractor contract quotes, balances, or payments from Google Sheets unless the user explicitly asked about money, cost, quotes, balances, or payments.
-   - Always attribute purchasing list data to "Google Docs (Master Purchasing Checklist)".`;
+   - PROJECT DOCUMENT DISCOVERY & SINGLE SOURCE OF TRUTH: If a Google Drive document named "Purchasing Checklist" or in a purchasing folder exists for a lot, that file IS the project's live purchasing list. Never claim that a purchasing list doesn't exist or is uninitialized when the Drive file is present. If the checklist has 0 items under a trade, simply state that the purchasing checklist exists on Google Drive but currently has no pending items listed.
+   - PROVENANCE ATTRIBUTION: When answering project-specific purchasing questions, attribute the source to "Google Docs (<Project Name> Purchasing Checklist)" (e.g. "Google Docs (Lot 3 Purchasing Checklist)"). Attribute to "Google Docs (Master Purchasing Checklist)" ONLY when explicitly referencing or managing the company-wide Master Template.
+   - DOMAIN BOUNDARIES: When the user asks purchasing questions ("what do I need to buy", "what do we still need to purchase", "what materials do we need for [trade]"), focus strictly on physical fixtures, materials, and hardware from the Google Docs Purchasing Checklist (get_purchasing_list). Do NOT dump contractor contract quotes, balances, or payments from Google Sheets unless the user explicitly asked about money, cost, quotes, balances, or payments.`;
 }
 
 export function formatUserFriendlyToolError(toolName) {
@@ -1447,7 +1448,7 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
               durationMs: Date.now() - clientStartTime,
               intentsCount: toolTelemetryList.length + (query.toLowerCase().includes('how much') || query.toLowerCase().includes('what') || query.toLowerCase().includes('who') ? 1 : 0),
               toolsRequested: data.toolCalls.map(t => t.name),
-              toolsExecuted: toolsSucceeded,
+              toolsExecuted: toolsSucceeded.map(t => typeof t === 'string' ? t : t.name),
               toolsFailed: toolsFailed,
               circuitBreakerStatus: {
                 weather: circuitBreaker.getStatus('get_weather_for_jobsite')
@@ -1485,7 +1486,7 @@ SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
             durationMs: Date.now() - clientStartTime,
             intentsCount: toolTelemetryList.length,
             toolsRequested: data.toolCalls.map(t => t.name),
-            toolsExecuted: toolsSucceeded,
+            toolsExecuted: toolsSucceeded.map(t => typeof t === 'string' ? t : t.name),
             toolsFailed: toolsFailed,
             tools: toolTelemetryList.map(t => ({
               name: t.name,

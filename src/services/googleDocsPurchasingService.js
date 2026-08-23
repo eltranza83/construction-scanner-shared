@@ -314,7 +314,7 @@ export function saveMasterPurchasingDoc(storageOrAdapter, content = '', autoIncr
 }
 
 export function loadProjectPurchasingDoc(storageOrAdapter, projectId = 'default', defaultDoc = null) {
-  if (projectId === 'master') {
+  if (projectId === 'master' || projectId === 'purchasing_master' || projectId === MASTER_PROJECT_ID) {
     return loadMasterPurchasingDoc(storageOrAdapter, defaultDoc);
   }
   const adapter = resolvePurchasingAdapter(storageOrAdapter);
@@ -322,7 +322,7 @@ export function loadProjectPurchasingDoc(storageOrAdapter, projectId = 'default'
 }
 
 export function saveProjectPurchasingDoc(storageOrAdapter, projectId = 'default', content = '') {
-  if (projectId === 'master') {
+  if (projectId === 'master' || projectId === 'purchasing_master' || projectId === MASTER_PROJECT_ID) {
     return saveMasterPurchasingDoc(storageOrAdapter, content);
   }
   const adapter = resolvePurchasingAdapter(storageOrAdapter);
@@ -966,4 +966,103 @@ export function cloneMasterToNewProject(storageOrAdapter, newProjectId) {
   const freshLotDoc = projectLines.join('\n');
   adapter.saveProjectDocument(newProjectId, freshLotDoc);
   return freshLotDoc;
+}
+
+/**
+ * Scans projectContext driveTree or storage metadata to discover and bind
+ * the authoritative Google Drive purchasing checklist document for a project.
+ */
+export function discoverAndBindProjectPurchasingDoc(storageOrAdapter, projectId = 'default', projectContext = {}) {
+  if (!projectId || projectId === 'master') {
+    return { found: false, documentId: null, fileName: null, folderName: null, content: null };
+  }
+
+  const adapter = resolvePurchasingAdapter(storageOrAdapter);
+  const currentDoc = adapter.getProjectDocument(projectId, '');
+
+  // 1. Check if document already has an embedded DocumentId tag
+  const existingIdMatch = currentDoc.match(/DocumentId:\s*([^\s\n]+)/i);
+  const existingNameMatch = currentDoc.match(/DocumentName:\s*([^\n]+)/i);
+  if (existingIdMatch) {
+    return {
+      found: true,
+      documentId: existingIdMatch[1].trim(),
+      fileName: existingNameMatch ? existingNameMatch[1].trim() : 'Purchasing Checklist',
+      folderName: 'Google Doc Purchasing List',
+      content: currentDoc
+    };
+  }
+
+  // 2. Scan driveTree / files in projectContext for designated purchasing checklist
+  const driveTree = projectContext?.driveTree || projectContext?.currentLiveTree || projectContext?.dashboardData?.driveTree || null;
+  let matchedFile = null;
+  let matchedFolder = null;
+
+  if (driveTree) {
+    if (Array.isArray(driveTree.subfolders)) {
+      for (const sub of driveTree.subfolders) {
+        const folderName = (sub.folderName || sub.name || '').toLowerCase();
+        const isPurchasingFolder = folderName.includes('purchasing') || folderName.includes('checklist') || folderName.includes('materials');
+        
+        if (Array.isArray(sub.files)) {
+          for (const file of sub.files) {
+            const fileName = (file.name || file.title || '').toLowerCase();
+            const isPurchasingFile = fileName.includes('purchasing') || fileName.includes('checklist');
+            
+            if (isPurchasingFolder || isPurchasingFile) {
+              matchedFile = file;
+              matchedFolder = sub.folderName || sub.name || 'Google Doc Purchasing List';
+              break;
+            }
+          }
+        }
+        if (matchedFile) break;
+      }
+    }
+
+    if (!matchedFile && Array.isArray(driveTree.directFiles)) {
+      for (const file of driveTree.directFiles) {
+        const fileName = (file.name || file.title || '').toLowerCase();
+        if (fileName.includes('purchasing') || fileName.includes('checklist')) {
+          matchedFile = file;
+          matchedFolder = 'Google Drive';
+          break;
+        }
+      }
+    }
+  }
+
+  // 3. If matched, bind document metadata into the project purchasing document
+  if (matchedFile && matchedFile.id) {
+    const docId = matchedFile.id;
+    const docName = matchedFile.name || 'Purchasing Checklist.docx';
+    const folderName = matchedFolder || 'Google Doc Purchasing List';
+
+    let boundContent = currentDoc;
+    if (!boundContent || boundContent === getDefaultProjectDoc(projectId)) {
+      boundContent = `# Master Fixtures & Hardware Purchasing Checklist - Project ${projectId}\nDocumentId: ${docId}\nDocumentName: ${docName}\n\n<!-- section: quartz -->\n## 1. Quartz Hardware\n\n<!-- section: electrical -->\n## 2. Electrical Hardware Fixtures\n\n<!-- section: plumbing -->\n## 3. Plumbing Hardware Fixtures\n`;
+    } else {
+      if (!boundContent.includes(`DocumentId: ${docId}`)) {
+        boundContent = boundContent.replace(/^(# Master Fixtures & Hardware Purchasing Checklist.*?\n)/m, `$1DocumentId: ${docId}\nDocumentName: ${docName}\n`);
+      }
+    }
+
+    adapter.saveProjectDocument(projectId, boundContent);
+
+    return {
+      found: true,
+      documentId: docId,
+      fileName: docName,
+      folderName: folderName,
+      content: boundContent
+    };
+  }
+
+  return {
+    found: false,
+    documentId: null,
+    fileName: null,
+    folderName: null,
+    content: currentDoc || null
+  };
 }

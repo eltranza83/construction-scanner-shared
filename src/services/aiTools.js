@@ -39,6 +39,8 @@ import {
   getPurchasingAuditLog,
   recordPurchasingAuditLog,
   deprecateMasterItem,
+  incrementMasterVersion,
+  discoverAndBindProjectPurchasingDoc,
   RESOURCE_TYPES,
   MASTER_PROJECT_ID
 } from './googleDocsPurchasingService.js';
@@ -603,23 +605,48 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const unpurchasedOnly = args.unpurchasedOnly !== false;
       const target = resolvePurchasingTarget(args, projectContext);
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
-      
+      const projLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master' : (projectContext?.activeProjectName || target.projectId || 'Lot');
+      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? 'Google Docs (Master Purchasing Checklist)'
+        : `Google Docs (${projLabel} Purchasing Checklist)`;
+
+      const discovery = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
+        : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
+
       const rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
         ? loadMasterPurchasingDoc(storage)
-        : loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null));
-      
+        : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
+
       const parsed = parseGoogleDocPurchasingStructure(rawDoc);
       const queryResults = queryPurchasingList(parsed, { trade, unpurchasedOnly });
 
+      const hasDoc = Boolean(discovery.found || target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER);
+      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
+
+      let message = '';
+      if (queryResults.length > 0) {
+        message = `Found ${queryResults.reduce((sum, s) => sum + s.items.length, 0)} item(s) in ${docName} for ${projLabel}.`;
+      } else if (hasDoc) {
+        message = `Project ${projLabel} has an active purchasing document "${docName}" in Google Drive (ID: ${discovery.documentId || 'active'}), but currently has no pending items listed${trade ? ` for ${trade}` : ''}.`;
+      } else {
+        message = `No purchasing checklist document has been configured or discovered for project ${projLabel} yet. Would you like to initialize one from the Master Purchasing Template?`;
+      }
+
       resultPayload = {
-        found: queryResults.length > 0,
+        found: queryResults.length > 0 || hasDoc,
+        hasExistingDocument: hasDoc,
+        documentId: discovery.documentId || null,
+        documentName: docName,
         resourceType: target.resourceType,
         projectId: target.projectId,
+        source: sourceLabel,
         trade: trade || 'all',
         unpurchasedOnly,
         totalSections: queryResults.length,
         totalItems: queryResults.reduce((sum, s) => sum + s.items.length, 0),
-        sections: queryResults
+        sections: queryResults,
+        message
       };
       break;
     }
@@ -630,11 +657,19 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const category = args.category || null;
       const target = resolvePurchasingTarget(args, projectContext);
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const projLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master' : (projectContext?.activeProjectName || target.projectId || 'Lot');
+      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? 'Google Docs (Master Purchasing Checklist)'
+        : `Google Docs (${projLabel} Purchasing Checklist)`;
+
+      const discovery = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
+        : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
 
       let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
         ? loadMasterPurchasingDoc(storage)
-        : loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null));
-      
+        : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
+
       const parsed = parseGoogleDocPurchasingStructure(rawDoc);
       const insertion = calculateSectionInsertion(parsed, itemInput, quantity, category);
 
@@ -650,26 +685,27 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       }
 
       if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
-        saveMasterPurchasingDoc(storage, updatedDoc);
-        // Record audit entry for Master Template write
+        saveMasterPurchasingDoc(storage, updatedDoc, true);
+        const nextMasterVer = incrementMasterVersion(parsed.masterVersion || 'v1.0');
         recordPurchasingAuditLog(storage, {
           resourceType: RESOURCE_TYPES.PURCHASING_MASTER,
           source: 'Master',
+          masterVersion: nextMasterVer,
           itemId: insertion.itemId,
           itemName: itemInput,
           projectsAffected: ['purchasing_master'],
           action: insertion.action,
-          userCommand: projectContext?.lastUserMessage || `Add ${quantity} ${itemInput} to Master`,
-          details: { category: insertion.category?.title, quantity: insertion.newQuantity || quantity }
+          userCommand: args.userCommand || projectContext?.lastUserMessage
         });
       } else {
         saveProjectPurchasingDoc(storage, target.projectId, updatedDoc);
-        if (projectContext) {
-          if (!projectContext[target.projectId]) projectContext[target.projectId] = {};
-          projectContext[target.projectId].purchasingDocContent = updatedDoc;
-          if (projectContext.projectId === target.projectId || !projectContext.projectId) {
-            projectContext.purchasingDocContent = updatedDoc;
-          }
+      }
+
+      if (projectContext) {
+        if (!projectContext[target.projectId]) projectContext[target.projectId] = {};
+        projectContext[target.projectId].purchasingDocContent = updatedDoc;
+        if (projectContext.projectId === target.projectId || !projectContext.projectId) {
+          projectContext.purchasingDocContent = updatedDoc;
         }
       }
 
@@ -677,13 +713,18 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         success: true,
         resourceType: target.resourceType,
         projectId: target.projectId,
+        documentId: discovery.documentId || null,
+        documentName: discovery.fileName || 'Purchasing Checklist',
+        source: sourceLabel,
         itemId: insertion.itemId,
+        item: itemInput,
+        quantity: insertion.newQuantity || quantity,
+        isDuplicate: insertion.action === 'UPDATE_QUANTITY',
+        updatedQuantity: insertion.newQuantity || quantity,
         action: insertion.action,
-        isDuplicate: Boolean(insertion.isDuplicate),
-        category: insertion.category?.title,
-        sectionId: insertion.category?.id,
-        message: insertion.message,
-        updatedQuantity: insertion.newQuantity || quantity
+        category: insertion.category?.canonicalTitle || insertion.category?.title,
+        sectionId: insertion.category?.sectionId || insertion.category?.categoryId,
+        message: insertion.message
       };
       break;
     }
