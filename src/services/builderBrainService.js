@@ -795,6 +795,26 @@ export function formatToolResultsHumanReadable(toolTelemetryList) {
       } else if (res.found === false || res.total === 0) {
         parts.push(`I don't have any saved notes or preferences matching that request for this project.`);
       }
+    } else if (t.name === 'get_purchasing_list') {
+      if (res.sections && res.sections.length > 0) {
+        const lines = [];
+        for (const s of res.sections) {
+          lines.push(`${s.category}:`);
+          for (const item of s.items) {
+            const qtyStr = item.quantity && item.hasExplicitQuantity ? ` (${item.quantity})` : '';
+            const statusStr = item.isPurchased ? ' - Purchased' : '';
+            lines.push(`• ${item.name}${qtyStr}${statusStr}`);
+          }
+          lines.push('');
+        }
+        parts.push(lines.join('\n').trim());
+      } else if (res.message) {
+        parts.push(res.message);
+      }
+    } else if (t.name === 'add_purchasing_item' || t.name === 'update_purchasing_item_status' || t.name === 'sync_purchasing_master_to_projects' || t.name === 'deprecate_purchasing_master_item') {
+      if (res.message) {
+        parts.push(res.message);
+      }
     }
   }
 
