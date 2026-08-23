@@ -1547,17 +1547,18 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                             <div style={{ margin: '4px 0', fontSize: '0.70rem', color: '#fef08a', display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
                               <span style={{ fontWeight: 800 }}>📚 Sources:</span>
                               {m.telemetry.sourcesUsed.map((src, sIdx) => {
+                                const isDocs = src.includes('Google Docs');
                                 const isSheets = src.includes('Google Sheets');
                                 const isMemory = src.includes('Memory');
                                 const isReminders = src.includes('Field Reminders');
-                                const isDrive = src.includes('Google Drive');
+                                const isDrive = src.includes('Google Drive') && !isDocs;
                                 const isInspection = src.includes('Inspection');
                                 const isWeather = src.includes('Weather');
                                 
-                                const icon = isSheets ? '📊 ' : isMemory ? '🧠 ' : isReminders ? '📝 ' : isDrive ? '📁 ' : isInspection ? '🏗️ ' : isWeather ? '🌦️ ' : '⚡ ';
-                                const bg = isSheets ? 'rgba(16, 185, 129, 0.15)' : isMemory ? 'rgba(168, 85, 247, 0.15)' : isReminders ? 'rgba(245, 158, 11, 0.15)' : isDrive ? 'rgba(56, 189, 248, 0.15)' : 'rgba(234, 179, 8, 0.15)';
-                                const border = isSheets ? 'rgba(16, 185, 129, 0.3)' : isMemory ? 'rgba(168, 85, 247, 0.3)' : isReminders ? 'rgba(245, 158, 11, 0.3)' : isDrive ? 'rgba(56, 189, 248, 0.3)' : 'rgba(234, 179, 8, 0.3)';
-                                const color = isSheets ? '#6ee7b7' : isMemory ? '#d8b4fe' : isReminders ? '#fde047' : isDrive ? '#7dd3fc' : '#fde047';
+                                const icon = isDocs ? '📄 ' : isSheets ? '📊 ' : isMemory ? '🧠 ' : isReminders ? '📝 ' : isDrive ? '📁 ' : isInspection ? '🏗️ ' : isWeather ? '🌦️ ' : '⚡ ';
+                                const bg = isDocs ? 'rgba(56, 189, 248, 0.2)' : isSheets ? 'rgba(16, 185, 129, 0.15)' : isMemory ? 'rgba(168, 85, 247, 0.15)' : isReminders ? 'rgba(245, 158, 11, 0.15)' : isDrive ? 'rgba(56, 189, 248, 0.15)' : 'rgba(234, 179, 8, 0.15)';
+                                const border = isDocs ? 'rgba(56, 189, 248, 0.4)' : isSheets ? 'rgba(16, 185, 129, 0.3)' : isMemory ? 'rgba(168, 85, 247, 0.3)' : isReminders ? 'rgba(245, 158, 11, 0.3)' : isDrive ? 'rgba(56, 189, 248, 0.3)' : 'rgba(234, 179, 8, 0.3)';
+                                const color = isDocs ? '#38bdf8' : isSheets ? '#6ee7b7' : isMemory ? '#d8b4fe' : isReminders ? '#fde047' : isDrive ? '#7dd3fc' : '#fde047';
 
                                 return (
                                   <span key={sIdx} style={{ backgroundColor: bg, border: `1px solid ${border}`, padding: '1px 5px', borderRadius: '3px', color: color, fontWeight: 600 }}>

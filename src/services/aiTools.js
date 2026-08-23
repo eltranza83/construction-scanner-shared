@@ -21,6 +21,27 @@ import {
   PREFERENCE_SOURCES,
   resolvePreferenceConflicts
 } from './userPreferenceEngine.js';
+import {
+  parseGoogleDocPurchasingStructure,
+  calculateSectionInsertion,
+  calculateMarkPurchased,
+  queryPurchasingList,
+  resolvePurchasingTarget,
+  classifyTradeCategory,
+  resolveTargetProjectId,
+  loadMasterPurchasingDoc,
+  saveMasterPurchasingDoc,
+  loadProjectPurchasingDoc,
+  saveProjectPurchasingDoc,
+  getPurchasingDocStorageKey,
+  syncMasterPurchasingToProjects,
+  cloneMasterToNewProject,
+  getPurchasingAuditLog,
+  recordPurchasingAuditLog,
+  deprecateMasterItem,
+  RESOURCE_TYPES,
+  MASTER_PROJECT_ID
+} from './googleDocsPurchasingService.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -32,6 +53,36 @@ export const TOOL_REGISTRY = {
     type: 'READ',
     source: 'Weather API',
     description: 'Fetches real-time weather observations for jobsite coordinates.'
+  },
+  get_purchasing_list: {
+    type: 'READ',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Retrieves materials and fixtures from the Master Purchasing Google Doc, filtered by trade.'
+  },
+  add_purchasing_item: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Inserts or updates quantity of a purchasing item in the correct trade section of the Google Doc.'
+  },
+  update_purchasing_item_status: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Marks an item as purchased/completed in the Google Docs Master Purchasing List.'
+  },
+  sync_purchasing_master_to_projects: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Non-destructively synchronizes standard items from Master Purchasing into active project purchasing lists.'
+  },
+  deprecate_purchasing_master_item: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Marks an item as deprecated in the Company Master Purchasing Template.'
+  },
+  get_purchasing_audit_log: {
+    type: 'READ',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Retrieves the historical audit log of purchasing modifications and synchronization events.'
   },
   get_subcontractor_balance: {
     type: 'READ',
@@ -145,7 +196,7 @@ const IDEMPOTENCY_WINDOW_MS = 60000; // 60 seconds duplicate protection
 export const TOOL_TIMEOUT_MS = 6000; // 6000ms max execution time per tool
 
 export function generateIdempotencyKey(toolName, args = {}, projectId = '') {
-  const normalizedText = String(args.text || args.updatedText || args.searchQuery || args.memoryId || '').trim().toLowerCase();
+  const normalizedText = String(args.text || args.updatedText || args.searchQuery || args.memoryId || args.item || args.itemName || '').trim().toLowerCase();
   const normalizedCategory = String(args.category || '').trim().toLowerCase();
   const normalizedDate = String(args.effectiveDate || '').trim();
   return `${toolName}:${projectId || 'global'}:${normalizedText}:${normalizedCategory}:${normalizedDate}`;
@@ -169,6 +220,11 @@ export function checkIdempotency(toolName, args = {}, projectId = '') {
     }
   }
   return { isDuplicate: false, key };
+}
+
+export function resetWriteIdempotencyState() {
+  recentWriteActions.clear();
+  inFlightWritePromises.clear();
 }
 
 export function recordIdempotency(key, result) {
@@ -539,6 +595,215 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           receipts: receipts.slice(0, 20)
         };
       }
+      break;
+    }
+
+    case 'get_purchasing_list': {
+      const trade = args.trade || null;
+      const unpurchasedOnly = args.unpurchasedOnly !== false;
+      const target = resolvePurchasingTarget(args, projectContext);
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      
+      const rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? loadMasterPurchasingDoc(storage)
+        : loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null));
+      
+      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
+      const queryResults = queryPurchasingList(parsed, { trade, unpurchasedOnly });
+
+      resultPayload = {
+        found: queryResults.length > 0,
+        resourceType: target.resourceType,
+        projectId: target.projectId,
+        trade: trade || 'all',
+        unpurchasedOnly,
+        totalSections: queryResults.length,
+        totalItems: queryResults.reduce((sum, s) => sum + s.items.length, 0),
+        sections: queryResults
+      };
+      break;
+    }
+
+    case 'add_purchasing_item': {
+      const itemInput = args.item || '';
+      const quantity = args.quantity || 1;
+      const category = args.category || null;
+      const target = resolvePurchasingTarget(args, projectContext);
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+
+      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? loadMasterPurchasingDoc(storage)
+        : loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null));
+      
+      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
+      const insertion = calculateSectionInsertion(parsed, itemInput, quantity, category);
+
+      let updatedDoc = rawDoc;
+      if (insertion.action === 'UPDATE_QUANTITY') {
+        const before = rawDoc.slice(0, insertion.replaceRange.startIndex);
+        const after = rawDoc.slice(insertion.replaceRange.endIndex);
+        updatedDoc = before + insertion.replacementText + after;
+      } else if (insertion.action === 'INSERT_ITEM' || insertion.action === 'CREATE_SECTION_AND_INSERT') {
+        const before = rawDoc.slice(0, insertion.insertionIndex);
+        const after = rawDoc.slice(insertion.insertionIndex);
+        updatedDoc = before + insertion.textToInsert + after;
+      }
+
+      if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
+        saveMasterPurchasingDoc(storage, updatedDoc);
+        // Record audit entry for Master Template write
+        recordPurchasingAuditLog(storage, {
+          resourceType: RESOURCE_TYPES.PURCHASING_MASTER,
+          source: 'Master',
+          itemId: insertion.itemId,
+          itemName: itemInput,
+          projectsAffected: ['purchasing_master'],
+          action: insertion.action,
+          userCommand: projectContext?.lastUserMessage || `Add ${quantity} ${itemInput} to Master`,
+          details: { category: insertion.category?.title, quantity: insertion.newQuantity || quantity }
+        });
+      } else {
+        saveProjectPurchasingDoc(storage, target.projectId, updatedDoc);
+        if (projectContext) {
+          if (!projectContext[target.projectId]) projectContext[target.projectId] = {};
+          projectContext[target.projectId].purchasingDocContent = updatedDoc;
+          if (projectContext.projectId === target.projectId || !projectContext.projectId) {
+            projectContext.purchasingDocContent = updatedDoc;
+          }
+        }
+      }
+
+      resultPayload = {
+        success: true,
+        resourceType: target.resourceType,
+        projectId: target.projectId,
+        itemId: insertion.itemId,
+        action: insertion.action,
+        isDuplicate: Boolean(insertion.isDuplicate),
+        category: insertion.category?.title,
+        sectionId: insertion.category?.id,
+        message: insertion.message,
+        updatedQuantity: insertion.newQuantity || quantity
+      };
+      break;
+    }
+
+    case 'update_purchasing_item_status': {
+      const itemName = args.itemName || '';
+      const isPurchased = args.isPurchased !== false;
+      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext);
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+
+      let rawDoc = loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
+      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
+      const markRes = calculateMarkPurchased(parsed, itemName, isPurchased);
+
+      if (markRes.found) {
+        const before = rawDoc.slice(0, markRes.replaceRange.startIndex);
+        const after = rawDoc.slice(markRes.replaceRange.endIndex);
+        const updatedDoc = before + markRes.replacementText + after;
+
+        saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
+        if (projectContext) {
+          if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
+          projectContext[targetProjectId].purchasingDocContent = updatedDoc;
+          if (projectContext.projectId === targetProjectId || !projectContext.projectId) {
+            projectContext.purchasingDocContent = updatedDoc;
+          }
+        }
+
+        resultPayload = {
+          success: true,
+          projectId: targetProjectId,
+          itemId: markRes.item.itemId,
+          itemName: markRes.item.itemName,
+          category: markRes.category?.canonicalTitle || markRes.category?.title,
+          sectionId: markRes.category?.sectionId || markRes.category?.categoryId,
+          isPurchased,
+          message: markRes.message
+        };
+      } else {
+        resultPayload = {
+          success: false,
+          projectId: targetProjectId,
+          message: markRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
+        };
+      }
+      break;
+    }
+
+    case 'sync_purchasing_master_to_projects': {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      let targets = Array.isArray(args.targetProjectIds) && args.targetProjectIds.length > 0 ? args.targetProjectIds : [];
+      
+      if (targets.length === 0) {
+        if (Array.isArray(projectContext?.projects)) {
+          targets = projectContext.projects.map(p => p.id).filter(Boolean);
+        } else if (Array.isArray(projectContext?.allProjects)) {
+          targets = projectContext.allProjects.map(p => p.id).filter(Boolean);
+        } else {
+          targets = ['lot_3', 'lot_37', 'lot_55', 'lot_59'];
+        }
+      }
+
+      const syncResult = syncMasterPurchasingToProjects(storage, targets, {
+        dryRun: Boolean(args.dryRun),
+        userCommand: args.userCommand || projectContext?.lastUserMessage
+      });
+
+      if (syncResult.isDryRun) {
+        resultPayload = {
+          success: true,
+          isDryRun: true,
+          masterVersion: syncResult.masterVersion,
+          resourceType: syncResult.resourceType,
+          totalProjectsTargeted: syncResult.totalProjectsTargeted,
+          projectsSynced: syncResult.projectsSynced,
+          missingInProjects: syncResult.missingInProjects,
+          detailedPreview: syncResult.detailedPreview,
+          totalMissingItemsCount: syncResult.totalMissingItemsCount,
+          alreadyCurrentCount: syncResult.alreadyCurrentCount,
+          customItemsUntouchedCount: syncResult.customItemsUntouchedCount,
+          voiceSummary: syncResult.voiceSummary,
+          summaryPrompt: syncResult.voiceSummary,
+          message: syncResult.voiceSummary
+        };
+      } else {
+        resultPayload = {
+          success: true,
+          isDryRun: false,
+          masterVersion: syncResult.masterVersion,
+          resourceType: syncResult.resourceType,
+          totalProjectsTargeted: syncResult.totalProjectsTargeted,
+          projectsSynced: syncResult.projectsSynced,
+          itemsAddedSummary: syncResult.itemsAddedSummary,
+          detailedPreview: syncResult.detailedPreview,
+          auditEntriesCount: syncResult.auditEntries.length,
+          voiceSummary: syncResult.voiceSummary,
+          message: syncResult.voiceSummary
+        };
+      }
+      break;
+    }
+
+    case 'deprecate_purchasing_master_item': {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const item = args.item;
+      const res = deprecateMasterItem(storage, item);
+      resultPayload = res;
+      break;
+    }
+
+    case 'get_purchasing_audit_log': {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const limit = typeof args.limit === 'number' ? args.limit : 20;
+      const logs = getPurchasingAuditLog(storage, limit);
+
+      resultPayload = {
+        success: true,
+        totalEntries: logs.length,
+        entries: logs
+      };
       break;
     }
 

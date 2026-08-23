@@ -52,6 +52,86 @@ export const AI_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: 'get_purchasing_list',
+    description: 'Retrieve items and materials from the Google Docs Master Purchasing Template or a specific project purchasing list, optionally filtered by trade (e.g. electrical, plumbing, quartz, hvac).',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        trade: { type: 'STRING', description: 'Optional trade/category filter (e.g. electrical, plumbing, quartz, hvac, paint)' },
+        unpurchasedOnly: { type: 'BOOLEAN', description: 'Whether to return only unpurchased/pending items (default true)' },
+        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default, reads working project doc) or "master" (reads Company Master Template)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37) when targetResource is "project". Defaults to active project.' }
+      }
+    }
+  },
+  {
+    name: 'add_purchasing_item',
+    description: 'Add a new hardware fixture or material item to the Master Purchasing Template (targetResource="master") or a specific project purchasing list (targetResource="project") under the appropriate trade section, automatically merging quantities if duplicate exists.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        item: { type: 'STRING', description: 'Name of the hardware, fixture, or material item to buy (e.g. GFCI outlets, dimmer switches, shower pan liner)' },
+        quantity: { type: 'NUMBER', description: 'Quantity needed (default 1)' },
+        category: { type: 'STRING', description: 'Optional explicit trade/category override (e.g. electrical, plumbing, quartz)' },
+        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default, modifies working project doc) or "master" (modifies Company Master Template in parent folder)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37) when targetResource is "project". Defaults to active project.' }
+      },
+      required: ['item']
+    }
+  },
+  {
+    name: 'update_purchasing_item_status',
+    description: 'Mark a hardware fixture or material item as purchased/completed in the Google Docs Master Purchasing List for a specific project/lot.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        itemName: { type: 'STRING', description: 'Name of the item purchased (e.g. GFCI outlets, soap dispenser)' },
+        isPurchased: { type: 'BOOLEAN', description: 'Whether the item has been purchased (default true)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37). Defaults to active project.' }
+      },
+      required: ['itemName']
+    }
+  },
+  {
+    name: 'sync_purchasing_master_to_projects',
+    description: 'Non-destructively synchronize standard items from the Master Purchasing Template into active project purchasing lists, adding missing items without resetting checked items or custom quantities.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        targetProjectIds: {
+          type: 'ARRAY',
+          items: { type: 'STRING' },
+          description: 'Optional list of project IDs to sync (e.g. ["lot_3", "lot_37"]). Defaults to all active projects if omitted.'
+        },
+        dryRun: {
+          type: 'BOOLEAN',
+          description: 'If true, simulates the sync and returns a preview summary of what would change without modifying project documents.'
+        }
+      }
+    }
+  },
+  {
+    name: 'get_purchasing_audit_log',
+    description: 'Retrieve the historical audit log of purchasing operations and Master sync actions across projects.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        limit: { type: 'INTEGER', description: 'Maximum number of audit entries to return (default 20)' }
+      }
+    }
+  },
+  {
+    name: 'deprecate_purchasing_master_item',
+    description: 'Marks an item as deprecated in the Company Master Purchasing Template. Deprecated items are excluded from future project creations while remaining preserved on active projects.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        item: { type: 'STRING', description: 'The name or item_id of the standard item to deprecate in the Master Purchasing Template.' }
+      },
+      required: ['item']
+    }
+  },
+  {
     name: 'get_municipal_inspections',
     description: 'Retrieve the 6-stage city building inspection checklist, passed stages, and pending inspection items.',
     parameters: {

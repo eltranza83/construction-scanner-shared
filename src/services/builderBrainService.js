@@ -4,7 +4,7 @@
  * No brittle hardcoded if/else rules or regex catchphrases.
  */
 import { determineTaskModel, AI_CONFIG } from '../config/aiConfig.js';
-import { executeClientToolCall, circuitBreaker } from './aiTools.js';
+import { executeClientToolCall, circuitBreaker, resetWriteIdempotencyState } from './aiTools.js';
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
 import { searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
@@ -46,6 +46,9 @@ export function resetActiveSessionCognitiveState() {
     lastSuggestionTurn: -999,
     pendingProactiveSuggestion: null
   };
+  try {
+    resetWriteIdempotencyState();
+  } catch (_) {}
 }
 
 
@@ -508,7 +511,16 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - If the user shares an observation (e.g. "I'm heading over to Lot 3" or "The electrician is finishing today"), acknowledge warmly and, if genuinely useful, offer AT MOST ONE natural, conversational next step as a brief question.
    - NEVER use robotic alert formats like "Suggestion:" or "Proactive Alert:". Sound like a competent human assistant.
    - If the user confirms a suggestion ("yeah", "sure", "go ahead", "check it"), execute the action immediately without asking twice.
-   - If the user is concluding ("thanks", "got it", "that's all"), acknowledge cleanly without unsolicited suggestions or data dumps.`;
+   - If the user is concluding ("thanks", "got it", "that's all"), acknowledge cleanly without unsolicited suggestions or data dumps.
+
+14. GOOGLE DOCS MASTER & PROJECT PURCHASING ARCHITECTURE (V1 FINAL):
+   - You manage the parent Master Purchasing Template (resourceType: 'purchasing_master') and individual project lot purchasing documents (resourceType: 'project_purchasing') via get_purchasing_list, add_purchasing_item, update_purchasing_item_status, sync_purchasing_master_to_projects, deprecate_purchasing_master_item, and get_purchasing_audit_log.
+   - DEFAULT SCOPE = ACTIVE LOT ONLY: When the user says "Add XYZ to purchasing list", target ONLY the currently active lot (e.g. Lot 3, Lot 37). Never modify the Master or other lots automatically.
+   - MASTER TEMPLATE SCOPE & AUTO-VERSIONING: When the user says "Add XYZ to the master purchasing list" or "make XYZ standard for future projects", target the Master Template. The Master version auto-increments (e.g. v1.0 -> v1.1). Confirm and ask: "Added to the Master Purchasing List (v1.1). Do you also want me to add it to existing active projects?"
+   - VOICE VS UI DUAL-PAYLOAD: When reporting sync previews over voice, be concise (e.g. "I found 4 projects missing 7 Master items. Want me to sync them?"). The chat UI displays the full breakdown table.
+   - MASTER ITEM REMOVAL = DEPRECATION: When an item is removed/retired from Master, call deprecate_purchasing_master_item. It marks the item as deprecated so it is excluded from future projects, while active projects keep their historical records untouched. Never delete items from active projects.
+   - STRICT NON-DESTRUCTIVE SYNC & CONFLICT PROTECTION: Never overwrite project-specific quantities, never reset [x] checked items, never delete custom items, and never create duplicates.
+   - Always attribute purchasing list data to "Google Docs (Master Purchasing Checklist)".`;
 }
 
 export function formatUserFriendlyToolError(toolName) {
@@ -616,6 +628,14 @@ export function detectGroundedSourcesUsed(query = '', answerText = '', context =
     /\b(site setup|mobilization checklist)\b/i.test(a)
   ) {
     sources.add('Site Setup Checklist Database');
+  }
+
+  // 9. Google Docs (Master Purchasing Checklist)
+  if (
+    /\b(purchasing|purchasing list|checklist|need to buy|still need|bought|hardware fixtures|plumbing list|electrical list|quartz list)\b/i.test(q) ||
+    /\b(purchasing checklist|master purchasing|added to|marked as purchased|google doc)\b/i.test(a)
+  ) {
+    sources.add('Google Docs (Master Purchasing Checklist)');
   }
 
   return Array.from(sources);
