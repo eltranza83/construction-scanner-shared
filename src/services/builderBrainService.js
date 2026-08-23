@@ -1404,9 +1404,10 @@ ${formatToolResultsForSynthesis(toolTelemetryList)}
 SYNTHESIS INSTRUCTIONS & GROUNDING RULES:
 1. You MUST directly address EVERY part, intent, and question in the user's original request.
 2. STRICT GROUNDING RULE: You may ONLY state financial figures, dollar amounts, contractor quotes, balances, payments, and dates that appear EXACTLY in the project manifest or tool outcomes above. Do NOT invent, assume, or estimate numbers.
-3. If a tool succeeded (e.g. saving a reminder/memory), clearly confirm it in your response.
-4. If a tool failed, clearly and concisely report what couldn't be completed (e.g. "The weather service was temporarily unavailable") without technical jargon.
-5. Provide ONE single, unified, coherent, and professional answer.`;
+3. STRICT ERROR TRUTH RULE: If a tool execution reports readError: true, state: 'DOCUMENT_READ_ERROR', or contains an error message, you MUST report the exact error to the user (e.g. "I found your Purchasing Checklist in Google Drive, but couldn't read its contents: [error]"). You are STRICTLY FORBIDDEN from stating that a document has zero items or no pending items when a read error occurred.
+4. If a tool succeeded (e.g. saving a reminder/memory), clearly confirm it in your response.
+5. If a tool failed, clearly and concisely report what couldn't be completed without technical jargon.
+6. Provide ONE single, unified, coherent, and professional answer.`;
 
         let synthesisText = null;
         try {

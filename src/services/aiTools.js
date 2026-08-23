@@ -651,7 +651,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
             message: `I found the ${projLabel} Purchasing Checklist ("${docName}") in Google Drive, but I was unable to read its current contents: ${contentRes.error}`,
             error: contentRes.error,
             sections: [],
-            totalItems: 0
+            totalItems: null
           };
           break;
         }

@@ -184,38 +184,55 @@ export async function fetchDocumentContent(params = {}) {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 12000);
 
+      // A1: Try Google Docs export endpoint first
       let textContent = '';
       let detectedFormat = isDocx ? 'docx' : 'google_doc';
+      let exportSucceeded = false;
 
-      // A1: Try Google Docs export endpoint first (works for all Google Docs and Drive-managed docx files)
-      const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
-      const exportRes = await fetch(exportUrl, {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        signal: controller.signal
-      });
-
-      if (exportRes.ok) {
-        textContent = await exportRes.text();
-        detectedFormat = 'google_doc';
-      } else {
-        // A2: Fallback to binary alt=media download and parse docx buffer
-        const mediaUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}?alt=media`;
-        const mediaRes = await fetch(mediaUrl, {
+      try {
+        const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}/export?mimeType=text/plain`;
+        const exportRes = await fetch(exportUrl, {
           headers: { Authorization: `Bearer ${accessToken}` },
           signal: controller.signal
         });
+        if (exportRes.ok) {
+          textContent = await exportRes.text();
+          detectedFormat = 'google_doc';
+          exportSucceeded = true;
+        }
+      } catch (expErr) {
+        console.warn('[DocProvider] Export text attempt note:', expErr);
+      }
 
-        if (mediaRes.ok) {
-          const buf = await mediaRes.arrayBuffer();
-          textContent = await extractTextFromDocx(buf);
-          detectedFormat = 'docx';
-        } else {
+      if (!exportSucceeded) {
+        // A2: Fallback to binary media download and parse docx buffer
+        try {
+          const mediaUrl = `${GOOGLE_DRIVE_API_BASE}/files/${documentId}?alt=media`;
+          const mediaRes = await fetch(mediaUrl, {
+            headers: { Authorization: `Bearer ${accessToken}` },
+            signal: controller.signal
+          });
+
+          if (mediaRes.ok) {
+            const buf = await mediaRes.arrayBuffer();
+            textContent = await extractTextFromDocx(buf);
+            detectedFormat = 'docx';
+          } else {
+            clearTimeout(timeoutId);
+            return {
+              success: false,
+              state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
+              content: null,
+              error: `Google Drive file access returned status ${mediaRes.status}`
+            };
+          }
+        } catch (mediaErr) {
           clearTimeout(timeoutId);
           return {
             success: false,
             state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
             content: null,
-            error: `Google Drive read failed (export: ${exportRes.status}, media: ${mediaRes.status})`
+            error: mediaErr.message || 'Google Drive file read error.'
           };
         }
       }
