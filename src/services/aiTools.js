@@ -1,3 +1,4 @@
+import { fetchDocumentContent, writeDocumentContent, DOCUMENT_STATES } from './documentContentProvider.js';
 /**
  * Client-Side AI Tool Executors, Data Retrieval & Diagnostic Test Suite
  */
@@ -614,15 +615,50 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
         : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
 
-      const rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+      const hasDoc = Boolean(discovery.found || target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER);
+      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
+
+      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
         ? loadMasterPurchasingDoc(storage)
         : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
 
+      // LIVE GOOGLE DRIVE CONTENT READ:
+      // If bound to a Google Drive document, fetch current live content directly from Drive (Source of Truth)
+      if (discovery.found && discovery.documentId && target.resourceType !== RESOURCE_TYPES.PURCHASING_MASTER) {
+        const contentRes = await fetchDocumentContent({
+          documentId: discovery.documentId,
+          fileName: discovery.fileName,
+          modifiedTime: discovery.modifiedTime,
+          projectContext
+        });
+
+        if (contentRes.success && contentRes.content !== null && contentRes.content !== undefined) {
+          rawDoc = contentRes.content;
+          // Update local cache with freshly fetched live content
+          saveProjectPurchasingDoc(storage, target.projectId, rawDoc);
+        } else if (!contentRes.success && contentRes.state === DOCUMENT_STATES.DOCUMENT_READ_ERROR) {
+          // Distinct failure state: report read error truthfully, NEVER report as empty!
+          resultPayload = {
+            found: true,
+            hasExistingDocument: true,
+            readError: true,
+            state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
+            documentId: discovery.documentId,
+            documentName: docName,
+            resourceType: target.resourceType,
+            projectId: target.projectId,
+            source: sourceLabel,
+            message: `I found the ${projLabel} Purchasing Checklist ("${docName}") in Google Drive, but I was unable to read its current contents: ${contentRes.error}`,
+            error: contentRes.error,
+            sections: [],
+            totalItems: 0
+          };
+          break;
+        }
+      }
+
       const parsed = parseGoogleDocPurchasingStructure(rawDoc);
       const queryResults = queryPurchasingList(parsed, { trade, unpurchasedOnly });
-
-      const hasDoc = Boolean(discovery.found || target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER);
-      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
 
       let message = '';
       if (queryResults.length > 0) {
@@ -666,9 +702,24 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
         : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
 
+      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
+
       let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
         ? loadMasterPurchasingDoc(storage)
         : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
+
+      // 1. LIVE DRIVE READ: Fetch current live version before modifying
+      if (discovery.found && discovery.documentId && target.resourceType !== RESOURCE_TYPES.PURCHASING_MASTER) {
+        const fetchRes = await fetchDocumentContent({
+          documentId: discovery.documentId,
+          fileName: discovery.fileName,
+          modifiedTime: discovery.modifiedTime,
+          projectContext
+        });
+        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
+          rawDoc = fetchRes.content;
+        }
+      }
 
       const parsed = parseGoogleDocPurchasingStructure(rawDoc);
       const insertion = calculateSectionInsertion(parsed, itemInput, quantity, category);
@@ -684,6 +735,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         updatedDoc = before + insertion.textToInsert + after;
       }
 
+      // 2. SAFE WRITE-BACK PIPELINE: Write to Google Drive first
       if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
         saveMasterPurchasingDoc(storage, updatedDoc, true);
         const nextMasterVer = incrementMasterVersion(parsed.masterVersion || 'v1.0');
@@ -698,6 +750,31 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           userCommand: args.userCommand || projectContext?.lastUserMessage
         });
       } else {
+        // Write to Drive if document is bound
+        if (discovery.found && discovery.documentId) {
+          const writeRes = await writeDocumentContent({
+            documentId: discovery.documentId,
+            fileName: discovery.fileName,
+            content: updatedDoc,
+            projectContext
+          });
+
+          if (!writeRes.success) {
+            resultPayload = {
+              success: false,
+              writeError: true,
+              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
+              documentId: discovery.documentId,
+              documentName: docName,
+              source: sourceLabel,
+              message: `Failed to write item to Google Drive document "${docName}": ${writeRes.error}`,
+              error: writeRes.error
+            };
+            break;
+          }
+        }
+
+        // 3. ONLY ON CONFIRMED DRIVE WRITE SUCCESS: Update local cache
         saveProjectPurchasingDoc(storage, target.projectId, updatedDoc);
       }
 
@@ -711,12 +788,12 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       resultPayload = {
         success: true,
+        state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
         resourceType: target.resourceType,
         projectId: target.projectId,
-        documentId: discovery.documentId || null,
-        documentName: discovery.fileName || 'Purchasing Checklist',
         source: sourceLabel,
-        itemId: insertion.itemId,
+        documentId: discovery.documentId || null,
+        documentName: docName,
         item: itemInput,
         quantity: insertion.newQuantity || quantity,
         isDuplicate: insertion.action === 'UPDATE_QUANTITY',
@@ -734,8 +811,27 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const isPurchased = args.isPurchased !== false;
       const targetProjectId = resolveTargetProjectId(args.projectId, projectContext);
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const projLabel = projectContext?.activeProjectName || targetProjectId || 'Lot';
+      const sourceLabel = `Google Docs (${projLabel} Purchasing Checklist)`;
 
-      let rawDoc = loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
+      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
+      const docName = discovery.fileName || 'Purchasing Checklist';
+
+      let rawDoc = discovery.content || loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
+
+      // 1. LIVE DRIVE READ
+      if (discovery.found && discovery.documentId) {
+        const fetchRes = await fetchDocumentContent({
+          documentId: discovery.documentId,
+          fileName: discovery.fileName,
+          modifiedTime: discovery.modifiedTime,
+          projectContext
+        });
+        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
+          rawDoc = fetchRes.content;
+        }
+      }
+
       const parsed = parseGoogleDocPurchasingStructure(rawDoc);
       const markRes = calculateMarkPurchased(parsed, itemName, isPurchased);
 
@@ -744,6 +840,31 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         const after = rawDoc.slice(markRes.replaceRange.endIndex);
         const updatedDoc = before + markRes.replacementText + after;
 
+        // 2. SAFE WRITE-BACK
+        if (discovery.found && discovery.documentId) {
+          const writeRes = await writeDocumentContent({
+            documentId: discovery.documentId,
+            fileName: discovery.fileName,
+            content: updatedDoc,
+            projectContext
+          });
+
+          if (!writeRes.success) {
+            resultPayload = {
+              success: false,
+              writeError: true,
+              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
+              documentId: discovery.documentId,
+              documentName: docName,
+              source: sourceLabel,
+              message: `Failed to update item status in Google Drive document "${docName}": ${writeRes.error}`,
+              error: writeRes.error
+            };
+            break;
+          }
+        }
+
+        // 3. Update local cache after confirmed Drive write
         saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
         if (projectContext) {
           if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
@@ -755,7 +876,11 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
         resultPayload = {
           success: true,
+          state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
           projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
           itemId: markRes.item.itemId,
           itemName: markRes.item.itemName,
           category: markRes.category?.canonicalTitle || markRes.category?.title,
@@ -767,6 +892,9 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         resultPayload = {
           success: false,
           projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
           message: markRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
         };
       }

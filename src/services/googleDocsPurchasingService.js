@@ -214,6 +214,10 @@ export class LocalStoragePurchasingAdapter {
     const key = this.getProjectKey(projectId, docType);
     if (this.storage?.setItem) {
       this.storage.setItem(key, content);
+      const docIdMatch = content ? String(content).match(/DocumentId:\s*([^\s\n]+)/i) : null;
+      if (docIdMatch) {
+        this.storage.setItem('sitetactix_doc_cache_' + docIdMatch[1].trim(), content);
+      }
     }
     return content;
   }

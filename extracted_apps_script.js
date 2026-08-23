@@ -665,11 +665,84 @@ function doPost(e) {
   
   let action = null;
   let mainFolderId = null;
+  let postData = null;
+
+  if (e && e.postData && e.postData.contents) {
+    try {
+      postData = JSON.parse(e.postData.contents);
+      if (postData && postData.action) action = postData.action;
+    } catch (_) {}
+  }
+
   if (e && e.parameter) {
-    action = e.parameter.action;
+    if (!action) action = e.parameter.action;
     mainFolderId = e.parameter.folderId;
   }
   
+  if (action === "read_document_text") {
+    try {
+      const fileId = (postData && postData.fileId) || (e && e.parameter && e.parameter.fileId);
+      if (!fileId) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "fileId required" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      const file = DriveApp.getFileById(fileId);
+      const mimeType = file.getMimeType();
+      let text = "";
+      
+      if (mimeType === MimeType.GOOGLE_DOCS || mimeType === "application/vnd.google-apps.document") {
+        const doc = DocumentApp.openById(fileId);
+        text = doc.getBody().getText();
+      } else {
+        text = file.getBlob().getDataAsString();
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        text: text,
+        fileName: file.getName(),
+        modifiedTime: file.getLastUpdated().toISOString(),
+        mimeType: mimeType
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        error: err && err.message ? err.message : String(err)
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
+  if (action === "write_document_text") {
+    try {
+      const fileId = (postData && postData.fileId) || (e && e.parameter && e.parameter.fileId);
+      const content = (postData && postData.content !== undefined) ? postData.content : "";
+      if (!fileId) {
+        return ContentService.createTextOutput(JSON.stringify({ success: false, error: "fileId required" }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      const file = DriveApp.getFileById(fileId);
+      const mimeType = file.getMimeType();
+      
+      if (mimeType === MimeType.GOOGLE_DOCS || mimeType === "application/vnd.google-apps.document") {
+        const doc = DocumentApp.openById(fileId);
+        doc.getBody().setText(content);
+        doc.saveAndClose();
+      } else {
+        file.setContent(content);
+      }
+      
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        updatedTime: file.getLastUpdated().toISOString()
+      })).setMimeType(ContentService.MimeType.JSON);
+    } catch (err) {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        error: err && err.message ? err.message : String(err)
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+  }
+
   if (action === "sync") {
     parseNewInvoices(mainFolderId);
     return ContentService.createTextOutput("Sync Completed");
