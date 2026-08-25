@@ -202,15 +202,18 @@ export function parseQuantity(rawText = '') {
     };
   }
 
+  const isExplicitIncrement = /\b(more|additional|another)\b/i.test(text);
+
   const wordPrefixMatch = text.match(/^(?:add\s+|i need\s+|buy\s+)?(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|dozen)\s+(?:more\s+)?(.+)$/i);
   if (wordPrefixMatch && !text.toLowerCase().includes('inch') && !text.toLowerCase().includes('gallon')) {
     const qty = wordNumbers[wordPrefixMatch[1].toLowerCase()] || 1;
-    const rawItem = wordPrefixMatch[2].trim();
+    const rawItem = wordPrefixMatch[2].replace(/\b(more|additional)\b/gi, '').trim();
     return {
       itemId: embeddedId || generateItemId(rawItem),
       itemName: rawItem,
       quantity: qty,
       hasExplicitQuantity: true,
+      isExplicitIncrement,
       status,
       notes: ''
     };
@@ -219,23 +222,25 @@ export function parseQuantity(rawText = '') {
   const digitPrefixMatch = text.match(/^(?:add\s+|i need\s+|buy\s+)?(\d+)\s+(?:more\s+|x\s+)?(.+)$/i);
   if (digitPrefixMatch && !text.toLowerCase().includes('inch') && !text.toLowerCase().includes('gallon')) {
     const qty = parseInt(digitPrefixMatch[1], 10) || 1;
-    const rawItem = digitPrefixMatch[2].trim();
+    const rawItem = digitPrefixMatch[2].replace(/\b(more|additional)\b/gi, '').trim();
     return {
       itemId: embeddedId || generateItemId(rawItem),
       itemName: rawItem,
       quantity: qty,
       hasExplicitQuantity: true,
+      isExplicitIncrement,
       status,
       notes: ''
     };
   }
 
-  const cleaned = text.replace(/^(?:add\s+|i need\s+|buy\s+)/i, '').trim();
+  const cleaned = text.replace(/^(?:add\s+|i need\s+|buy\s+)/i, '').replace(/\b(another|more|additional)\b/gi, '').trim();
   return {
     itemId: embeddedId || generateItemId(cleaned),
     itemName: cleaned,
     quantity: 1,
     hasExplicitQuantity: false,
+    isExplicitIncrement,
     status,
     notes: ''
   };
@@ -524,27 +529,40 @@ export class PurchasingService {
     }
 
     const existingItems = await this.storage.getItems(projectId);
-    const existingIndex = existingItems.findIndex(it => {
-      const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
-      return (it.id && parsed.itemId && it.id === parsed.itemId) || itNorm === normalizedName;
-    });
+    const match = this.findMatchingItems(existingItems, parsed.itemName);
+    let existingIndex = -1;
+    if (match && (match.type === 'EXACT' || match.type === 'SINGLE_MATCH')) {
+      existingIndex = existingItems.findIndex(it => it.id === match.item.id);
+    }
 
     if (existingIndex >= 0) {
       const existing = existingItems[existingIndex];
-      const updatedQty = (existing.quantity || 1) + effectiveQty;
-      const updatedItem = {
-        ...existing,
-        quantity: updatedQty,
-        status: PURCHASING_STATUSES.NEEDED, // Re-activate if needed
-        updatedAt: now
-      };
-      existingItems[existingIndex] = updatedItem;
-      await this.storage.saveItems(projectId, existingItems);
+
+      // If user explicitly requested an increment (e.g. "Add 2 more pool heaters", "Add another pool heater")
+      if (parsed.isExplicitIncrement) {
+        const updatedQty = (existing.quantity || 1) + effectiveQty;
+        const updatedItem = {
+          ...existing,
+          quantity: updatedQty,
+          status: PURCHASING_STATUSES.NEEDED, // Re-activate if needed
+          updatedAt: now
+        };
+        existingItems[existingIndex] = updatedItem;
+        await this.storage.saveItems(projectId, existingItems);
+        return {
+          action: 'UPDATE_QUANTITY',
+          isDuplicate: true,
+          item: updatedItem,
+          message: `Updated ${updatedItem.itemName} quantity to ${updatedQty} under ${category.title}.`
+        };
+      }
+
+      // Idempotent duplicate: User simply repeated "Add a pool heater" when it already exists
       return {
-        action: 'UPDATE_QUANTITY',
+        action: 'ALREADY_EXISTS',
         isDuplicate: true,
-        item: updatedItem,
-        message: `Updated ${updatedItem.itemName} quantity to ${updatedQty} under ${category.title}.`
+        item: existing,
+        message: `"${existing.itemName}" is already on the ${projectId} purchasing checklist (Qty: ${existing.quantity || 1}, ${existing.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'}).`
       };
     }
 

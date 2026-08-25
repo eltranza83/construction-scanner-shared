@@ -636,36 +636,48 @@ export function extractPurchasingSubjectFromQuery(query = '') {
 export function normalizePurchasingToolCalls(toolCalls = [], userQuery = '') {
   if (!Array.isArray(toolCalls) || toolCalls.length === 0) return toolCalls;
 
-  if (isPurchaseStatusMutationCommand(userQuery)) {
+  const isMutation = isPurchaseStatusMutationCommand(userQuery);
+
+  if (isMutation) {
     const extractedSubject = extractPurchasingSubjectFromQuery(userQuery);
     
     // Safety Gate: If extracted subject is empty or a broad quantifier, REFUSE mutation
     if (!extractedSubject || extractedSubject.length < 2 || /^(what|which|all|everything|items|list|anything)$/i.test(extractedSubject)) {
-      return toolCalls;
+      return toolCalls.map(tc => {
+        if (tc.name === 'update_purchasing_item_status' || tc.name === 'add_purchasing_item') {
+          return { ...tc, name: 'get_purchasing_list', args: { projectId: tc.args?.projectId, unpurchasedOnly: false } };
+        }
+        return tc;
+      });
     }
 
     const isPurchased = !/\b(needed|as needed|unpurchased)\b/i.test(userQuery);
 
-    return toolCalls.map(tc => {
-      // If the model proposed add_purchasing_item or get_purchasing_list for a status mutation command:
-      if (tc.name === 'add_purchasing_item' || tc.name === 'get_purchasing_list') {
-        return {
-          ...tc,
-          name: 'update_purchasing_item_status',
-          args: {
-            itemName: extractedSubject || tc.args?.item || tc.args?.itemName || '',
-            isPurchased,
-            projectId: tc.args?.projectId
-          }
-        };
+    // CRITICAL: Collapse all proposed mutation calls into exactly ONE authoritative call
+    // targeting the user's actual subject. Gemini is forbidden from splitting one ambiguous
+    // command (e.g. "Mark the lights as purchased") into multiple specific writes.
+    const primaryProject = toolCalls.find(tc => tc.args?.projectId)?.args?.projectId;
+    return [{
+      name: 'update_purchasing_item_status',
+      args: {
+        itemName: extractedSubject,
+        isPurchased,
+        projectId: primaryProject
       }
-      if (tc.name === 'update_purchasing_item_status') {
+    }];
+  }
+
+  // If NOT a mutation command (READ ONLY), intercept any hallucinated mutation tool calls
+  const isExplicitAdd = /^(add|create|insert|new item)\b/i.test(userQuery) && !/\b(as purchased|as needed|to purchased|to needed|mark|bought|got)\b/i.test(userQuery);
+  if (!isExplicitAdd) {
+    return toolCalls.map(tc => {
+      if (tc.name === 'update_purchasing_item_status' || tc.name === 'add_purchasing_item') {
         return {
           ...tc,
+          name: 'get_purchasing_list',
           args: {
-            ...tc.args,
-            itemName: tc.args?.itemName || extractedSubject || tc.args?.item || '',
-            isPurchased: tc.args?.isPurchased !== undefined ? tc.args.isPurchased : isPurchased
+            projectId: tc.args?.projectId,
+            unpurchasedOnly: false
           }
         };
       }

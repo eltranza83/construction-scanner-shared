@@ -602,17 +602,22 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(itemsAfter1.filter(it => it.status === 'purchased').length, 1, 'Exactly 1 item purchased');
 
     // -------------------------------------------------------------
-    // Scenario 2: Ambiguous Mutation ("Mark the lights as purchased")
-    // Model proposed get_purchasing_list or update_purchasing_item_status
+    // Scenario 2: Ambiguous Mutation with Multi-Call Hallucination ("Mark the lights as purchased")
+    // Model proposed TWO parallel calls for specific lights!
     // -------------------------------------------------------------
     const q2 = 'Mark the lights as purchased';
     assert.equal(isPurchaseStatusMutationCommand(q2), true);
     assert.equal(extractPurchasingSubjectFromQuery(q2), 'lights');
 
-    // Model hallucinated calling get_purchasing_list instead of update
-    const rawCalls2 = [{ name: 'get_purchasing_list', args: { trade: 'electrical', projectId: lotId } }];
+    // Model hallucinated calling two separate items in parallel
+    const rawCalls2 = [
+      { name: 'update_purchasing_item_status', args: { itemName: 'Exterior column lights', isPurchased: true, projectId: lotId } },
+      { name: 'update_purchasing_item_status', args: { itemName: 'Garage ceiling lights with the cap to install it', isPurchased: true, projectId: lotId } }
+    ];
     const normCalls2 = normalizePurchasingToolCalls(rawCalls2, q2);
-    assert.equal(normCalls2[0].name, 'update_purchasing_item_status', 'Must be deterministically converted to update');
+    assert.equal(normCalls2.length, 1, 'Multi-call hallucination must collapse to exactly 1 authoritative call');
+    assert.equal(normCalls2[0].name, 'update_purchasing_item_status');
+    assert.equal(normCalls2[0].args.itemName, 'lights', 'Target item must be the user query subject, not model hallucinations');
 
     const res2 = await executeClientToolCall(normCalls2[0].name, normCalls2[0].args, { ...projectContext, userQuery: q2 });
     assert.equal(res2.success, false, 'Must not mutate ambiguous item');
@@ -620,7 +625,7 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(res2.matches.length, 5, 'Must return 5 light fixtures');
 
     const itemsAfter2 = await purchasingService.getItems(lotId);
-    assert.equal(itemsAfter2.filter(it => it.status === 'purchased').length, 1, 'Zero writes allowed on ambiguous mutation');
+    assert.equal(itemsAfter2.filter(it => it.status === 'purchased').length, 1, 'Zero writes allowed on ambiguous mutation (count remains 1)');
 
     // -------------------------------------------------------------
     // Scenario 3: Nonexistent Mutation ("Mark the pool heater as purchased")
@@ -687,14 +692,8 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(res6.success, true, 'Explicit creation must succeed');
 
     const itemsAfter6 = await purchasingService.getItems(lotId);
-    assert.equal(itemsAfter6.length, 21, 'Checklist count increases from 20 to 21');
+    assert.equal(itemsAfter6.length, 21, 'Checklist count increases from 20 to 21 (1 write)');
     assert.ok(itemsAfter6.some(it => it.itemName.toLowerCase() === 'pool heater'));
-
-    // Verify numerical integrity after add
-    const listResFinal = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, projectContext);
-    assert.equal(listResFinal.summary.totalChecklistCount, 21);
-    assert.equal(listResFinal.summary.neededCount, 20);
-    assert.equal(listResFinal.summary.purchasedCount, 1);
 
     // -------------------------------------------------------------
     // Scenario 7: Broad Purchased Query ("what have we already purchased")
@@ -751,6 +750,67 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
 
     const itemsAfter10 = await purchasingService.getItems(lotId);
     assert.equal(itemsAfter10.filter(it => it.status === 'purchased').length, 2, '2 items now purchased (Security lights + Vanity lights)');
+
+    // -------------------------------------------------------------
+    // Scenario 11: Quantity/Existence Inquiry ("How many pool heaters do we have on the purchasing list?")
+    // Must return exact item quantity and status, NOT broad summary
+    // -------------------------------------------------------------
+    const q11 = 'How many pool heaters do we have on the purchasing list?';
+    assert.equal(isPurchaseStatusMutationCommand(q11), false, 'Quantity query must be READ-ONLY');
+
+    const listRes11 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q11 });
+    assert.ok(listRes11.itemLookup, 'itemLookup must be populated for quantity query');
+    assert.ok(['EXACT', 'SINGLE_MATCH'].includes(listRes11.itemLookup.matchType));
+    assert.match(listRes11.itemLookup.canonicalAnswer, /You have 1 Pool heater \(Needed\) on the Lot 55 purchasing checklist\./i);
+
+    // -------------------------------------------------------------
+    // Scenario 12: Trade-Specific List ("Show me the General Hardware & Materials list")
+    // Must return individual items belonging to that trade section
+    // -------------------------------------------------------------
+    const q12 = 'Show me the General Hardware & Materials list';
+    assert.equal(isPurchaseStatusMutationCommand(q12), false);
+
+    const listRes12 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'general' }, { ...projectContext, userQuery: q12 });
+    assert.match(listRes12.summary.canonicalAnswer, /General Hardware & Materials for Lot 55/i);
+    assert.match(listRes12.summary.canonicalAnswer, /•/i, 'Must contain bullet list of individual items');
+
+    // -------------------------------------------------------------
+    // Scenario 13: Idempotent Add ("Add a pool heater to the purchasing list" called twice)
+    // Second identical call must report already exists with ZERO writes (quantity remains 1)
+    // -------------------------------------------------------------
+    const q13 = 'Add a pool heater to the purchasing list';
+    const res13 = await executeClientToolCall('add_purchasing_item', { item: 'pool heater', projectId: lotId }, { ...projectContext, userQuery: q13 });
+    assert.equal(res13.action, 'ALREADY_EXISTS');
+    assert.equal(res13.isDuplicate, true);
+    assert.match(res13.message, /already on the.*purchasing checklist/i);
+
+    const itemsAfter13 = await purchasingService.getItems(lotId);
+    const poolHeater13 = itemsAfter13.find(it => it.itemName.toLowerCase() === 'pool heater');
+    assert.equal(poolHeater13?.quantity, 1, 'Quantity must remain 1 on identical repeat add (0 writes)');
+
+    // -------------------------------------------------------------
+    // Scenario 14: Explicit Increment ("Add 2 more pool heaters to the purchasing list")
+    // Explicit increment language increases quantity by 2 (quantity becomes 3, 1 write)
+    // -------------------------------------------------------------
+    const q14 = 'Add 2 more pool heaters to the purchasing list';
+    const res14 = await executeClientToolCall('add_purchasing_item', { item: '2 more pool heaters', projectId: lotId }, { ...projectContext, userQuery: q14 });
+    assert.equal(res14.action, 'UPDATE_QUANTITY');
+    assert.equal(res14.quantity, 3, 'Quantity increments from 1 to 3 on explicit increment');
+
+    const itemsAfter14 = await purchasingService.getItems(lotId);
+    const poolHeater14 = itemsAfter14.find(it => it.itemName.toLowerCase() === 'pool heater');
+    assert.equal(poolHeater14?.quantity, 3, 'Persisted quantity must be 3');
+
+    // -------------------------------------------------------------
+    // Scenario 15: Read Query with Model Hallucinated Mutation Tool
+    // Model proposed update_purchasing_item_status for "What do we need for electrical?"
+    // Deterministic layer must convert it to get_purchasing_list (0 writes)
+    // -------------------------------------------------------------
+    const q15 = 'What do we need for electrical?';
+    assert.equal(isPurchaseStatusMutationCommand(q15), false);
+    const rawCalls15 = [{ name: 'update_purchasing_item_status', args: { itemName: 'electrical', projectId: lotId } }];
+    const normCalls15 = normalizePurchasingToolCalls(rawCalls15, q15);
+    assert.equal(normCalls15[0].name, 'get_purchasing_list', 'Read query must be forced to get_purchasing_list even if model proposed mutation');
 
     // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:

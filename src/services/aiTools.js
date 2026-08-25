@@ -775,7 +775,17 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       // Generate canonical pre-synthesized answer
       let canonicalAnswer = '';
-      if (totalNeeded === 0 && grandTotal > 0) {
+      if (trade) {
+        const matchedTradeKey = Object.keys(STRUCTURED_TRADE_MAP).find(k => k === trade.toLowerCase() || STRUCTURED_TRADE_MAP[k]?.title.toLowerCase().includes(trade.toLowerCase()));
+        const matchedTradeTitle = (matchedTradeKey && STRUCTURED_TRADE_MAP[matchedTradeKey]?.title) || trade;
+        const tradeItems = items; // Already filtered to this trade
+        if (tradeItems.length === 0) {
+          canonicalAnswer = `No purchasing items found under ${matchedTradeTitle} for ${projLabel}.`;
+        } else {
+          const itemLines = tradeItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (${it.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+          canonicalAnswer = `${matchedTradeTitle} for ${projLabel} (${tradeItems.length} item${tradeItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+        }
+      } else if (totalNeeded === 0 && grandTotal > 0) {
         canonicalAnswer = `All ${grandTotal} items have been purchased for ${projLabel}.`;
       } else if (grandTotal === 0) {
         canonicalAnswer = `No purchasing items found on the checklist for ${projLabel}.`;
@@ -799,16 +809,17 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         canonicalAnswer = `You still have ${totalNeeded} items to purchase for ${projLabel}${breakdownStr ? `: ${breakdownStr}` : ''}. ${purchasedNote} If you want, I can give you the individual items for any trade.`;
       }
 
-      // Check if user's question was an item status query (e.g. "Did we buy the lights?", "Have we purchased the faucets?")
+      // Check if user's question was an item status or quantity query (e.g. "Did we buy the lights?", "How many pool heaters do we have?")
       const userPrompt = String(projectContext?.userQuery || args.item || args.itemName || '').trim();
       let itemLookup = null;
       if (userPrompt) {
+        const isQuantityInquiry = /\b(how many|how much|count|quantity)\b/i.test(userPrompt);
         let extractedSubject = userPrompt
-          .replace(/^(did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
-          .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got)\s+/i, '')
+          .replace(/^(how many|how much|do we have any|do we have|is there a|is there an|is there|are there any|are there|what is the quantity of|what's the count of|what count of|did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
+          .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got|have|need)\s+/i, '')
           .replace(/^(the|those|these|that|a|an)\s+/i, '')
           .replace(/\s+(for|on|in)\s+lot\s*\d+.*$/i, '')
-          .replace(/\s+(already|yet|so far|now|recently|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
+          .replace(/\s+(do we have|are there|on the list|on the checklist|on our checklist|in the list|already|yet|so far|now|recently|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
           .replace(/[?.!]+$/, '')
           .trim();
 
@@ -819,11 +830,16 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
             if (lookupMatch.type === 'EXACT' || lookupMatch.type === 'SINGLE_MATCH') {
               const item = lookupMatch.item;
               const isP = item.isPurchased || item.status === PURCHASING_STATUSES.PURCHASED;
-              lookupAnswer = isP
-                ? `Yes. The ${item.itemName} are marked as purchased on ${projLabel}.`
-                : `No. The ${item.itemName} are still marked as needed on ${projLabel}.`;
+              const statusLabel = isP ? 'Purchased' : 'Needed';
+              if (isQuantityInquiry) {
+                lookupAnswer = `You have ${item.quantity || 1} ${item.itemName} (${statusLabel}) on the ${projLabel} purchasing checklist.`;
+              } else {
+                lookupAnswer = isP
+                  ? `Yes. The ${item.itemName} are marked as purchased on ${projLabel}.`
+                  : `No. The ${item.itemName} are still marked as needed on ${projLabel}.`;
+              }
             } else if (lookupMatch.type === 'AMBIGUOUS') {
-              const candidateLines = lookupMatch.matches.map(m => `• ${m.itemName} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+              const candidateLines = lookupMatch.matches.map(m => `• ${m.itemName} — Qty: ${m.quantity || 1} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
               lookupAnswer = `There are ${lookupMatch.matches.length} matching items on the ${projLabel} checklist:\n${candidateLines}\nWhich one were you asking about?`;
             }
 
@@ -833,6 +849,14 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
               matchCount: lookupMatch.matches.length,
               matches: lookupMatch.matches.map(m => ({ ...m, name: m.itemName })),
               canonicalAnswer: lookupAnswer
+            };
+          } else if (lookupMatch && lookupMatch.type === 'NONE' && (isQuantityInquiry || /\b(is there|do we have)\b/i.test(userPrompt))) {
+            itemLookup = {
+              subject: extractedSubject,
+              matchType: 'NONE',
+              matchCount: 0,
+              matches: [],
+              canonicalAnswer: `"${extractedSubject}" is not currently on the ${projLabel} purchasing checklist.`
             };
           }
         }
