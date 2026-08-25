@@ -166,7 +166,17 @@ export function classifyTradeCategory(itemText = '', explicitOverride = null) {
 }
 
 export function parseQuantity(rawText = '') {
-  let text = (rawText || '').trim();
+  if (typeof rawText === 'object' && rawText !== null) {
+    return {
+      itemId: rawText.id || rawText.itemId || generateItemId(rawText.itemName || rawText.name),
+      itemName: String(rawText.itemName || rawText.name || '').trim(),
+      quantity: Number(rawText.quantity) || 1,
+      hasExplicitQuantity: rawText.quantity !== undefined,
+      status: rawText.status || PURCHASING_STATUSES.NEEDED,
+      notes: rawText.notes || ''
+    };
+  }
+  let text = String(rawText || '').trim();
   
   let embeddedId = null;
   const idMatch = text.match(/<!--\s*id:\s*([a-zA-Z0-9_-]+)\s*-->/i);
@@ -328,12 +338,24 @@ export class LocalStoragePurchasingAdapter {
  */
 export class FirestorePurchasingAdapter {
   constructor(db = null) {
-    this.db = db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    this.db = db;
     this.fallback = new LocalStoragePurchasingAdapter();
   }
 
+  _getDb() {
+    if (this.db) return this.db;
+    if (typeof window !== 'undefined') {
+      try {
+        return getFirebaseDb();
+      } catch (err) {
+        console.warn('[FirestorePurchasingAdapter] Failed to get Firebase DB:', err);
+      }
+    }
+    return null;
+  }
+
   async getItems(projectId) {
-    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    const database = this._getDb();
     if (!database) {
       return await this.fallback.getItems(projectId);
     }
@@ -349,7 +371,19 @@ export class FirestorePurchasingAdapter {
         await this.fallback.saveItems(projectId, items);
         return items;
       }
-      return await this.fallback.getItems(projectId);
+      
+      // If Firestore is empty (0 docs in purchasing_items):
+      // Check if local cache has items that were saved offline or during transition
+      const fallbackItems = await this.fallback.getItems(projectId);
+      if (fallbackItems && fallbackItems.length > 0) {
+        for (const item of fallbackItems) {
+          if (!item.id) continue;
+          const itemRef = doc(database, 'projects', cleanId, 'purchasing_items', item.id);
+          await setDoc(itemRef, item, { merge: true });
+        }
+        return fallbackItems;
+      }
+      return [];
     } catch (err) {
       console.warn('[FirestorePurchasingAdapter] Falling back to local cache:', err);
       return await this.fallback.getItems(projectId);
@@ -358,7 +392,7 @@ export class FirestorePurchasingAdapter {
 
   async saveItems(projectId, items = []) {
     await this.fallback.saveItems(projectId, items);
-    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    const database = this._getDb();
     if (!database) return items;
 
     try {
@@ -379,7 +413,7 @@ export class FirestorePurchasingAdapter {
     if (this.fallback?.deleteItem) {
       await this.fallback.deleteItem(projectId, itemId);
     }
-    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    const database = this._getDb();
     if (!database) return;
     try {
       const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
@@ -391,7 +425,7 @@ export class FirestorePurchasingAdapter {
   }
 
   async getMetadata(projectId) {
-    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    const database = this._getDb();
     if (!database) {
       return await this.fallback.getMetadata(projectId);
     }
@@ -412,7 +446,7 @@ export class FirestorePurchasingAdapter {
 
   async saveMetadata(projectId, meta = {}) {
     await this.fallback.saveMetadata(projectId, meta);
-    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    const database = this._getDb();
     if (!database) return meta;
 
     try {
@@ -550,6 +584,7 @@ export class PurchasingService {
         existingItems[existingIndex] = updatedItem;
         await this.storage.saveItems(projectId, existingItems);
         return {
+          success: true,
           action: 'UPDATE_QUANTITY',
           isDuplicate: true,
           item: updatedItem,
@@ -559,6 +594,7 @@ export class PurchasingService {
 
       // Idempotent duplicate: User simply repeated "Add a pool heater" when it already exists
       return {
+        success: true,
         action: 'ALREADY_EXISTS',
         isDuplicate: true,
         item: existing,
@@ -585,6 +621,7 @@ export class PurchasingService {
     await this.storage.saveItems(projectId, existingItems);
 
     return {
+      success: true,
       action: 'INSERT_ITEM',
       isDuplicate: false,
       item: newItem,
@@ -1033,4 +1070,11 @@ export class PurchasingService {
   }
 }
 
-export const purchasingService = new PurchasingService();
+export function createDefaultPurchasingStorageAdapter() {
+  if (typeof window !== 'undefined') {
+    return new FirestorePurchasingAdapter();
+  }
+  return new LocalStoragePurchasingAdapter();
+}
+
+export const purchasingService = new PurchasingService(createDefaultPurchasingStorageAdapter());
