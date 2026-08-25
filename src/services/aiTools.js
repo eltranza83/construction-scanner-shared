@@ -656,7 +656,9 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         const hasRealItems = (doc) => doc && typeof doc === 'string' && (doc.includes('- [ ]') || doc.includes('- [x]'));
 
         let rawDoc = null;
-        const contextDoc = projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null);
+        const contextDoc = projectContext?.[targetProjectId]?.purchasingDocContent ||
+                           projectContext?.purchasingDocContent ||
+                           (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null);
         if (hasRealItems(contextDoc)) {
           rawDoc = contextDoc;
         }
@@ -670,7 +672,10 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         const googleToken = projectContext?.googleToken || projectContext?.accessToken;
         if (!rawDoc && discovery.documentId && googleToken && typeof fetchGoogleDocText === 'function') {
           try {
-            rawDoc = await fetchGoogleDocText(googleToken, discovery.documentId);
+            rawDoc = await fetchGoogleDocText(googleToken, discovery.documentId, {
+              fileName: discovery.fileName,
+              mimeType: discovery.file?.mimeType
+            });
           } catch (err) {
             console.warn('[get_purchasing_list] Failed to fetch Google Doc text from Drive:', err);
             // Strict error guard: Do NOT silently populate Master Template if file exists but is unreadable!

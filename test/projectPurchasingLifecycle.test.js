@@ -1,4 +1,4 @@
-import { test, describe } from 'node:test';
+import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 if (typeof globalThis.localStorage === 'undefined') {
@@ -26,8 +26,17 @@ import {
 
 import { executeClientToolCall } from '../src/services/aiTools.js';
 import { synthesizeGroundedEvidence } from '../src/services/semanticIntentService.js';
+import { extractTextFromDocxBytes } from '../src/services/googleDrive.js';
+import * as fflate from 'fflate';
 
 describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
+
+  beforeEach(() => {
+    localStorage.clear();
+    if (purchasingService.storage?.memoryStore?.clear) {
+      purchasingService.storage.memoryStore.clear();
+    }
+  });
 
   test('1. Canonical Project ID Resolution Normalization', () => {
     assert.equal(toCanonicalProjectId('Lot 55'), 'lot_55');
@@ -183,5 +192,127 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
 
     assert.equal(res.found, true);
     assert.ok(res.totalItems >= 19, 'Lot 3 must retain its full checklist');
+  });
+
+  test('7. Real Binary .docx OpenXML In-Memory Extraction & Checkbox Normalization', () => {
+    // Construct authentic OpenXML word/document.xml with mixed checkboxes & headings
+    const wordXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+  <w:body>
+    <w:p><w:r><w:t>Master Fixtures &amp; Hardware Purchasing Checklist - Lot 55</w:t></w:r></w:p>
+    <w:p><w:r><w:t>1. Quartz Hardware</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Quartz pass-through caps (2)</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Undermount sink clips — Qty: 4</w:t></w:r></w:p>
+    <w:p><w:r><w:t>2. Electrical Hardware Fixtures</w:t></w:r></w:p>
+    <w:p>
+      <w:sdt><w:sdtPr><w14:checkbox><w14:checked w14:val="1"/></w14:checkbox></w:sdtPr>
+      <w:sdtContent><w:p><w:r><w:t>Security lights</w:t></w:r></w:p></w:sdtContent></w:sdt>
+    </w:p>
+    <w:p><w:r><w:t>☐ Smart switches — Qty: 8</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☑ Garage ceiling lights</w:t></w:r></w:p>
+    <w:p><w:r><w:t>3. Plumbing Hardware Fixtures</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Kitchen sink faucet</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Soap dispenser</w:t></w:r></w:p>
+  </w:body>
+</w:document>`;
+
+    const docxZipBytes = fflate.zipSync({
+      'word/document.xml': fflate.strToU8(wordXml),
+      '[Content_Types].xml': fflate.strToU8('<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"/>')
+    });
+
+    assert.ok(docxZipBytes instanceof Uint8Array);
+    assert.equal(docxZipBytes[0], 0x50); // PK
+    assert.equal(docxZipBytes[1], 0x4b);
+
+    const extractedText = extractTextFromDocxBytes(docxZipBytes);
+    assert.ok(extractedText, 'Must successfully extract text from binary .docx');
+    assert.match(extractedText, /## 1\. Quartz Hardware/);
+    assert.match(extractedText, /- \[ \] Quartz pass-through caps \(2\)/);
+    assert.match(extractedText, /- \[x\] Security lights/);
+    assert.match(extractedText, /- \[ \] Smart switches — Qty: 8/);
+    assert.match(extractedText, /- \[x\] Garage ceiling lights/);
+    assert.match(extractedText, /- \[ \] Kitchen sink faucet/);
+  });
+
+  test('8. Real-World Lot 55 End-to-End: Binary Purchasing Checklist.docx Ingestion to Live Synthesis', async () => {
+    const lot55Proj = 'lot_55';
+    
+    // Construct real binary .docx for Lot 55
+    const wordXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml">
+  <w:body>
+    <w:p><w:r><w:t>Master Fixtures &amp; Hardware Purchasing Checklist - Lot 55</w:t></w:r></w:p>
+    <w:p><w:r><w:t>1. Quartz Hardware</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Quartz pass-through caps (2)</w:t></w:r></w:p>
+    <w:p><w:r><w:t>2. Electrical Hardware Fixtures</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☑ Security lights</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Smart switches — Qty: 8</w:t></w:r></w:p>
+    <w:p><w:r><w:t>3. Plumbing Hardware Fixtures</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Kitchen sink faucet</w:t></w:r></w:p>
+    <w:p><w:r><w:t>☐ Soap dispenser</w:t></w:r></w:p>
+  </w:body>
+</w:document>`;
+
+    const docxZipBytes = fflate.zipSync({
+      'word/document.xml': fflate.strToU8(wordXml)
+    });
+
+    const extractedText = extractTextFromDocxBytes(docxZipBytes);
+    
+    // Simulate Lot 55 project context with discovered .docx file in Drive tree
+    const projectContext = {
+      projectId: lot55Proj,
+      activeProjectName: 'Lot 55',
+      ['lot_55']: {
+        purchasingDocContent: extractedText
+      },
+      driveTree: {
+        folders: [
+          {
+            name: 'Google Docs Purchasing List',
+            files: [
+              {
+                id: 'file_lot55_docx_real',
+                name: 'Purchasing Checklist.docx',
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+              }
+            ]
+          }
+        ]
+      }
+    };
+
+    // 1. Initial query executes JIT ingestion
+    const toolRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: 'Lot 55',
+      unpurchasedOnly: true
+    }, projectContext);
+
+    assert.equal(toolRes.found, true);
+    assert.equal(toolRes.totalPurchased, 1);
+    assert.equal(toolRes.totalNeeded, 4);
+    assert.equal(toolRes.totalItems, 4); // unpurchased only
+
+    // 2. Synthesize broad purchasing question
+    const synth = synthesizeGroundedEvidence(
+      [{ name: 'get_purchasing_list', success: true, result: toolRes }],
+      'What do we still need to purchase for Lot 55?',
+      projectContext
+    );
+    assert.match(synth, /You still have 4 items to purchase for Lot 55/i);
+    assert.match(synth, /You have 1 item marked as purchased/i);
+
+    // 3. Synthesize single-item status question
+    const itemStatusSynth = synthesizeGroundedEvidence(
+      [{ name: 'get_purchasing_list', success: true, result: toolRes }],
+      'Did we already buy the security lights?',
+      projectContext
+    );
+    assert.match(itemStatusSynth, /Yes\. The Security lights are marked as purchased on Lot 55\./i);
+
+    // 4. Verify Firestore sentinel was written
+    const isInit = await purchasingService.isProjectInitialized(lot55Proj);
+    assert.equal(isInit, true, 'Sentinel metadata must be initialized');
   });
 });
