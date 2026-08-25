@@ -427,22 +427,29 @@ export const RetrievalPlugin = {
         }
 
         // 3. Answer-Priority Hierarchy 3: Multi-Trade / Broad Project Queries
-        const isPurchasedQuery = res.unpurchasedOnly === false || res.status === 'purchased' || /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought)\b/i.test(queryLower);
+        const isPurchasedQuery = res.status === 'purchased' ||
+          /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought|what have we purchased|what did we buy|what did we purchase)\b/i.test(queryLower);
         const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);
 
-        if (isPurchasedQuery && (res.status === 'purchased' || /\b(purchased|already bought|already purchased)\b/i.test(queryLower))) {
-          const purchasedItems = res.purchasedItems || res.items || sections.flatMap(s => s.items || []);
-          const totalPurchased = typeof res.totalPurchased === 'number' ? res.totalPurchased : purchasedItems.length;
-
-          if (totalPurchased === 0) {
-            responses.push(`Nothing has been marked as purchased yet for ${activeProject}.`);
-          } else if (totalPurchased <= 5) {
-            const itemNames = purchasedItems.map(i => i.name || i.itemName).join(', ');
-            responses.push(`You've purchased ${totalPurchased} item${totalPurchased === 1 ? '' : 's'} for ${activeProject} so far: ${itemNames}.`);
+        if (isPurchasedQuery) {
+          if (res.summary?.canonicalAnswer && /\bPurchased items for\b/i.test(res.summary.canonicalAnswer)) {
+            responses.push(res.summary.canonicalAnswer);
           } else {
-            const catSummary = sections.map(s => `${(s.items || []).length} in ${s.category || s.title}`).join(', ');
-            responses.push(`You've purchased ${totalPurchased} items so far for ${activeProject} (${catSummary}).`);
+            const purchasedItems = (res.purchasedItems && res.purchasedItems.length > 0)
+              ? res.purchasedItems
+              : (res.allItems
+                  ? res.allItems.filter(i => i.status === 'purchased' || i.isPurchased)
+                  : (res.status === 'purchased' ? (res.items || []) : (res.items || []).filter(i => i.status === 'purchased' || i.isPurchased)));
+            const totalPurchased = typeof res.totalPurchased === 'number' ? res.totalPurchased : purchasedItems.length;
+
+            if (totalPurchased === 0) {
+              responses.push(`Nothing has been marked as purchased yet for ${activeProject}.`);
+            } else {
+              const itemNames = purchasedItems.map(i => i.name || i.itemName).join(', ');
+              responses.push(`You've purchased ${totalPurchased} item${totalPurchased === 1 ? '' : 's'} for ${activeProject} so far: ${itemNames}.`);
+            }
           }
+          continue;
         } else if (sections.length > 0) {
           if (!wantsDetailedItems && sections.length > 1) {
             const totalRemaining = res.totalItems || sections.reduce((acc, s) => acc + (s.items?.length || 0), 0);

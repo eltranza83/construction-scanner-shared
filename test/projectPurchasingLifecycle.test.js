@@ -829,6 +829,46 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.match(synthTextDup, /Deduplicated idempotent 0-write/i);
 
     // -------------------------------------------------------------
+    // Scenario 17: Broad Purchased-Items Inquiry ("What have we already purchased for this lot?")
+    // When multiple items are purchased (e.g. Security lights, Ceiling fans, Sinks, Bathroom vanity faucets, Kitchen faucets, Soap dispenser = 6 items),
+    // must return actual purchased item names, 0 writes, and no contradictory category totals.
+    // -------------------------------------------------------------
+    await purchasingService.updateItemStatus(lotId, 'Ceiling fans', 'purchased');
+    await purchasingService.updateItemStatus(lotId, 'Sinks', 'purchased');
+    await purchasingService.updateItemStatus(lotId, 'Bathroom vanity faucets', 'purchased');
+    await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'purchased');
+    await purchasingService.updateItemStatus(lotId, 'Soap dispenser', 'purchased');
+
+    const q17 = 'What have we already purchased for this lot?';
+    assert.equal(isPurchaseStatusMutationCommand(q17), false, 'Purchased query must be READ-only');
+
+    const listRes17 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q17 });
+    assert.equal(listRes17.totalPurchased, 7);
+    assert.match(listRes17.summary.canonicalAnswer, /Purchased items for Lot 55 \(7 items\):/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Security lights/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Vanity lights/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Ceiling fans/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Sinks/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Bathroom vanity faucets/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Kitchen faucets/i);
+    assert.match(listRes17.summary.canonicalAnswer, /• Soap dispenser/i);
+    assert.doesNotMatch(listRes17.summary.canonicalAnswer, /still have \d+ items to purchase/i, 'Must not override with unpurchased summary');
+    assert.doesNotMatch(listRes17.summary.canonicalAnswer, /\b15\b/, 'No contradictory 15 total in purchased list');
+
+    const synth17 = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: listRes17 }], q17, projectContext);
+    assert.match(synth17, /Purchased items for Lot 55/i);
+    assert.match(synth17, /Security lights/i);
+    assert.match(synth17, /Ceiling fans/i);
+    assert.match(synth17, /Sinks/i);
+
+    // Reset the temporary 5 purchased items back to needed before post-test reset
+    await purchasingService.updateItemStatus(lotId, 'Ceiling fans', 'needed');
+    await purchasingService.updateItemStatus(lotId, 'Sinks', 'needed');
+    await purchasingService.updateItemStatus(lotId, 'Bathroom vanity faucets', 'needed');
+    await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'needed');
+    await purchasingService.updateItemStatus(lotId, 'Soap dispenser', 'needed');
+
+    // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:
     // 1. Remove pool heater
     // 2. Reset Vanity lights to needed

@@ -717,6 +717,8 @@ export function formatToolResultsForSynthesis(toolTelemetryList = []) {
         priorityHeader = `\n[PRIORITY TARGET ITEM QUERY RESOLUTION: ${dataPayload.itemLookup.canonicalAnswer}]\n`;
       } else if (dataPayload?.trade && dataPayload.trade !== 'all') {
         priorityHeader = `\n[PRIORITY TRADE ITEM LIST: ${dataPayload.summary?.canonicalAnswer || dataPayload.message}]\n`;
+      } else if (dataPayload?.summary?.canonicalAnswer && /\bPurchased items for\b/i.test(dataPayload.summary.canonicalAnswer)) {
+        priorityHeader = `\n[PRIORITY PURCHASED ITEMS LIST: ${dataPayload.summary.canonicalAnswer}]\n`;
       }
       return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}${dupTag}: SUCCESS${priorityHeader}Structured Data: ${JSON.stringify(dataPayload)}`;
     } else {
@@ -922,6 +924,13 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
       unsupportedClaims.push(`Project-wide summary given instead of trade-specific list for "${purchasingData.trade}"`);
       purchasingDiscrepancyDetected = true;
       suggestedCorrection = purchasingData.summary?.canonicalAnswer || purchasingData.message;
+    }
+  } else if (purchasingData?.summary?.canonicalAnswer && /\bPurchased items for\b/i.test(purchasingData.summary.canonicalAnswer)) {
+    const isNeededSummary = /\bstill have \d+ items to purchase\b/i.test(synthesizedText);
+    if (isNeededSummary) {
+      unsupportedClaims.push('Unpurchased project summary given instead of purchased items list');
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = purchasingData.summary.canonicalAnswer;
     }
   } else if (purchasingData?.summary) {
     const summary = purchasingData.summary;

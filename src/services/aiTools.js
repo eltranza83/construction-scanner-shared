@@ -773,6 +773,11 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         }
       }
 
+      // Check user's conversational intent for specific answer formats
+      const userPrompt = String(projectContext?.userQuery || args.item || args.itemName || '').trim();
+      const isPurchasedInquiry = args.status === PURCHASING_STATUSES.PURCHASED ||
+        /\b(what have we (already )?(purchased|bought)|what did we (already )?(purchase|buy)|what items are purchased|what items have been purchased|what is purchased|what's purchased|already purchased|purchased items|list purchased|show purchased)\b/i.test(userPrompt);
+
       // Generate canonical pre-synthesized answer
       let canonicalAnswer = '';
       if (trade) {
@@ -784,6 +789,24 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         } else {
           const itemLines = tradeItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (${it.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
           canonicalAnswer = `${matchedTradeTitle} for ${projLabel} (${tradeItems.length} item${tradeItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+        }
+      } else if (isPurchasedInquiry) {
+        if (totalPurchased === 0) {
+          canonicalAnswer = `Nothing has been marked as purchased yet for ${projLabel}.`;
+        } else {
+          const purchasedLines = [];
+          for (const catKey of categoryOrder) {
+            const catTitle = STRUCTURED_TRADE_MAP[catKey]?.title || catKey;
+            const catPurchased = allProjectItems.filter(it => (it.categoryId || 'general') === catKey && it.status === PURCHASING_STATUSES.PURCHASED);
+            if (catPurchased.length > 0) {
+              purchasedLines.push(`${catTitle}:`);
+              for (const it of catPurchased) {
+                const qtyStr = it.quantity && it.quantity > 1 ? ` — Qty: ${it.quantity}` : '';
+                purchasedLines.push(`• ${it.itemName}${qtyStr} (Purchased)`);
+              }
+            }
+          }
+          canonicalAnswer = `Purchased items for ${projLabel} (${totalPurchased} item${totalPurchased === 1 ? '' : 's'}):\n${purchasedLines.join('\n')}`;
         }
       } else if (totalNeeded === 0 && grandTotal > 0) {
         canonicalAnswer = `All ${grandTotal} items have been purchased for ${projLabel}.`;
@@ -810,7 +833,6 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       }
 
       // Check if user's question was an item status or quantity query (e.g. "Did we buy the lights?", "How many pool heaters do we have?")
-      const userPrompt = String(projectContext?.userQuery || args.item || args.itemName || '').trim();
       let itemLookup = null;
       if (userPrompt) {
         const isQuantityInquiry = /\b(how many|how much|count|quantity)\b/i.test(userPrompt);
