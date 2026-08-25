@@ -421,4 +421,30 @@ test('Multi-Domain Grounded Evidence Synthesis Suite', async (t) => {
     const emptyFolderRes = synthesizeGroundedEvidence(emptyFolderTelemetry, 'what else do we have in app folders', projectContext);
     assert.match(emptyFolderRes, /"App Folders" directory exists in Google Drive for Lot 3, but it does not currently contain any files/i);
   });
+
+  await t.test('10. Multi-category broad overview vs explicit detailed items', () => {
+    const multiSectionTelemetry = [{
+      name: 'get_purchasing_list',
+      success: true,
+      result: {
+        totalItems: 5,
+        sections: [
+          { category: 'Quartz Hardware', items: [{ name: 'Sinks' }, { name: 'Caps' }] },
+          { category: 'Electrical Hardware Fixtures', items: [{ name: 'Security lights' }, { name: 'Doorbell' }, { name: 'Fans' }] }
+        ]
+      }
+    }];
+
+    // 1. Broad inquiry -> concise overview by categories
+    const broadRes = synthesizeGroundedEvidence(multiSectionTelemetry, 'what do we have on the list again', projectContext);
+    assert.match(broadRes, /2 main sections/i);
+    assert.match(broadRes, /Quartz Hardware \(2 items\)/i);
+    assert.match(broadRes, /Electrical Hardware Fixtures \(3 items\)/i);
+    assert.match(broadRes, /Which section would you like me to read off\?/i);
+
+    // 2. Explicit request for all items -> lists all lines
+    const detailRes = synthesizeGroundedEvidence(multiSectionTelemetry, 'read all items on the list', projectContext);
+    assert.match(detailRes, /• Sinks/i);
+    assert.match(detailRes, /• Security lights/i);
+  });
 });

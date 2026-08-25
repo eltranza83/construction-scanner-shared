@@ -283,7 +283,7 @@ export const RetrievalPlugin = {
   name: 'Content Retrieval',
   priority: 999,
   description: 'Standard factual lookup and full content record retrieval.',
-  promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly, faithfully, and completely without artificial truncation.',
+  promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly and faithfully. For broad purchasing list inquiries across multiple categories (e.g. "what do we have on the list?", "show me the list"), summarize by category heading and item counts (e.g. Quartz Hardware (2 items), Electrical (10 items), Plumbing (8 items)) to keep voice output conversational and concise, offering to read specific sections. If the user asks for a specific trade (e.g. "what electrical items do we need?") or explicitly asks for "all items" / "item by item", present the full line-item checklist.',
   classifier: () => true, // default catch-all
   synthesizeEvidence: (evidenceList, query, projectContext) => {
     const activeProject = projectContext?.activeProjectName || projectContext?.projectId || 'Active Project';
@@ -293,18 +293,29 @@ export const RetrievalPlugin = {
       const res = t.result;
       if (t.name === 'get_purchasing_list') {
         const sections = res.sections || [];
+        const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(query || '') || (sections.length === 1);
         if (sections.length > 0) {
-          const lines = [];
-          for (const s of sections) {
-            lines.push(`${s.category || s.title}:`);
-            for (const item of (s.items || [])) {
-              const qtyStr = item.quantity && item.hasExplicitQuantity ? ` (${item.quantity})` : '';
-              const statusStr = item.isPurchased ? ' - Purchased' : '';
-              lines.push(`• ${item.name}${qtyStr}${statusStr}`);
+          if (!wantsDetailedItems && sections.length > 1) {
+            const summaryLines = [`On your ${activeProject} Purchasing Checklist, you have ${sections.length} main sections:`];
+            for (const s of sections) {
+              const count = (s.items || []).length;
+              summaryLines.push(`• ${s.category || s.title} (${count} item${count === 1 ? '' : 's'})`);
             }
-            lines.push('');
+            summaryLines.push(`\nWhich section would you like me to read off?`);
+            responses.push(summaryLines.join('\n'));
+          } else {
+            const lines = [];
+            for (const s of sections) {
+              lines.push(`${s.category || s.title}:`);
+              for (const item of (s.items || [])) {
+                const qtyStr = item.quantity && item.hasExplicitQuantity ? ` (${item.quantity})` : '';
+                const statusStr = item.isPurchased ? ' - Purchased' : '';
+                lines.push(`• ${item.name}${qtyStr}${statusStr}`);
+              }
+              lines.push('');
+            }
+            responses.push(lines.join('\n').trim());
           }
-          responses.push(lines.join('\n').trim());
         } else {
           responses.push(res.message || `No items found on the ${activeProject} Purchasing Checklist.`);
         }

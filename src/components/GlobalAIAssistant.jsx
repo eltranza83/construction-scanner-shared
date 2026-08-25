@@ -881,15 +881,17 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     const recSessionId = voiceSmRef.current.currentSessionId;
     const rec = new SpeechRecognition();
-    rec.continuous = false;
-    rec.interimResults = false;
+    rec.continuous = true;
+    rec.interimResults = true;
     rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : (typeof navigator !== 'undefined' && navigator.language?.startsWith('es')) ? 'es-US' : 'en-US';
 
-    rec.onresult = (e) => {
-      if (voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale session guard
-      const spoken = e.results[0]?.[0]?.transcript || '';
-      const trimmed = spoken.trim();
+    let silenceDebounceTimer = null;
+    let latestTranscript = '';
+
+    const commitUtterance = (transcript) => {
+      const trimmed = (transcript || '').trim();
       if (!trimmed) return;
+      if (voiceSmRef.current.currentSessionId !== recSessionId) return;
 
       // Acoustic Feedback Check
       if (voiceSmRef.current.isAcousticFeedback(trimmed)) {
@@ -910,12 +912,40 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         return;
       }
 
+      try {
+        rec.stop();
+      } catch (_) {}
+
       // Normal Query or Wake-Word Processing
       const finalQuery = stripWakeWord(trimmed);
       if (finalQuery) {
         setInput(finalQuery);
         executeMessage(finalQuery);
       }
+    };
+
+    rec.onresult = (e) => {
+      if (voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale session guard
+      
+      let fullTranscript = '';
+      for (let i = 0; i < e.results.length; ++i) {
+        fullTranscript += e.results[i][0]?.transcript || '';
+      }
+
+      const trimmed = fullTranscript.trim();
+      if (!trimmed) return;
+
+      latestTranscript = trimmed;
+      setInput(trimmed); // Live streaming transcript preview
+
+      if (silenceDebounceTimer) {
+        clearTimeout(silenceDebounceTimer);
+      }
+
+      // Allow 2.5 seconds of sustained silence before auto-submitting
+      silenceDebounceTimer = setTimeout(() => {
+        commitUtterance(latestTranscript);
+      }, Math.max((silenceTimeoutSec || 2.5) * 1000, 2500));
     };
 
     rec.onerror = (e) => {
@@ -926,8 +956,16 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     rec.onend = () => {
       if (voiceSmRef.current.currentSessionId !== recSessionId) return;
+      if (silenceDebounceTimer) {
+        clearTimeout(silenceDebounceTimer);
+        silenceDebounceTimer = null;
+      }
       // In PTT mode, ending recognition returns to IDLE unless thinking/speaking
       if (voiceSmRef.current.mode === VOICE_MODES.PUSH_TO_TALK && voiceSmRef.current.state === VOICE_STATES.LISTENING) {
+        if (latestTranscript) {
+          commitUtterance(latestTranscript);
+          latestTranscript = '';
+        }
         voiceSmRef.current.transition(VOICE_STATES.IDLE, 'rec_ended_ptt');
       }
     };
@@ -941,6 +979,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
 
     return () => {
+      if (silenceDebounceTimer) clearTimeout(silenceDebounceTimer);
       try {
         rec.abort();
       } catch (_) {}
