@@ -917,6 +917,36 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'needed');
 
     // -------------------------------------------------------------
+    // Scenario 19: Trade-Context Item Disambiguation & Trade Normalization
+    // -------------------------------------------------------------
+    // 19a: "Did we buy the pool heater in general Hardware"
+    // Item subject: "pool heater", trade context: "in general Hardware", singular grammar + quantity
+    const q19a = 'Did we buy the pool heater in general Hardware';
+    assert.equal(isPurchaseStatusMutationCommand(q19a), false);
+
+    const rawCalls19a = [{ name: 'get_purchasing_list', args: { projectId: lotId, trade: 'general Hardware', unpurchasedOnly: false } }];
+    const normCalls19a = normalizePurchasingToolCalls(rawCalls19a, q19a);
+    assert.equal(normCalls19a[0].args.trade, 'general', 'general Hardware normalizes to general');
+
+    const res19a = await executeClientToolCall('get_purchasing_list', normCalls19a[0].args, { ...projectContext, userQuery: q19a });
+    assert.notEqual(res19a.itemLookup, null, 'Must extract pool heater itemLookup even with trade context');
+    assert.equal(res19a.itemLookup.subject, 'pool heater');
+    assert.match(res19a.itemLookup.canonicalAnswer, /No\. The pool heater is still marked as needed on Lot 55\. Quantity: 3\./i);
+
+    // 19b: "How many pool heaters do we have" with hallucinated trade: "pool"
+    const q19b = 'How many pool heaters do we have';
+    assert.equal(isPurchaseStatusMutationCommand(q19b), false);
+
+    const rawCalls19b = [{ name: 'get_purchasing_list', args: { projectId: lotId, trade: 'pool', unpurchasedOnly: false } }];
+    const normCalls19b = normalizePurchasingToolCalls(rawCalls19b, q19b);
+    assert.equal(normCalls19b[0].args.trade, undefined, 'Invalid trade "pool" must be purged from trade filter');
+    assert.equal(normCalls19b[0].args.itemName, 'pool', 'Moved invalid trade to itemName');
+
+    const res19b = await executeClientToolCall('get_purchasing_list', normCalls19b[0].args, { ...projectContext, userQuery: q19b });
+    assert.notEqual(res19b.itemLookup, null);
+    assert.match(res19b.itemLookup.canonicalAnswer, /You have 3 pool heater \(Needed\) on the Lot 55 purchasing checklist\./i);
+
+    // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:
     // 1. Remove pool heater
     // 2. Reset Vanity lights to needed

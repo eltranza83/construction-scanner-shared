@@ -53,14 +53,15 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'get_purchasing_list',
-    description: 'Retrieve items and materials from the Google Docs Master Purchasing Template or a specific project purchasing list, optionally filtered by trade (e.g. electrical, plumbing, quartz, hvac).',
+    description: 'Retrieve items and materials from the Firestore Purchasing Checklist for a project/lot. Optionally filtered by trade or specific item name.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        trade: { type: 'STRING', description: 'Optional trade/category filter (e.g. electrical, plumbing, quartz, hvac, paint)' },
-        unpurchasedOnly: { type: 'BOOLEAN', description: 'Whether to return only unpurchased/pending items (default true)' },
-        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default, reads working project doc) or "master" (reads Company Master Template)' },
-        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37) when targetResource is "project". Defaults to active project.' }
+        trade: { type: 'STRING', description: 'Optional trade/category filter. Only pass recognized trade names: "electrical", "plumbing", "quartz", "hvac", "paint_drywall", "general". Do NOT pass item names (e.g. "pool", "pool heater", "lights") here.' },
+        itemName: { type: 'STRING', description: 'Optional item name to check or look up on the purchasing checklist (e.g. "pool heater", "ceiling fans", "security lights").' },
+        unpurchasedOnly: { type: 'BOOLEAN', description: 'Whether to return only unpurchased/needed items (default false)' },
+        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default, reads project checklist) or "master" (reads Master Template)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55). Defaults to active project.' }
       }
     }
   },

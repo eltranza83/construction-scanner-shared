@@ -382,6 +382,7 @@ export const RetrievalPlugin = {
             .replace(/^(how many|how much|do we have any|do we have|is there a|is there an|is there|are there any|are there|what is the quantity of|what's the count of|what count of|did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
             .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got|have|need)\s+/i, '')
             .replace(/^(the|those|these|that|a|an)\s+/i, '')
+            .replace(/\s+(?:in|under|for|from)\s+(?:general\s+hardware(?:\s+&\s+materials)?|electrical(?:\s+hardware)?(?:\s+fixtures)?|plumbing(?:\s+hardware)?(?:\s+fixtures)?|quartz(?:\s+hardware)?|hvac|paint|drywall|paint\s+&\s+drywall|general).*$/i, '')
             .replace(/\s+(?:do we have|are there|are on|have we got|do we need|are needed|on the purchasing list|on the list|on the checklist|on our checklist|in the purchasing list|in the list|for lot\s*\d+|on lot\s*\d+|in lot\s*\d+|already|yet|so far|now|recently|been purchased|been bought|purchased|needed).*$/i, '')
             .replace(/[?.!]+$/, '')
             .trim();
@@ -392,12 +393,17 @@ export const RetrievalPlugin = {
             const item = matchResult.item;
             const isPurchased = item.isPurchased || item.status === 'purchased';
             const statusLabel = isPurchased ? 'Purchased' : 'Needed';
+            const name = item.name || item.itemName;
+            const isPlural = /s$/i.test(name) && !/ss$/i.test(name);
+            const verb = isPlural ? 'are' : 'is';
+            const qtyNote = item.quantity && item.quantity > 1 ? ` Quantity: ${item.quantity}.` : '';
+
             if (isQtyQuery) {
-              responses.push(`You have ${item.quantity || 1} ${item.name || item.itemName} (${statusLabel}) on the ${activeProject} purchasing checklist.`);
+              responses.push(`You have ${item.quantity || 1} ${name} (${statusLabel}) on the ${activeProject} purchasing checklist.`);
             } else {
               responses.push(isPurchased
-                ? `Yes. The ${item.name || item.itemName} are marked as purchased on ${activeProject}.`
-                : `No. The ${item.name || item.itemName} are still marked as needed on ${activeProject}.`);
+                ? `Yes. The ${name} ${verb} marked as purchased on ${activeProject}.${qtyNote}`
+                : `No. The ${name} ${verb} still marked as needed on ${activeProject}.${qtyNote}`);
             }
             continue;
           } else if (matchResult && matchResult.type === 'AMBIGUOUS') {

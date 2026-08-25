@@ -667,25 +667,67 @@ export function normalizePurchasingToolCalls(toolCalls = [], userQuery = '') {
     }];
   }
 
-  // If NOT a mutation command (READ ONLY), intercept any hallucinated mutation tool calls
-  const isExplicitAdd = /^(add|create|insert|new item)\b/i.test(userQuery) && !/\b(as purchased|as needed|to purchased|to needed|mark|bought|got)\b/i.test(userQuery);
-  if (!isExplicitAdd) {
-    return toolCalls.map(tc => {
-      if (tc.name === 'update_purchasing_item_status' || tc.name === 'add_purchasing_item') {
-        return {
-          ...tc,
-          name: 'get_purchasing_list',
-          args: {
-            projectId: tc.args?.projectId,
-            unpurchasedOnly: false
-          }
-        };
-      }
-      return tc;
-    });
-  }
+  const VALID_TRADES_MAP = {
+    quartz: 'quartz',
+    'quartz hardware': 'quartz',
+    electrical: 'electrical',
+    'electrical hardware': 'electrical',
+    'electrical hardware fixtures': 'electrical',
+    electrician: 'electrical',
+    plumbing: 'plumbing',
+    'plumbing hardware': 'plumbing',
+    'plumbing hardware fixtures': 'plumbing',
+    plumber: 'plumbing',
+    hvac: 'hvac',
+    'hvac materials': 'hvac',
+    heating: 'hvac',
+    cooling: 'hvac',
+    paint: 'paint_drywall',
+    drywall: 'paint_drywall',
+    paint_drywall: 'paint_drywall',
+    'paint & drywall': 'paint_drywall',
+    'paint and drywall': 'paint_drywall',
+    general: 'general',
+    'general hardware': 'general',
+    'general hardware & materials': 'general',
+    'general hardware and materials': 'general',
+    'general materials': 'general',
+    materials: 'general'
+  };
 
-  return toolCalls;
+  // If NOT a mutation command (READ ONLY), intercept any hallucinated mutation tool calls & normalize trade arguments
+  const isExplicitAdd = /^(add|create|insert|new item)\b/i.test(userQuery) && !/\b(as purchased|as needed|to purchased|to needed|mark|bought|got)\b/i.test(userQuery);
+  return toolCalls.map(tc => {
+    let call = tc;
+    if (!isExplicitAdd && (tc.name === 'update_purchasing_item_status' || tc.name === 'add_purchasing_item')) {
+      call = {
+        ...tc,
+        name: 'get_purchasing_list',
+        args: {
+          projectId: tc.args?.projectId,
+          unpurchasedOnly: false
+        }
+      };
+    }
+
+    if (call.name === 'get_purchasing_list' && call.args?.trade) {
+      const cleanTrade = String(call.args.trade).toLowerCase().trim();
+      const normalizedTrade = VALID_TRADES_MAP[cleanTrade];
+      if (normalizedTrade) {
+        call = { ...call, args: { ...call.args, trade: normalizedTrade } };
+      } else {
+        // Trade argument was actually an item name (e.g. "pool", "pool heater")
+        const newArgs = { ...call.args };
+        if (!newArgs.itemName) {
+          newArgs.itemName = newArgs.trade;
+        }
+        delete newArgs.trade;
+        call = { ...call, args: newArgs };
+      }
+    }
+
+    return call;
+  });
 }
 
 export function formatUserFriendlyToolError(toolName) {
