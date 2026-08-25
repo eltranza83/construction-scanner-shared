@@ -1081,36 +1081,77 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
     }
 
     case 'get_drive_files': {
-      const folderName = (args.folderName || '').toLowerCase();
-      const keyword = (args.keyword || '').toLowerCase();
-      
-      let nodes = [];
-      if (Array.isArray(driveTree)) {
-        nodes = driveTree;
-      } else if (driveTree && typeof driveTree === 'object') {
-        nodes = [...(driveTree.directFiles || []), ...(driveTree.subfolders || [])];
-      }
+      const folderQuery = (args.folderName || '').trim().toLowerCase();
+      const keyword = (args.keyword || '').trim().toLowerCase();
 
       const results = [];
-      function searchTree(nodeList) {
-        if (!Array.isArray(nodeList)) return;
-        for (const n of nodeList) {
-          const name = (n.name || '').toLowerCase();
-          if ((!folderName || name.includes(folderName)) && (!keyword || name.includes(keyword))) {
-            results.push({ name: n.name, type: n.isFolder || n.mimeType?.includes('folder') ? 'folder' : 'file', link: n.webViewLink || null });
+      let matchedFolder = null;
+      let matchedFolderFileCount = 0;
+
+      const subfolders = Array.isArray(driveTree?.subfolders) ? driveTree.subfolders : [];
+      const directFiles = Array.isArray(driveTree?.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
+
+      // 1. If a specific subfolder is requested, search inside that subfolder
+      if (folderQuery) {
+        matchedFolder = subfolders.find(s => (s.name || s.folderName || '').toLowerCase().includes(folderQuery));
+        if (matchedFolder) {
+          const filesInSub = Array.isArray(matchedFolder.files) ? matchedFolder.files : (Array.isArray(matchedFolder.children) ? matchedFolder.children : []);
+          matchedFolderFileCount = filesInSub.length;
+          for (const f of filesInSub) {
+            const fileName = (f.name || '').toLowerCase();
+            if (!keyword || fileName.includes(keyword)) {
+              results.push({
+                name: f.name,
+                folderName: matchedFolder.name || matchedFolder.folderName,
+                type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
+                link: f.webViewLink || null
+              });
+            }
           }
-          if (Array.isArray(n.children) && n.children.length > 0) {
-            searchTree(n.children);
+        }
+      } else {
+        // 2. Search all direct files and subfolder files
+        for (const f of directFiles) {
+          const fileName = (f.name || '').toLowerCase();
+          if (!keyword || fileName.includes(keyword)) {
+            results.push({
+              name: f.name,
+              folderName: 'Root',
+              type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
+              link: f.webViewLink || null
+            });
+          }
+        }
+
+        for (const sub of subfolders) {
+          const subName = sub.name || sub.folderName || 'Subfolder';
+          const filesInSub = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
+          for (const f of filesInSub) {
+            const fileName = (f.name || '').toLowerCase();
+            if (!keyword || fileName.includes(keyword)) {
+              results.push({
+                name: f.name,
+                folderName: subName,
+                type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
+                link: f.webViewLink || null
+              });
+            }
           }
         }
       }
-      searchTree(nodes);
+
+      const isFolderEmpty = Boolean(matchedFolder && matchedFolderFileCount === 0);
+      const folderDisplayName = matchedFolder ? (matchedFolder.name || matchedFolder.folderName) : null;
 
       resultPayload = {
-        found: results.length > 0,
+        found: results.length > 0 || isFolderEmpty,
+        isFolderEmpty,
+        folderName: folderDisplayName,
         count: results.length,
-        message: results.length === 0 ? 'I cannot locate any matching files in Google Drive for this project.' : undefined,
-        files: results.slice(0, 20)
+        message: isFolderEmpty
+          ? `The "${folderDisplayName}" directory exists in Google Drive for this project, but it does not currently contain any files.`
+          : (results.length === 0 ? 'I cannot locate any matching files in Google Drive for this project.' : undefined),
+        files: results.slice(0, 30)
       };
       break;
     }

@@ -164,7 +164,13 @@ export const VerificationMetaPlugin = {
         responses.push(`Those ${memories.length} note${memories.length === 1 ? '' : 's'} are currently all the persistent memories I have saved for this topic.`);
       } else if (t.name === 'get_drive_files') {
         const files = res.files || [];
-        responses.push(`Those ${files.length} file${files.length === 1 ? '' : 's'} are currently all that exist in that folder.`);
+        if (res.isFolderEmpty && res.folderName) {
+          responses.push(`The "${res.folderName}" directory exists in Google Drive for ${activeProject}, but it does not currently contain any files.`);
+        } else if (files.length === 0) {
+          responses.push(res.message || `No files found in Google Drive for ${activeProject}.`);
+        } else {
+          responses.push(`Those ${files.length} file${files.length === 1 ? '' : 's'} are currently all that exist in that folder.`);
+        }
       }
     }
     return responses.length > 0 ? responses.join('\n\n') : null;
@@ -327,11 +333,13 @@ export const RetrievalPlugin = {
         }
       } else if (t.name === 'get_drive_files') {
         const files = res.files || [];
-        if (files.length > 0) {
+        if (res.isFolderEmpty && res.folderName) {
+          responses.push(`The "${res.folderName}" directory exists in Google Drive for ${activeProject}, but it does not currently contain any files.`);
+        } else if (files.length > 0) {
           const list = files.map(f => `• ${f.name} (${f.folderName || 'Google Drive'})`).join('\n');
           responses.push(list);
         } else {
-          responses.push(`No files found in Google Drive for ${activeProject}.`);
+          responses.push(res.message || `No files found in Google Drive for ${activeProject}.`);
         }
       } else if (res.message) {
         responses.push(res.message);

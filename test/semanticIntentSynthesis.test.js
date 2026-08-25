@@ -404,4 +404,21 @@ test('Multi-Domain Grounded Evidence Synthesis Suite', async (t) => {
     const fallbackMeta = formatToolResultsHumanReadable(telemetry, 'Are there any other lists?', projectContext);
     assert.match(fallbackMeta, /all the categories listed/i);
   });
+
+  await t.test('9. Google Drive Subfolder Search & Empty Folder Messaging', () => {
+    const emptyFolderTelemetry = [{
+      name: 'get_drive_files',
+      success: true,
+      result: {
+        found: true,
+        isFolderEmpty: true,
+        folderName: 'App Folders',
+        count: 0,
+        files: []
+      }
+    }];
+
+    const emptyFolderRes = synthesizeGroundedEvidence(emptyFolderTelemetry, 'what else do we have in app folders', projectContext);
+    assert.match(emptyFolderRes, /"App Folders" directory exists in Google Drive for Lot 3, but it does not currently contain any files/i);
+  });
 });
