@@ -85,7 +85,8 @@ export const AnalyticalPlugin = {
 
     for (const t of evidenceList) {
       const res = t.result;
-      if (t.name === 'get_purchasing_list') {
+      const toolName = t.name || t.tool?.name;
+      if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
         if (sections.length > 0) {
           const sorted = [...sections].sort((a, b) => (b.items?.length || 0) - (a.items?.length || 0));
@@ -95,14 +96,14 @@ export const AnalyticalPlugin = {
         } else {
           responses.push(`There are no purchasing items to compare on the ${activeProject} Purchasing Checklist.`);
         }
-      } else if (t.name === 'get_subcontractor_balance' || t.name === 'get_vendor_history') {
+      } else if (toolName === 'get_subcontractor_balance' || toolName === 'get_vendor_history') {
         const records = res.results || [];
         if (records.length > 0) {
           const sorted = [...records].sort((a, b) => (b.remainingBalance || 0) - (a.remainingBalance || 0));
           const top = sorted[0];
           responses.push(`${top.phaseName || top.contractor} has the highest remaining balance owed at $${top.remainingBalance?.toLocaleString() || 0} (Quote: $${top.quote?.toLocaleString() || 0}, Paid: $${top.totalPaid?.toLocaleString() || 0}).`);
         }
-      } else if (t.name === 'search_receipts') {
+      } else if (toolName === 'search_receipts') {
         const receipts = res.results || res.receipts || [];
         if (receipts.length > 0) {
           const sorted = [...receipts].sort((a, b) => (b.amount || 0) - (a.amount || 0));
@@ -137,7 +138,8 @@ export const VerificationMetaPlugin = {
 
     for (const t of evidenceList) {
       const res = t.result;
-      if (t.name === 'get_purchasing_list') {
+      const toolName = t.name || t.tool?.name;
+      if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
         const totalSections = sections.length;
         const names = sections.map(s => s.category || s.title || 'Category').join(', ');
@@ -146,7 +148,7 @@ export const VerificationMetaPlugin = {
         } else {
           responses.push(`Those ${totalSections} categories (${names}) are currently all the categories listed on the ${activeProject} Purchasing Checklist.`);
         }
-      } else if (t.name === 'get_subcontractor_balance' || t.name === 'get_vendor_history') {
+      } else if (toolName === 'get_subcontractor_balance' || toolName === 'get_vendor_history') {
         const records = res.results || [];
         if (records.length === 0) {
           responses.push(`There are no additional subcontractor balances recorded for ${activeProject} in the financial ledger.`);
@@ -156,13 +158,13 @@ export const VerificationMetaPlugin = {
         } else {
           responses.push(`Those ${records.length} trade contracts are currently all that are recorded in the ${activeProject} financial ledger.`);
         }
-      } else if (t.name === 'search_receipts') {
+      } else if (toolName === 'search_receipts') {
         const receipts = res.results || res.receipts || [];
         responses.push(`Those ${receipts.length} receipt${receipts.length === 1 ? '' : 's'} are currently all that are recorded for that category in ${activeProject}.`);
-      } else if (t.name === 'search_memories' || t.name === 'list_memories') {
+      } else if (toolName === 'search_memories' || toolName === 'list_memories') {
         const memories = res.memories || [];
         responses.push(`Those ${memories.length} note${memories.length === 1 ? '' : 's'} are currently all the persistent memories I have saved for this topic.`);
-      } else if (t.name === 'get_drive_files') {
+      } else if (toolName === 'get_drive_files') {
         const files = res.files || [];
         if (res.isFolderEmpty && res.folderName) {
           responses.push(`The "${res.folderName}" directory exists in Google Drive for ${activeProject}, but it does not currently contain any files.`);
@@ -202,7 +204,8 @@ export const SummarizationPlugin = {
     const summaries = [];
     for (const t of evidenceList) {
       const res = t.result;
-      if (t.name === 'get_purchasing_list') {
+      const toolName = t.name || t.tool?.name;
+      if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
         const totalItems = res.totalItems || sections.reduce((acc, s) => acc + (s.items?.length || 0), 0);
         summaries.push(`${activeProject} Purchasing Summary: ${sections.length} active categories with ${totalItems} total pending items.`);
@@ -269,21 +272,22 @@ export const ActionCommandPlugin = {
     const responses = [];
     for (const t of evidenceList) {
       const res = t.result;
+      const toolName = t.name || t.tool?.name;
       if (!res) continue;
 
-      if (t.name === 'open_drive_document') {
+      if (toolName === 'open_drive_document') {
         if (res.success) {
           responses.push(`Opened "${res.fileName}" (${res.folderName || 'Google Drive'}).`);
         } else {
           responses.push(res.error || `I couldn't open that document.`);
         }
-      } else if (t.name === 'open_drive_folder') {
+      } else if (toolName === 'open_drive_folder') {
         if (res.success) {
           responses.push(`Opened the "${res.folderName}" folder in Google Drive (${res.fileCount} files).`);
         } else {
           responses.push(res.error || `I couldn't open that folder.`);
         }
-      } else if (t.name === 'navigate_app_tab') {
+      } else if (toolName === 'navigate_app_tab') {
         responses.push(res.message || `Switched to the ${res.tab} tab.`);
       } else if (res.message) {
         responses.push(res.message);
@@ -317,7 +321,8 @@ export const RetrievalPlugin = {
 
     for (const t of evidenceList) {
       const res = t.result;
-      if (t.name === 'get_purchasing_list') {
+      const toolName = t.name || t.tool?.name;
+      if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
         const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(query || '') || (sections.length === 1);
         if (sections.length > 0) {
@@ -345,7 +350,7 @@ export const RetrievalPlugin = {
         } else {
           responses.push(res.message || `No items found on the ${activeProject} Purchasing Checklist.`);
         }
-      } else if (t.name === 'get_subcontractor_balance' || t.name === 'get_vendor_history') {
+      } else if (toolName === 'get_subcontractor_balance' || toolName === 'get_vendor_history') {
         const records = res.results || [];
         if (records.length > 0) {
           const lines = records.map(item => `For ${item.phaseName || item.contractor}: Quote is $${item.quote?.toLocaleString()}, Total Paid is $${item.totalPaid?.toLocaleString()}, and Remaining Balance owed is $${item.remainingBalance?.toLocaleString()}.`);
@@ -353,14 +358,14 @@ export const RetrievalPlugin = {
         } else {
           responses.push(res.message || 'No balance records found.');
         }
-      } else if (t.name === 'search_receipts') {
+      } else if (toolName === 'search_receipts') {
         const receipts = res.results || res.receipts || [];
         if (receipts.length > 0) {
           responses.push(`Found ${receipts.length} receipt(s) totaling $${receipts.reduce((sum, r) => sum + (r.amount || 0), 0).toLocaleString()}.`);
         } else {
           responses.push(res.message || 'No matching receipts found.');
         }
-      } else if (t.name === 'search_memories' || t.name === 'list_memories') {
+      } else if (toolName === 'search_memories' || toolName === 'list_memories') {
         const memories = res.memories || [];
         if (memories.length > 0) {
           const list = memories.map(m => `• ${m.text}`).join('\n');
@@ -368,12 +373,15 @@ export const RetrievalPlugin = {
         } else {
           responses.push(`I don't have any saved notes or preferences matching that request for this project.`);
         }
-      } else if (t.name === 'get_drive_files') {
+      } else if (toolName === 'get_drive_files') {
         const files = res.files || [];
+        const subfolders = res.subfolders || [];
         if (res.isFolderEmpty && res.folderName) {
           responses.push(`The "${res.folderName}" directory exists in Google Drive for ${activeProject}, but it does not currently contain any files.`);
+        } else if (res.message && files.length === 0 && subfolders.length > 0) {
+          responses.push(res.message);
         } else if (files.length > 0) {
-          const list = files.map(f => `• ${f.name} (${f.folderName || 'Google Drive'})`).join('\n');
+          const list = files.map(f => `• ${f.name} (${f.folderPath || f.folderName || 'Google Drive'})`).join('\n');
           responses.push(list);
         } else {
           responses.push(res.message || `No files found in Google Drive for ${activeProject}.`);
