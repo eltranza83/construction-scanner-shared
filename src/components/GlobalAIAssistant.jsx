@@ -270,6 +270,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   }
 
   const chatEndRef = useRef(null);
+  const lastSubmissionRef = useRef({ query: '', timestamp: 0 });
 
 
   const handleRunDiagnosticSuite = async () => {
@@ -565,6 +566,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const executeMessage = async (queryText) => {
     if (!queryText || !queryText.trim() || isLoading) return;
     const query = queryText.trim();
+
+    const now = Date.now();
+    if (lastSubmissionRef.current.query === query && (now - lastSubmissionRef.current.timestamp) < 2000) {
+      console.log('🔇 [Duplicate Submission Guarded]', query);
+      return;
+    }
+    lastSubmissionRef.current = { query, timestamp: now };
+
     setInput('');
 
     const userMsg = {
@@ -887,11 +896,20 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
     let silenceDebounceTimer = null;
     let latestTranscript = '';
+    let isCommitted = false;
 
     const commitUtterance = (transcript) => {
+      if (isCommitted) return;
       const trimmed = (transcript || '').trim();
       if (!trimmed) return;
       if (voiceSmRef.current.currentSessionId !== recSessionId) return;
+
+      isCommitted = true;
+      if (silenceDebounceTimer) {
+        clearTimeout(silenceDebounceTimer);
+        silenceDebounceTimer = null;
+      }
+      latestTranscript = '';
 
       // Acoustic Feedback Check
       if (voiceSmRef.current.isAcousticFeedback(trimmed)) {
@@ -925,7 +943,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     };
 
     rec.onresult = (e) => {
-      if (voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale session guard
+      if (isCommitted || voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale or committed guard
       
       let fullTranscript = '';
       for (let i = 0; i < e.results.length; ++i) {
@@ -962,9 +980,8 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
       // In PTT mode, ending recognition returns to IDLE unless thinking/speaking
       if (voiceSmRef.current.mode === VOICE_MODES.PUSH_TO_TALK && voiceSmRef.current.state === VOICE_STATES.LISTENING) {
-        if (latestTranscript) {
+        if (!isCommitted && latestTranscript) {
           commitUtterance(latestTranscript);
-          latestTranscript = '';
         }
         voiceSmRef.current.transition(VOICE_STATES.IDLE, 'rec_ended_ptt');
       }
