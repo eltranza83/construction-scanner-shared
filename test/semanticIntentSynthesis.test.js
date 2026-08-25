@@ -4,6 +4,7 @@ import {
   classifySemanticIntent,
   synthesizeGroundedEvidence,
   getSemanticPromptGuidelines,
+  validatePluginContract,
   intentRegistry,
   INTENT_MODALITIES
 } from '../src/services/semanticIntentService.js';
@@ -149,27 +150,107 @@ test('Extended Semantic Modalities Classification Suite', async (t) => {
   });
 });
 
-test('Extensibility Hook & Dynamic Modality Registration Suite', async (t) => {
-  await t.test('1. Allows registering a brand new custom modality dynamically at runtime', () => {
-    const customModalityId = 'custom_weather_risk';
-    intentRegistry.registerModality(customModalityId, {
+test('Plugin Contract Validation & Conflict Resolution Suite', async (t) => {
+  await t.test('1. Contract Validation rejects malformed plugin definitions with descriptive errors', () => {
+    // Missing id
+    assert.throws(() => validatePluginContract({ priority: 10, classifier: () => true }), /non-empty "id"/i);
+    // Invalid priority
+    assert.throws(() => validatePluginContract({ id: 'test', priority: 'high', classifier: () => true }), /"priority" must be a valid number/i);
+    // Missing classifier function
+    assert.throws(() => validatePluginContract({ id: 'test', priority: 10, classifier: 'not-a-func' }), /"classifier" must be an executable function/i);
+    // Invalid isApplicable
+    assert.throws(() => validatePluginContract({ id: 'test', priority: 10, classifier: () => true, isApplicable: 'bad' }), /"isApplicable" must be a function/i);
+  });
+
+  await t.test('2. Deterministic Conflict Resolution: Specificity and Confidence break overlapping matches', () => {
+    const query = 'Why does Electrical have more items than Plumbing?';
+    
+    // Explanation matches ('why') and Analytical matches ('more than')
+    // Analytical has specificity 1.2 and confidence 0.95 -> higher composite score than generic explanation
+    const result = classifySemanticIntent(query);
+    assert.equal(result.modality, INTENT_MODALITIES.ANALYTICAL);
+    assert.ok(result.score > 0);
+  });
+
+  await t.test('3. Optional Applicability Guard rejects otherwise matching modality when context is absent', () => {
+    const pluginId = 'specialized_foundation_audit';
+    intentRegistry.registerPlugin({
+      id: pluginId,
+      name: 'Foundation Audit',
       priority: 5,
-      description: 'Severe weather risk assessment and concrete delay forecasting',
-      promptGuideline: 'WEATHER RISK: Assess storm risks against concrete pouring thresholds.',
-      classifier: (cleanQuery) => /\b(rain risk|freeze warning|pour weather risk)\b/i.test(cleanQuery),
-      synthesizeEvidence: (evidenceList) => 'Weather risk is minimal for today.'
+      description: 'Only applies when active project phase is foundation',
+      promptGuideline: 'FOUNDATION AUDIT: Assess foundation rebar and concrete specs.',
+      isApplicable: (context) => context?.currentPhase === 'Foundation',
+      classifier: (query) => /\b(audit specs|rebar check)\b/i.test(query)
     });
 
-    const result = classifySemanticIntent('is there a rain risk for pouring concrete?');
-    assert.equal(result.modality, customModalityId);
+    // 1. Without matching context -> Applicability guard skips plugin
+    const skippedResult = classifySemanticIntent('audit specs for this trade', [], { currentPhase: 'Drywall' });
+    assert.notEqual(skippedResult.modality, pluginId);
 
-    const guidelines = getSemanticPromptGuidelines();
-    assert.match(guidelines, /WEATHER RISK: Assess storm risks/i);
+    // 2. With matching context -> Plugin applies
+    const appliedResult = classifySemanticIntent('audit specs for this trade', [], { currentPhase: 'Foundation' });
+    assert.equal(appliedResult.modality, pluginId);
 
     // Clean up
-    intentRegistry.unregisterModality(customModalityId);
-    const cleanedResult = classifySemanticIntent('is there a rain risk for pouring concrete?');
-    assert.notEqual(cleanedResult.modality, customModalityId);
+    intentRegistry.unregisterPlugin(pluginId);
+  });
+
+  await t.test('4. Runtime Lifecycle: Register, execute, and unregister plugin cleanly', () => {
+    const lifecycleId = 'runtime_warranty_plugin';
+    intentRegistry.registerPlugin({
+      id: lifecycleId,
+      name: 'Warranty Claims',
+      priority: 15,
+      description: 'Warranty service tracking',
+      promptGuideline: 'WARRANTY: Track post-closing defect repair claims.',
+      classifier: (query) => /\b(warranty claim|builder warranty)\b/i.test(query),
+      synthesizeEvidence: () => 'Active warranty claims: 0 pending.'
+    });
+
+    assert.ok(intentRegistry.hasModality(lifecycleId));
+    assert.equal(classifySemanticIntent('check the builder warranty claim').modality, lifecycleId);
+    assert.match(getSemanticPromptGuidelines(), /WARRANTY: Track post-closing defect repair claims/i);
+
+    intentRegistry.unregisterPlugin(lifecycleId);
+    assert.ok(!intentRegistry.hasModality(lifecycleId));
+    assert.notEqual(classifySemanticIntent('check the builder warranty claim').modality, lifecycleId);
+  });
+
+  await t.test('5. Cloud / Local Synchronization: Cloud prompt and local fallback share identical modalities', () => {
+    const modalities = intentRegistry.getModalities();
+    const promptGuidelines = getSemanticPromptGuidelines();
+
+    for (const mod of modalities) {
+      if (mod.promptGuideline) {
+        assert.ok(promptGuidelines.includes(mod.promptGuideline), `Prompt guidelines must contain guideline for ${mod.id}`);
+      }
+    }
+  });
+
+  await t.test('6. Zero-Touch Core Addition: Adding a new modality requires zero core code changes', () => {
+    const safetyAuditId = 'osha_safety_audit';
+    const plugin = {
+      id: safetyAuditId,
+      name: 'OSHA Safety Compliance',
+      priority: 8,
+      description: 'Jobsite safety checklist auditing',
+      promptGuideline: 'OSHA SAFETY: Audit hardhats, fall protection, and fire extinguisher readiness.',
+      classifier: (cleanQuery) => /\b(osha compliance|fall protection audit|safety check)\b/i.test(cleanQuery),
+      synthesizeEvidence: (evidenceList, query, context) => `Safety check completed for ${context.activeProjectName}: 100% compliant.`
+    };
+
+    // Registered dynamically with 0 edits to core synthesis engine
+    intentRegistry.registerPlugin(plugin);
+
+    const testQuery = 'run an osha compliance safety check on lot 3';
+    const classification = classifySemanticIntent(testQuery);
+    assert.equal(classification.modality, safetyAuditId);
+
+    const synthesis = synthesizeGroundedEvidence([{ name: 'dummy_tool', success: true, result: {} }], testQuery, { activeProjectName: 'Lot 3' });
+    assert.equal(synthesis, 'Safety check completed for Lot 3: 100% compliant.');
+
+    intentRegistry.unregisterPlugin(safetyAuditId);
   });
 });
 
