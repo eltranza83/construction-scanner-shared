@@ -66,28 +66,28 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'add_purchasing_item',
-    description: 'Add a new hardware fixture or material item to the Master Purchasing Template (targetResource="master") or a specific project purchasing list (targetResource="project") under the appropriate trade section, automatically merging quantities if duplicate exists.',
+    description: 'Add a brand new hardware fixture or material item to the Purchasing Checklist. Use ONLY when the user explicitly requests to create or add a new item (e.g. "add 6 GFCI outlets", "create item"). NEVER use this tool for "mark as purchased", "we bought X", or purchase status updates.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        item: { type: 'STRING', description: 'Name of the hardware, fixture, or material item to buy (e.g. GFCI outlets, dimmer switches, shower pan liner)' },
+        item: { type: 'STRING', description: 'Name of the hardware, fixture, or material item to add (e.g. GFCI outlets, dimmer switches, shower pan liner)' },
         quantity: { type: 'NUMBER', description: 'Quantity needed (default 1)' },
         category: { type: 'STRING', description: 'Optional explicit trade/category override (e.g. electrical, plumbing, quartz)' },
         targetResource: { type: 'STRING', description: 'Target resource type: "project" (default, modifies working project doc) or "master" (modifies Company Master Template in parent folder)' },
-        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37) when targetResource is "project". Defaults to active project.' }
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55) when targetResource is "project". Defaults to active project.' }
       },
       required: ['item']
     }
   },
   {
     name: 'update_purchasing_item_status',
-    description: 'Mark a hardware fixture or material item as purchased/completed in the Google Docs Master Purchasing List for a specific project/lot.',
+    description: 'Update the purchased or needed status of an existing hardware fixture or material item on the Purchasing Checklist for a project/lot (e.g. "mark security lights as purchased", "mark faucets as needed", "we bought the ceiling fans", "set vanity lights to purchased"). If the item is ambiguous or not on the list, it safely returns zero changes and asks for clarification.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        itemName: { type: 'STRING', description: 'Name of the item purchased (e.g. GFCI outlets, soap dispenser)' },
-        isPurchased: { type: 'BOOLEAN', description: 'Whether the item has been purchased (default true)' },
-        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 37). Defaults to active project.' }
+        itemName: { type: 'STRING', description: 'Name of the item to mark/update (e.g. Security lights, soap dispenser, vanity lights)' },
+        isPurchased: { type: 'BOOLEAN', description: 'Whether the item has been purchased (default true, false for needed)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55). Defaults to active project.' }
       },
       required: ['itemName']
     }

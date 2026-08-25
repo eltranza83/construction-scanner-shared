@@ -281,6 +281,14 @@ export class LocalStoragePurchasingAdapter {
     return items;
   }
 
+  async deleteItem(projectId, itemId) {
+    if (!itemId) return;
+    const key = this._getKey(projectId);
+    const existing = await this.getItems(projectId);
+    const filtered = existing.filter(it => it.id !== itemId);
+    await this.saveItems(projectId, filtered);
+  }
+
   async getMetadata(projectId) {
     const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
     const key = `sitetactix_purchasing_meta_${cleanId}`;
@@ -359,6 +367,22 @@ export class FirestorePurchasingAdapter {
       console.warn('[FirestorePurchasingAdapter] Error writing to Firestore:', err);
     }
     return items;
+  }
+
+  async deleteItem(projectId, itemId) {
+    if (!itemId) return;
+    if (this.fallback?.deleteItem) {
+      await this.fallback.deleteItem(projectId, itemId);
+    }
+    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    if (!database) return;
+    try {
+      const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const itemRef = doc(database, 'projects', cleanId, 'purchasing_items', itemId);
+      await deleteDoc(itemRef);
+    } catch (err) {
+      console.warn('[FirestorePurchasingAdapter] Error deleting item from Firestore:', err);
+    }
   }
 
   async getMetadata(projectId) {
@@ -745,6 +769,9 @@ export class PurchasingService {
 
     const removed = existingItems.splice(index, 1)[0];
     await this.storage.saveItems(projectId, existingItems);
+    if (typeof this.storage.deleteItem === 'function' && removed?.id) {
+      await this.storage.deleteItem(projectId, removed.id);
+    }
 
     return {
       success: true,

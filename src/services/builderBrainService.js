@@ -534,10 +534,15 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - 3-RULE CONVERSATIONAL PRESENTATION:
      * Broad questions (e.g. "what do we still need to purchase for Lot 3?"): Give a concise summary with total count and breakdown by trade (e.g. "You still have 20 items to purchase for Lot 3: 2 Quartz Hardware, 10 Electrical Hardware Fixtures, and 8 Plumbing Hardware Fixtures. Nothing has been marked as purchased yet. If you want, I can give you the individual items for any trade."). If items have been purchased, state the purchased count (e.g. "You have 1 item marked as purchased.").
      * Specific trade questions (e.g. "what electrical items do we need?"): Present the detailed line-item checklist for that trade.
-     * Specific item status questions (e.g. "Did we already buy the ceiling fans?", "Have we purchased the faucets?"): Answer directly with that specific item's status (e.g. "No. The ceiling fans are still marked as needed on Lot 3." or "Yes. The faucets are marked as purchased on Lot 3."). Do NOT dump the entire trade list unless the user explicitly asks for the list.
+     * Specific item status questions (e.g. "Did we already buy the ceiling fans?", "Have we purchased the faucets?", "Did we buy the lights?"):
+       - If exactly 1 match: Answer directly with that specific item's status (e.g. "No. The ceiling fans are still marked as needed on Lot 3." or "Yes. The faucets are marked as purchased on Lot 3.").
+       - If multiple matches (ambiguous, e.g. "lights"): List all candidate items with their current statuses (Needed or Purchased) and ask the user which one they meant. Never claim the item is unlisted when candidate fixtures exist.
+       - If 0 matches: State clearly that the item is not currently listed on the project's purchasing checklist.
      * Purchased-status questions ("what have we already purchased?"): If 0 items, state nothing has been marked as purchased yet. If 1-5 items, list them directly. If 6+ items, summarize count and trade breakdown.
-     * Action requests ("mark faucets as purchased", "add 6 GFCI outlets", "remove soap dispenser"): Execute the action tool immediately and confirm cleanly.
-   - DEFAULT SCOPE = ACTIVE LOT ONLY: Target ONLY the currently active lot (e.g. Lot 3, Lot 37) unless explicitly managing Master.
+     * Action requests ("mark faucets as purchased", "mark security lights purchased", "we bought the vanity lights", "set lights to needed"):
+       - You MUST call 'update_purchasing_item_status'. You are STRICTLY FORBIDDEN from calling 'add_purchasing_item' for status updates or purchase confirmations.
+       - Only call 'add_purchasing_item' when the user explicitly uses creation verbs ("add 6 GFCI outlets", "create item").
+   - DEFAULT SCOPE = ACTIVE LOT ONLY: Target ONLY the currently active lot (e.g. Lot 3, Lot 37, Lot 55) unless explicitly managing Master.
    - PROVENANCE ATTRIBUTION: Attribute purchasing sources strictly to "Firestore (<Project Name> Purchasing Checklist)" (e.g. "Firestore (Lot 3 Purchasing Checklist)"). Attribute to "Firestore (Purchasing Master Template)" ONLY when explicitly referencing or managing the company-wide Master Template. Never cite Google Docs for purchasing.
    - DOMAIN BOUNDARIES: When the user asks purchasing questions ("what do I need to buy", "what do we still need to purchase", "what materials do we need for [trade]"), focus strictly on physical fixtures, materials, and hardware from the Firestore Purchasing Checklist (get_purchasing_list). Do NOT dump contractor contract quotes, balances, or payments from Google Sheets unless the user explicitly asked about money, cost, quotes, balances, or payments.
    - NO UNPROMPTED FULLSCREEN VIEWERS: Output the items directly in your answer. Never emit [[ACTION:VIEW_FILE:...]] for purchasing list queries unless the user specifically and explicitly asks to open a full-screen file viewer.
@@ -549,6 +554,83 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
       * You MUST NEVER leave 'folderName' empty when the user explicitly queries a specific folder.
     - BROAD FOLDER HIERARCHY INQUIRIES: When the user asks broadly what folders exist (e.g. "What folders do we have?", "List our folders", "Show me our drive directories"):
       * Call 'get_drive_files' with empty args {} to retrieve the complete directory hierarchy.`;
+}
+
+export function isPurchaseStatusMutationCommand(query = '') {
+  const q = String(query).trim().toLowerCase();
+  
+  if (/\b(add|create|insert|new item)\b/i.test(q) && !/\b(as purchased|as needed|to purchased|to needed|mark|bought|got|check off|cross off)\b/i.test(q)) {
+    return false;
+  }
+
+  // 1. mark / set / change / update / cross / check ... as purchased / purchased / as needed / needed / off / done / finished
+  if (/\b(mark|set|change|update|cross|check)\b.*\b(purchased|needed|bought|off|done|completed|finished)\b/i.test(q)) return true;
+
+  // 2. we bought / i bought / already bought / have bought / just bought / we got / i got / we purchased / installed
+  if (/\b(we|i|already|just|have)\s+(bought|got|purchased|installed)\b/i.test(q)) return true;
+
+  // 3. start of query: bought / purchased / got / installed / check off / cross off
+  if (/^(bought|purchased|got|installed|check off|cross off)\s+/i.test(q)) return true;
+
+  return false;
+}
+
+export function extractPurchasingSubjectFromQuery(query = '') {
+  const q = String(query).trim();
+  
+  const checkOffMatch = q.match(/\b(?:check\s+off|cross\s+off)\s+(?:the\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
+  if (checkOffMatch && checkOffMatch[1]) {
+    return checkOffMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
+  }
+
+  const markMatch = q.match(/\b(?:mark|set|change|update)\s+(?:the\s+)?(.+?)\s+(?:as\s+|to\s+)?(?:purchased|needed|bought|done|completed|finished)\b/i);
+  if (markMatch && markMatch[1]) {
+    return markMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
+  }
+
+  const boughtMatch = q.match(/\b(?:we|i|already|just|have)?\s*(?:bought|purchased|got|installed)\s+(?:the\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
+  if (boughtMatch && boughtMatch[1]) {
+    return boughtMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
+  }
+
+  return '';
+}
+
+export function normalizePurchasingToolCalls(toolCalls = [], userQuery = '') {
+  if (!Array.isArray(toolCalls) || toolCalls.length === 0) return toolCalls;
+
+  if (isPurchaseStatusMutationCommand(userQuery)) {
+    const extractedSubject = extractPurchasingSubjectFromQuery(userQuery);
+    const isPurchased = !/\b(needed|as needed|unpurchased)\b/i.test(userQuery);
+
+    return toolCalls.map(tc => {
+      // If the model proposed add_purchasing_item or get_purchasing_list for a status mutation command:
+      if (tc.name === 'add_purchasing_item' || tc.name === 'get_purchasing_list') {
+        return {
+          ...tc,
+          name: 'update_purchasing_item_status',
+          args: {
+            itemName: extractedSubject || tc.args?.item || tc.args?.itemName || '',
+            isPurchased,
+            projectId: tc.args?.projectId
+          }
+        };
+      }
+      if (tc.name === 'update_purchasing_item_status') {
+        return {
+          ...tc,
+          args: {
+            ...tc.args,
+            itemName: tc.args?.itemName || extractedSubject || tc.args?.item || '',
+            isPurchased: tc.args?.isPurchased !== undefined ? tc.args.isPurchased : isPurchased
+          }
+        };
+      }
+      return tc;
+    });
+  }
+
+  return toolCalls;
 }
 
 export function formatUserFriendlyToolError(toolName) {
@@ -574,7 +656,11 @@ export function formatToolResultsForSynthesis(toolTelemetryList = []) {
       const dataPayload = t.data !== undefined ? t.data : t.result;
       return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}${dupTag}: SUCCESS\nStructured Data: ${JSON.stringify(dataPayload)}`;
     } else {
-      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}: FAILED\nReason: ${t.error || 'Temporary service error'}`;
+      const dataPayload = t.data !== undefined ? t.data : t.result;
+      const extraContext = dataPayload && (dataPayload.matches || dataPayload.isAmbiguous || dataPayload.isNotFound)
+        ? `\nValidation Context: ${JSON.stringify(dataPayload)}`
+        : '';
+      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}: FAILED\nReason: ${t.error || 'Temporary service error'}${extraContext}`;
     }
   }).join('\n\n');
 }
@@ -797,6 +883,29 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
           suggestedCorrection = summary.canonicalAnswer;
         }
       }
+    }
+  }
+
+  // 6. Ambiguous Item Lookup & Disambiguation Grounding
+  if (purchasingData?.itemLookup) {
+    const itemLookup = purchasingData.itemLookup;
+    if (itemLookup.matchType === 'AMBIGUOUS') {
+      if (/\b(not currently listed|not listed|not on the|does not exist|item isn't listed)\b/i.test(synthesizedText)) {
+        unsupportedClaims.push(`False not-listed claim for ambiguous item: "${itemLookup.subject}"`);
+        purchasingDiscrepancyDetected = true;
+        suggestedCorrection = itemLookup.canonicalAnswer;
+      }
+    }
+  }
+
+  // 7. Purchasing Mutation Result Grounding (Never allow generic "temporarily unavailable" on validation)
+  const mutTool = (toolResults || []).find(t => (t.name === 'update_purchasing_item_status' || t.tool?.name === 'update_purchasing_item_status') && (t.result?.isAmbiguous || t.result?.isNotFound || t.data?.isAmbiguous || t.data?.isNotFound));
+  const mutData = mutTool?.data || mutTool?.result;
+  if (mutData?.message) {
+    if (/\b(temporarily unavailable|service error|added|created)\b/i.test(synthesizedText)) {
+      unsupportedClaims.push(`Mischaracterized mutation business validation: "${mutData.message}"`);
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = mutData.message;
     }
   }
 
@@ -1378,11 +1487,15 @@ export async function askGeminiBrain(
         console.log('[BuilderBrain] User message:', query);
         console.log('[BuilderBrain] Gemini returned toolCalls count:', data.toolCalls.length);
 
-        for (const tc of data.toolCalls) {
+        const rawToolCalls = data.toolCalls || [];
+        const normalizedToolCalls = normalizePurchasingToolCalls(rawToolCalls, query);
+        const fullProjectContext = { ...projectContext, userQuery: query };
+
+        for (const tc of normalizedToolCalls) {
           const toolStartTime = Date.now();
           console.log(`[BuilderBrain] Executing Tool: "${tc.name}" | Parsed Args:`, JSON.stringify(tc.args || {}));
           try {
-            const result = await executeClientToolCall(tc.name, tc.args || {}, projectContext, correlationId);
+            const result = await executeClientToolCall(tc.name, tc.args || {}, fullProjectContext, correlationId);
             const durationMs = result._executionDurationMs || (Date.now() - toolStartTime);
 
             if (result && (result.error || result.success === false)) {

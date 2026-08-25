@@ -799,12 +799,52 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         canonicalAnswer = `You still have ${totalNeeded} items to purchase for ${projLabel}${breakdownStr ? `: ${breakdownStr}` : ''}. ${purchasedNote} If you want, I can give you the individual items for any trade.`;
       }
 
+      // Check if user's question was an item status query (e.g. "Did we buy the lights?", "Have we purchased the faucets?")
+      const userPrompt = String(projectContext?.userQuery || args.item || args.itemName || '').trim();
+      let itemLookup = null;
+      if (userPrompt) {
+        let extractedSubject = userPrompt
+          .replace(/^(did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already)\s+/i, '')
+          .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got)\s+/i, '')
+          .replace(/^(the|a|an)\s+/i, '')
+          .replace(/\s+(for|on|in)\s+lot\s*\d+.*$/i, '')
+          .replace(/\s+(already|yet|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
+          .replace(/[?.!]+$/, '')
+          .trim();
+
+        if (extractedSubject && extractedSubject.length > 2 && !/\b(what|show|list|all|items|everything)\b/i.test(extractedSubject)) {
+          const lookupMatch = purchasingService.findMatchingItems(allProjectItems, extractedSubject);
+          if (lookupMatch && lookupMatch.type !== 'NONE') {
+            let lookupAnswer = '';
+            if (lookupMatch.type === 'EXACT' || lookupMatch.type === 'SINGLE_MATCH') {
+              const item = lookupMatch.item;
+              const isP = item.isPurchased || item.status === PURCHASING_STATUSES.PURCHASED;
+              lookupAnswer = isP
+                ? `Yes. The ${item.itemName} are marked as purchased on ${projLabel}.`
+                : `No. The ${item.itemName} are still marked as needed on ${projLabel}.`;
+            } else if (lookupMatch.type === 'AMBIGUOUS') {
+              const candidateLines = lookupMatch.matches.map(m => `• ${m.itemName} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+              lookupAnswer = `There are ${lookupMatch.matches.length} matching items on the ${projLabel} checklist:\n${candidateLines}\nWhich one were you asking about?`;
+            }
+
+            itemLookup = {
+              subject: extractedSubject,
+              matchType: lookupMatch.type,
+              matchCount: lookupMatch.matches.length,
+              matches: lookupMatch.matches.map(m => ({ ...m, name: m.itemName })),
+              canonicalAnswer: lookupAnswer
+            };
+          }
+        }
+      }
+
       const summary = {
         neededCount: totalNeeded,
         purchasedCount: totalPurchased,
         totalChecklistCount: grandTotal,
         tradeBreakdown,
-        canonicalAnswer
+        canonicalAnswer,
+        itemLookup
       };
 
       const message = totalItems > 0
@@ -844,6 +884,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         totalNeeded,
         grandTotal,
         summary,
+        itemLookup,
         unpurchasedItems,
         purchasedItems,
         allItems: allProjectItems.map(it => ({ ...it, name: it.itemName })),

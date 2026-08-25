@@ -26,6 +26,12 @@ import {
 
 import { executeClientToolCall } from '../src/services/aiTools.js';
 import { synthesizeGroundedEvidence } from '../src/services/semanticIntentService.js';
+import {
+  normalizePurchasingToolCalls,
+  isPurchaseStatusMutationCommand,
+  extractPurchasingSubjectFromQuery,
+  verifyResponseGrounding
+} from '../src/services/builderBrainService.js';
 import { extractTextFromDocxBytes } from '../src/services/googleDrive.js';
 import * as fflate from 'fflate';
 
@@ -541,5 +547,170 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     );
 
     assert.match(notFoundQuerySynth, /That item is not currently listed on the Lot 55 purchasing checklist\./i, 'Nonexistent item query must report not listed');
+  });
+
+  test('11. Full End-to-End Conversational Pipeline: Deterministic Routing Guard, Disambiguation & Safe Item Addition', async () => {
+    const lotId = 'lot_55_e2e_pipeline';
+    const projectContext = {
+      activeProjectId: lotId,
+      activeProjectName: 'Lot 55',
+      jobsiteId: 'site_55'
+    };
+
+    // Initial 20-item checklist (includes 5 light fixtures)
+    const masterItems = [
+      { id: 'item_quartz_1', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Electrical pass-through caps', status: 'needed', quantity: 1 },
+      { id: 'item_quartz_2', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Sinks', status: 'needed', quantity: 1 },
+      { id: 'item_elec_1', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Security lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_4', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Front porch hanging light', status: 'needed', quantity: 1 },
+      { id: 'item_elec_5', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Exterior column lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_6', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Garage ceiling lights with the cap to install it', status: 'needed', quantity: 1 },
+      { id: 'item_elec_7', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Vanity lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_2', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Contractor doorbell chime kit', status: 'needed', quantity: 1 },
+      { id: 'item_elec_3', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart doorbell', status: 'needed', quantity: 1 },
+      { id: 'item_elec_8', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart switches', status: 'needed', quantity: 8 },
+      { id: 'item_elec_9', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Extension rods', status: 'needed', quantity: 1 },
+      { id: 'item_elec_10', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Ceiling fans', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_1', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Soap dispenser', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_2', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal power button', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_3', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_4', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Water heater with the water heater stand and tray', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_5', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Shower pan liner', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_6', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Bathroom vanity faucets', status: 'needed', quantity: 2 },
+      { id: 'item_plumb_7', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Kitchen faucets', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_8', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Toilet supply lines', status: 'needed', quantity: 3 }
+    ];
+
+    await purchasingService.storage.saveItems(lotId, masterItems);
+    const initialItems = await purchasingService.getItems(lotId);
+    assert.equal(initialItems.length, 20, 'Must start with 20 items');
+
+    // -------------------------------------------------------------
+    // Scenario 1: Exact Mutation ("Mark security lights as purchased")
+    // -------------------------------------------------------------
+    const q1 = 'Mark security lights as purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q1), true);
+    assert.equal(extractPurchasingSubjectFromQuery(q1), 'security lights');
+
+    const rawCalls1 = [{ name: 'update_purchasing_item_status', args: { itemName: 'security lights', projectId: lotId } }];
+    const normCalls1 = normalizePurchasingToolCalls(rawCalls1, q1);
+    const res1 = await executeClientToolCall(normCalls1[0].name, normCalls1[0].args, { ...projectContext, userQuery: q1 });
+    assert.equal(res1.success, true);
+    assert.equal(res1.itemName, 'Security lights');
+
+    const itemsAfter1 = await purchasingService.getItems(lotId);
+    assert.equal(itemsAfter1.filter(it => it.status === 'purchased').length, 1, 'Exactly 1 item purchased');
+
+    // -------------------------------------------------------------
+    // Scenario 2: Ambiguous Mutation ("Mark the lights as purchased")
+    // Model proposed get_purchasing_list or update_purchasing_item_status
+    // -------------------------------------------------------------
+    const q2 = 'Mark the lights as purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q2), true);
+    assert.equal(extractPurchasingSubjectFromQuery(q2), 'lights');
+
+    // Model hallucinated calling get_purchasing_list instead of update
+    const rawCalls2 = [{ name: 'get_purchasing_list', args: { trade: 'electrical', projectId: lotId } }];
+    const normCalls2 = normalizePurchasingToolCalls(rawCalls2, q2);
+    assert.equal(normCalls2[0].name, 'update_purchasing_item_status', 'Must be deterministically converted to update');
+
+    const res2 = await executeClientToolCall(normCalls2[0].name, normCalls2[0].args, { ...projectContext, userQuery: q2 });
+    assert.equal(res2.success, false, 'Must not mutate ambiguous item');
+    assert.equal(res2.isAmbiguous, true);
+    assert.equal(res2.matches.length, 5, 'Must return 5 light fixtures');
+
+    const itemsAfter2 = await purchasingService.getItems(lotId);
+    assert.equal(itemsAfter2.filter(it => it.status === 'purchased').length, 1, 'Zero writes allowed on ambiguous mutation');
+
+    // -------------------------------------------------------------
+    // Scenario 3: Nonexistent Mutation ("Mark the pool heater as purchased")
+    // Model hallucinated calling add_purchasing_item!
+    // -------------------------------------------------------------
+    const q3 = 'Mark the pool heater as purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q3), true);
+    assert.equal(extractPurchasingSubjectFromQuery(q3), 'pool heater');
+
+    // Model hallucinated add_purchasing_item
+    const rawCalls3 = [{ name: 'add_purchasing_item', args: { item: 'pool heater', projectId: lotId } }];
+    const normCalls3 = normalizePurchasingToolCalls(rawCalls3, q3);
+    assert.equal(normCalls3[0].name, 'update_purchasing_item_status', 'Must be deterministically converted from add to update');
+
+    const res3 = await executeClientToolCall(normCalls3[0].name, normCalls3[0].args, { ...projectContext, userQuery: q3 });
+    assert.equal(res3.success, false, 'Must fail safely for nonexistent item');
+    assert.equal(res3.isNotFound, true);
+    assert.match(res3.message, /not currently listed/i, 'Must report item is not on checklist');
+
+    const itemsAfter3 = await purchasingService.getItems(lotId);
+    assert.equal(itemsAfter3.length, 20, 'Zero writes allowed for nonexistent item: count remains 20');
+    assert.equal(itemsAfter3.some(it => it.itemName.toLowerCase().includes('pool heater')), false, 'Pool heater must NOT be created');
+
+    // -------------------------------------------------------------
+    // Scenario 4: Ambiguous Status Query ("Did we buy the lights?")
+    // -------------------------------------------------------------
+    const q4 = 'Did we buy the lights?';
+    assert.equal(isPurchaseStatusMutationCommand(q4), false);
+
+    const listRes4 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q4 });
+    assert.ok(listRes4.itemLookup, 'itemLookup must be embedded in get_purchasing_list result');
+    assert.equal(listRes4.itemLookup.matchType, 'AMBIGUOUS');
+    assert.equal(listRes4.itemLookup.matchCount, 5);
+
+    // Validate second-pass grounding check
+    const grounding4 = verifyResponseGrounding(
+      'That item is not currently listed on the Lot 55 purchasing checklist.',
+      projectContext,
+      [{ name: 'get_purchasing_list', success: true, result: listRes4, data: listRes4 }]
+    );
+    assert.equal(grounding4.status, 'unsupported_claims_detected', 'Must catch hallucinated not-listed claim for ambiguous item');
+    assert.match(grounding4.suggestedCorrection, /5 matching items/i, 'Correction must provide candidate disambiguation');
+
+    // -------------------------------------------------------------
+    // Scenario 5: Exact Status Query ("Did we buy the security lights?")
+    // -------------------------------------------------------------
+    const q5 = 'Did we buy the security lights?';
+    const listRes5 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q5 });
+    assert.ok(listRes5.itemLookup);
+    assert.equal(listRes5.itemLookup.matchType, 'EXACT');
+    assert.match(listRes5.itemLookup.canonicalAnswer, /Yes\. The Security lights are marked as purchased on Lot 55\./i);
+
+    // -------------------------------------------------------------
+    // Scenario 6: Explicit Item Creation ("Add a pool heater to electrical")
+    // -------------------------------------------------------------
+    const q6 = 'Add a pool heater to electrical';
+    assert.equal(isPurchaseStatusMutationCommand(q6), false, 'Explicit add command must NOT be intercepted as status mutation');
+
+    const rawCalls6 = [{ name: 'add_purchasing_item', args: { item: 'pool heater', category: 'electrical', projectId: lotId } }];
+    const normCalls6 = normalizePurchasingToolCalls(rawCalls6, q6);
+    assert.equal(normCalls6[0].name, 'add_purchasing_item', 'Explicit creation must remain add_purchasing_item');
+
+    const res6 = await executeClientToolCall(normCalls6[0].name, normCalls6[0].args, { ...projectContext, userQuery: q6 });
+    assert.equal(res6.success, true, 'Explicit creation must succeed');
+
+    const itemsAfter6 = await purchasingService.getItems(lotId);
+    assert.equal(itemsAfter6.length, 21, 'Checklist count increases from 20 to 21');
+    assert.ok(itemsAfter6.some(it => it.itemName.toLowerCase() === 'pool heater'));
+
+    // Verify numerical integrity after add
+    const listResFinal = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, projectContext);
+    assert.equal(listResFinal.summary.totalChecklistCount, 21);
+    assert.equal(listResFinal.summary.neededCount, 20);
+    assert.equal(listResFinal.summary.purchasedCount, 1);
+
+    // -------------------------------------------------------------
+    // Post-Test Cleanup: Remove test-created pool heater & verify return to 20
+    // -------------------------------------------------------------
+    const removeRes = await purchasingService.removeItem(lotId, 'pool heater');
+    assert.equal(removeRes.success, true, 'Cleanup removal must succeed');
+
+    const finalCleanItems = await purchasingService.getItems(lotId);
+    assert.equal(finalCleanItems.length, 20, 'Lot 55 must return to exactly 20 items');
+    assert.equal(finalCleanItems.some(it => it.itemName.toLowerCase().includes('pool heater')), false, 'Pool heater must be gone');
+    assert.equal(finalCleanItems.filter(it => it.status === 'purchased').length, 1, 'Legitimate purchased item (Security lights) preserved');
+    assert.equal(finalCleanItems.filter(it => it.status === 'needed').length, 19, '19 items remain needed');
+
+    const cleanListRes = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, projectContext);
+    assert.equal(cleanListRes.summary.totalChecklistCount, 20);
+    assert.equal(cleanListRes.summary.neededCount, 19);
+    assert.equal(cleanListRes.summary.purchasedCount, 1);
   });
 });
