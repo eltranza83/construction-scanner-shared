@@ -839,7 +839,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
                   : `No. The ${item.itemName} are still marked as needed on ${projLabel}.`;
               }
             } else if (lookupMatch.type === 'AMBIGUOUS') {
-              const candidateLines = lookupMatch.matches.map(m => `• ${m.itemName} — Qty: ${m.quantity || 1} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+              const candidateLines = lookupMatch.matches.map(m => `• ${m.itemName} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
               lookupAnswer = `There are ${lookupMatch.matches.length} matching items on the ${projLabel} checklist:\n${candidateLines}\nWhich one were you asking about?`;
             }
 
@@ -936,15 +936,17 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
       }
 
+      const isAlreadyExists = addResult.action === 'ALREADY_EXISTS';
       resultPayload = {
         success: true,
+        status: isAlreadyExists ? 'already_exists' : 'ok',
         projectId: targetProjectId,
         resourceType: isMaster ? 'purchasing_master' : 'project_purchasing',
         source: `Firestore (${projLabel} Purchasing Checklist)`,
         itemId: addResult.item.id,
         itemName: addResult.item.itemName,
         quantity: addResult.item.quantity,
-        isDuplicate: addResult.isDuplicate,
+        isDuplicate: Boolean(addResult.isDuplicate),
         action: addResult.action,
         updatedQuantity: addResult.item.quantity,
         category: addResult.item.categoryTitle,

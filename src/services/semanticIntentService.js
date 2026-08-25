@@ -358,38 +358,78 @@ export const RetrievalPlugin = {
       if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
         const queryLower = (query || '').toLowerCase();
-        const isPurchasedQuery = res.unpurchasedOnly === false || res.status === 'purchased' || /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought)\b/i.test(queryLower);
-        const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);
 
-        // Fix #2: Specific item-status question (e.g. "Did we already buy the ceiling fans?", "Have we purchased the faucets?")
-        const isItemStatusQuery = !/\b(what (have we|did we|are the|items|is on)|all items|everything|list|checklist)\b/i.test(queryLower) && /\b(did we (already )?(buy|purchase|get)|have we (already )?(bought|purchased|got)|is (the )?.+ (bought|purchased|needed)|was (the )?.+ (bought|purchased)|did we get)\b/i.test(queryLower);
+        // 1. Answer-Priority Hierarchy 1: Specific Item Lookup
+        if (res.itemLookup?.canonicalAnswer) {
+          responses.push(res.itemLookup.canonicalAnswer);
+          continue;
+        }
+
+        // Dynamic fallback item lookup when tool was executed without query-specific itemLookup
+        const isItemStatusQuery = !/\b(what (have we|did we|are the|items|is on)|all items|everything|list|checklist)\b/i.test(queryLower) &&
+                                  /\b(how many|how much|did we (already )?(buy|purchase|get)|have we (already )?(bought|purchased|got)|is (the )?.+ (bought|purchased|needed)|was (the )?.+ (bought|purchased)|did we get|do we have any|do we have|is there a|is there)\b/i.test(queryLower);
 
         if (isItemStatusQuery) {
           const allItems = res.allItems || (res.items || []).concat(res.purchasedItems || []);
+          const isQtyQuery = /\b(how many|how much|count|quantity)\b/i.test(queryLower);
           const cleanSubject = queryLower
-            .replace(/\b(did we|have we|was the|is the|already|buy|bought|purchase|purchased|get|got|for|on|lot\s*\d+|lot|the|a|an)\b/g, ' ')
+            .replace(/^(how many|how much|do we have any|do we have|is there a|is there an|is there|are there any|are there|what is the quantity of|what's the count of|what count of|did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
+            .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got|have|need)\s+/i, '')
+            .replace(/^(the|those|these|that|a|an)\s+/i, '')
+            .replace(/\s+(for|on|in)\s+lot\s*\d+.*$/i, '')
+            .replace(/\s+(do we have|are there|on the list|on the checklist|on our checklist|in the list|already|yet|so far|now|recently|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
+            .replace(/[?.!]+$/, '')
             .trim();
 
           const matchResult = purchasingService.findMatchingItems(allItems, cleanSubject || queryLower);
 
-          if (matchResult.type === 'EXACT' || matchResult.type === 'SINGLE_MATCH') {
+          if (matchResult && (matchResult.type === 'EXACT' || matchResult.type === 'SINGLE_MATCH')) {
             const item = matchResult.item;
             const isPurchased = item.isPurchased || item.status === 'purchased';
-            if (isPurchased) {
-              responses.push(`Yes. The ${item.name || item.itemName} are marked as purchased on ${activeProject}.`);
+            const statusLabel = isPurchased ? 'Purchased' : 'Needed';
+            if (isQtyQuery) {
+              responses.push(`You have ${item.quantity || 1} ${item.name || item.itemName} (${statusLabel}) on the ${activeProject} purchasing checklist.`);
             } else {
-              responses.push(`No. The ${item.name || item.itemName} are still marked as needed on ${activeProject}.`);
+              responses.push(isPurchased
+                ? `Yes. The ${item.name || item.itemName} are marked as purchased on ${activeProject}.`
+                : `No. The ${item.name || item.itemName} are still marked as needed on ${activeProject}.`);
             }
             continue;
-          } else if (matchResult.type === 'AMBIGUOUS') {
+          } else if (matchResult && matchResult.type === 'AMBIGUOUS') {
             const candidates = matchResult.matches.map(m => `• ${m.name || m.itemName} (${m.status === 'purchased' ? 'Purchased' : 'Needed'})`).join('\n');
             responses.push(`There are ${matchResult.matches.length} matching items on the ${activeProject} checklist:\n${candidates}\nWhich one were you asking about?`);
             continue;
-          } else if (allItems.length > 0 && !/\b(electrical|plumbing|quartz|fixtures|hardware)\b/i.test(cleanSubject)) {
-            responses.push(`That item is not currently listed on the ${activeProject} purchasing checklist.`);
+          } else if (matchResult && matchResult.type === 'NONE') {
+            responses.push(`"${cleanSubject}" is not currently listed on the ${activeProject} purchasing checklist.`);
             continue;
           }
         }
+
+        // 2. Answer-Priority Hierarchy 2: Trade-Specific Filtered Item List
+        if (res.trade && res.trade !== 'all') {
+          if (res.summary?.canonicalAnswer) {
+            responses.push(res.summary.canonicalAnswer);
+          } else if (sections.length > 0) {
+            const lines = [];
+            for (const s of sections) {
+              lines.push(`${s.category || s.title}:`);
+              for (const item of (s.items || [])) {
+                const qtyStr = item.quantity && (item.quantity > 1 || item.hasExplicitQuantity) ? ` (${item.quantity})` : '';
+                const statusStr = item.isPurchased ? ' - Purchased' : '';
+                lines.push(`• ${item.name || item.itemName}${qtyStr}${statusStr}`);
+              }
+              lines.push('');
+            }
+            responses.push(lines.join('\n').trim());
+          } else {
+            responses.push(res.message || `No items found under ${res.trade} for ${activeProject}.`);
+          }
+          continue;
+        }
+
+        // 3. Answer-Priority Hierarchy 3: Multi-Trade / Broad Project Queries
+        const isPurchasedQuery = res.unpurchasedOnly === false || res.status === 'purchased' || /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought)\b/i.test(queryLower);
+        const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);
 
         if (isPurchasedQuery && (res.status === 'purchased' || /\b(purchased|already bought|already purchased)\b/i.test(queryLower))) {
           const purchasedItems = res.purchasedItems || res.items || sections.flatMap(s => s.items || []);

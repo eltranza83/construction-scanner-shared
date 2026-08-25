@@ -546,7 +546,7 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
       projectContext
     );
 
-    assert.match(notFoundQuerySynth, /That item is not currently listed on the Lot 55 purchasing checklist\./i, 'Nonexistent item query must report not listed');
+    assert.match(notFoundQuerySynth, /(That item|"pool heater") is not currently listed on the Lot 55 purchasing checklist\./i, 'Nonexistent item query must report not listed');
   });
 
   test('11. Full End-to-End Conversational Pipeline: Deterministic Routing Guard, Disambiguation & Safe Item Addition', async () => {
@@ -782,6 +782,7 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     const res13 = await executeClientToolCall('add_purchasing_item', { item: 'pool heater', projectId: lotId }, { ...projectContext, userQuery: q13 });
     assert.equal(res13.action, 'ALREADY_EXISTS');
     assert.equal(res13.isDuplicate, true);
+    assert.equal(res13.status, 'already_exists');
     assert.match(res13.message, /already on the.*purchasing checklist/i);
 
     const itemsAfter13 = await purchasingService.getItems(lotId);
@@ -811,6 +812,21 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     const rawCalls15 = [{ name: 'update_purchasing_item_status', args: { itemName: 'electrical', projectId: lotId } }];
     const normCalls15 = normalizePurchasingToolCalls(rawCalls15, q15);
     assert.equal(normCalls15[0].name, 'get_purchasing_list', 'Read query must be forced to get_purchasing_list even if model proposed mutation');
+
+    // -------------------------------------------------------------
+    // Scenario 16: Answer-Priority Hierarchy Grounding Tests
+    // itemLookup > trade filter > project-wide summary
+    // -------------------------------------------------------------
+    const { formatToolResultsForSynthesis } = await import('../src/services/builderBrainService.js');
+    const synthTextItem = formatToolResultsForSynthesis([{ name: 'get_purchasing_list', success: true, result: listRes11, data: listRes11 }]);
+    assert.match(synthTextItem, /PRIORITY TARGET ITEM QUERY RESOLUTION/i);
+
+    const synthTextTrade = formatToolResultsForSynthesis([{ name: 'get_purchasing_list', success: true, result: listRes12, data: listRes12 }]);
+    assert.match(synthTextTrade, /PRIORITY TRADE ITEM LIST/i);
+
+    const synthTextDup = formatToolResultsForSynthesis([{ name: 'add_purchasing_item', success: true, result: res13, data: res13, isDuplicate: true }]);
+    assert.match(synthTextDup, /STATUS: ALREADY_EXISTS/i);
+    assert.match(synthTextDup, /Deduplicated idempotent 0-write/i);
 
     // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:

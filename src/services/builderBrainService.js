@@ -704,14 +704,22 @@ export function formatToolResultsForSynthesis(toolTelemetryList = []) {
   return toolTelemetryList.map((t, i) => {
     const classification = t.toolType || (t.name.startsWith('save_') || t.name.startsWith('update_') || t.name.startsWith('delete_') ? 'WRITE' : 'READ');
     const sourceTag = t.source ? `[SOURCE: ${t.source}]` : '[SOURCE: Local Project Data]';
-    const statusTag = t.status ? `[STATUS: ${String(t.status).toUpperCase()}]` : (t.success ? '[STATUS: OK]' : '[STATUS: ERROR]');
-    const dupTag = t.isDuplicate ? ' (Deduplicated idempotent write)' : '';
+    const isAlreadyExists = t.isDuplicate || t.data?.action === 'ALREADY_EXISTS' || t.result?.action === 'ALREADY_EXISTS' || t.status === 'already_exists';
+    const statusText = isAlreadyExists ? 'ALREADY_EXISTS' : (t.status ? String(t.status).toUpperCase() : (t.success ? 'OK' : 'ERROR'));
+    const statusTag = `[STATUS: ${statusText}]`;
+    const dupTag = isAlreadyExists ? ' (Deduplicated idempotent 0-write)' : '';
+
+    const dataPayload = t.data !== undefined ? t.data : t.result;
 
     if (t.success) {
-      const dataPayload = t.data !== undefined ? t.data : t.result;
-      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}${dupTag}: SUCCESS\nStructured Data: ${JSON.stringify(dataPayload)}`;
+      let priorityHeader = '';
+      if (dataPayload?.itemLookup?.canonicalAnswer) {
+        priorityHeader = `\n[PRIORITY TARGET ITEM QUERY RESOLUTION: ${dataPayload.itemLookup.canonicalAnswer}]\n`;
+      } else if (dataPayload?.trade && dataPayload.trade !== 'all') {
+        priorityHeader = `\n[PRIORITY TRADE ITEM LIST: ${dataPayload.summary?.canonicalAnswer || dataPayload.message}]\n`;
+      }
+      return `Tool ${i + 1} [${t.name}] (Type: ${classification}) ${sourceTag} ${statusTag}${dupTag}: SUCCESS${priorityHeader}Structured Data: ${JSON.stringify(dataPayload)}`;
     } else {
-      const dataPayload = t.data !== undefined ? t.data : t.result;
       const extraContext = dataPayload && (dataPayload.matches || dataPayload.isAmbiguous || dataPayload.isNotFound)
         ? `\nValidation Context: ${JSON.stringify(dataPayload)}`
         : '';
@@ -883,21 +891,46 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
     }
   }
 
-  // 5. Purchasing Count & Numerical Integrity Validation
+  // 5. Purchasing Evidence Grounding & Answer-Priority Hierarchy
+  // Hierarchy: Item-Specific Lookup (itemLookup) > Specific Trade Filter (trade) > Project-Wide Summary
   let purchasingDiscrepancyDetected = false;
   let suggestedCorrection = null;
 
   const purchasingTool = (toolResults || []).find(t => (t.name === 'get_purchasing_list' || t.tool?.name === 'get_purchasing_list') && t.success);
   const purchasingData = purchasingTool?.data || purchasingTool?.result;
 
-  if (purchasingData?.summary) {
+  if (purchasingData?.itemLookup?.canonicalAnswer) {
+    const itemLookup = purchasingData.itemLookup;
+    const isBroadClaim = /\b(still have \d+ items to purchase|all \d+ items have been purchased)\b/i.test(synthesizedText);
+    const hasItemName = synthesizedText.toLowerCase().includes((itemLookup.subject || '').toLowerCase()) ||
+                        (itemLookup.matches || []).some(m => synthesizedText.toLowerCase().includes((m.itemName || m.name || '').toLowerCase()));
+
+    if (isBroadClaim && !hasItemName) {
+      unsupportedClaims.push(`Broad summary given instead of specific item lookup for "${itemLookup.subject}"`);
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = itemLookup.canonicalAnswer;
+    } else if (itemLookup.matchType === 'AMBIGUOUS' && /\b(not currently listed|not listed|not on the|does not exist|item isn't listed)\b/i.test(synthesizedText)) {
+      unsupportedClaims.push(`False not-listed claim for ambiguous item: "${itemLookup.subject}"`);
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = itemLookup.canonicalAnswer;
+    }
+  } else if (purchasingData?.trade && purchasingData.trade !== 'all') {
+    // Trade filter active: Ensure the response is focused on this trade, not project-wide summary
+    const isBroadProjectSummary = /\b(still have \d+ items to purchase for|all \d+ items have been purchased for)\b/i.test(synthesizedText) &&
+                                  !synthesizedText.toLowerCase().includes(purchasingData.trade.toLowerCase());
+    if (isBroadProjectSummary) {
+      unsupportedClaims.push(`Project-wide summary given instead of trade-specific list for "${purchasingData.trade}"`);
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = purchasingData.summary?.canonicalAnswer || purchasingData.message;
+    }
+  } else if (purchasingData?.summary) {
     const summary = purchasingData.summary;
     const needed = summary.neededCount;
     const purchased = summary.purchasedCount;
     const total = summary.totalChecklistCount;
     const tradeBreakdown = summary.tradeBreakdown || {};
 
-    // Check project-wide needed count claims (e.g. "still have 18 items", "need 18 items", "18 items remaining", "18 items to purchase")
+    // Check project-wide needed count claims
     const neededClaimRegex = /\b(?:have|still have|need(?: to purchase)?|remaining|left to (?:buy|purchase)|pending)\s+(\d+)\s+(?:items|materials|fixtures)\b/gi;
     const neededMatches = [...synthesizedText.matchAll(neededClaimRegex)];
     for (const nm of neededMatches) {
@@ -912,7 +945,7 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
       }
     }
 
-    // Check trade breakdown count claims (e.g. "8 electrical", "8 in electrical", "2 quartz", "8 plumbing")
+    // Check trade breakdown count claims
     const tradeClaimRegex = /\b(\d+)\s+(?:in\s+)?(quartz|electrical|plumbing|hvac|paint|drywall|general)(?:\s+(?:hardware|fixtures|supplies|materials|items))?\b/gi;
     const tradeMatches = [...synthesizedText.matchAll(tradeClaimRegex)];
     for (const tm of tradeMatches) {
@@ -920,7 +953,6 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
       const claimedTradeCount = parseInt(tm[1], 10);
       const tradeName = tm[2].toLowerCase();
 
-      // Find matching trade in breakdown
       let matchedBreakdown = null;
       for (const [title, counts] of Object.entries(tradeBreakdown)) {
         if (title.toLowerCase().includes(tradeName)) {
@@ -941,19 +973,7 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
     }
   }
 
-  // 6. Ambiguous Item Lookup & Disambiguation Grounding
-  if (purchasingData?.itemLookup) {
-    const itemLookup = purchasingData.itemLookup;
-    if (itemLookup.matchType === 'AMBIGUOUS') {
-      if (/\b(not currently listed|not listed|not on the|does not exist|item isn't listed)\b/i.test(synthesizedText)) {
-        unsupportedClaims.push(`False not-listed claim for ambiguous item: "${itemLookup.subject}"`);
-        purchasingDiscrepancyDetected = true;
-        suggestedCorrection = itemLookup.canonicalAnswer;
-      }
-    }
-  }
-
-  // 7. Purchasing Mutation Result Grounding (Never allow generic "temporarily unavailable" on validation)
+  // 6. Purchasing Mutation Result Grounding (Never allow generic "temporarily unavailable" on validation)
   const mutTool = (toolResults || []).find(t => (t.name === 'update_purchasing_item_status' || t.tool?.name === 'update_purchasing_item_status') && (t.result?.isAmbiguous || t.result?.isNotFound || t.data?.isAmbiguous || t.data?.isNotFound));
   const mutData = mutTool?.data || mutTool?.result;
   if (mutData?.message) {
