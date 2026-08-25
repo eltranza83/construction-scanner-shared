@@ -340,8 +340,9 @@ export const RetrievalPlugin = {
   priority: 999,
   description: 'Standard factual lookup and full content record retrieval.',
   promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly and faithfully. ' +
-    'For broad purchasing list questions (e.g. "what do we still need to purchase for Lot 3?"): give a concise summary with total count and breakdown by trade (e.g. "You still have 20 items to purchase for Lot 3: 2 Quartz, 10 Electrical, and 8 Plumbing. Nothing has been marked as purchased yet. If you want, I can give you the individual items for any trade."). ' +
-    'For specific trade/item questions (e.g. "what electrical items do we need?"): give the detailed list of items. ' +
+    'For broad purchasing list questions (e.g. "what do we still need to purchase for Lot 3?"): give a concise summary with total count and breakdown by trade (e.g. "You still have 20 items to purchase for Lot 3: 2 Quartz, 10 Electrical, and 8 Plumbing. Nothing has been marked as purchased yet. If you want, I can give you the individual items for any trade."). If items have been purchased, state how many items are marked as purchased (e.g. "You have 1 item marked as purchased."). ' +
+    'For specific trade questions (e.g. "what electrical items do we need?"): give the detailed list of items for that trade. ' +
+    'For specific item status questions (e.g. "did we already buy the ceiling fans?", "have we purchased the faucets?"): answer directly with the status of that specific item (e.g. "No. The ceiling fans are still marked as needed on Lot 3." or "Yes. The faucets are marked as purchased on Lot 3."). Do not dump the whole trade list. ' +
     'For purchased-status questions ("what have we already purchased?"): if 0 items, state nothing has been marked as purchased yet; if 1-5 items, list the items; if 6+ items, summarize count and trade breakdown.',
   classifier: () => true, // default catch-all
   synthesizeEvidence: (evidenceList, query, projectContext) => {
@@ -357,9 +358,42 @@ export const RetrievalPlugin = {
         const isPurchasedQuery = res.unpurchasedOnly === false || res.status === 'purchased' || /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought)\b/i.test(queryLower);
         const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);
 
+        // Fix #2: Specific item-status question (e.g. "Did we already buy the ceiling fans?", "Have we purchased the faucets?")
+        const isItemStatusQuery = !/\b(what (have we|did we|are the|items|is on)|all items|everything|list|checklist)\b/i.test(queryLower) && /\b(did we (already )?(buy|purchase|get)|have we (already )?(bought|purchased|got)|is (the )?.+ (bought|purchased|needed)|was (the )?.+ (bought|purchased)|did we get)\b/i.test(queryLower);
+
+        if (isItemStatusQuery) {
+          const allItems = res.allItems || (res.items || []).concat(res.purchasedItems || []);
+          let matchedItem = null;
+          for (const it of allItems) {
+            const nameLower = (it.name || it.itemName || '').toLowerCase();
+            const words = nameLower.split(/\s+/).filter(w => w.length > 2);
+            if (queryLower.includes(nameLower)) {
+              matchedItem = it;
+              break;
+            }
+            if (words.length > 0 && words.every(w => queryLower.includes(w))) {
+              matchedItem = it;
+              break;
+            }
+          }
+
+          if (matchedItem) {
+            const isPurchased = matchedItem.isPurchased || matchedItem.status === 'purchased';
+            if (isPurchased) {
+              responses.push(`Yes. The ${matchedItem.name || matchedItem.itemName} are marked as purchased on ${activeProject}.`);
+            } else {
+              responses.push(`No. The ${matchedItem.name || matchedItem.itemName} are still marked as needed on ${activeProject}.`);
+            }
+            continue;
+          } else if (allItems.length > 0 && !/\b(electrical|plumbing|quartz|fixtures|hardware)\b/i.test(queryLower.replace(/\b(did we|buy|purchased?|already)\b/g, '').trim())) {
+            responses.push(`That item is not currently listed on the ${activeProject} purchasing checklist.`);
+            continue;
+          }
+        }
+
         if (isPurchasedQuery && (res.status === 'purchased' || /\b(purchased|already bought|already purchased)\b/i.test(queryLower))) {
-          const purchasedItems = res.items || sections.flatMap(s => s.items || []);
-          const totalPurchased = purchasedItems.length;
+          const purchasedItems = res.purchasedItems || res.items || sections.flatMap(s => s.items || []);
+          const totalPurchased = typeof res.totalPurchased === 'number' ? res.totalPurchased : purchasedItems.length;
 
           if (totalPurchased === 0) {
             responses.push(`Nothing has been marked as purchased yet for ${activeProject}.`);
@@ -373,9 +407,13 @@ export const RetrievalPlugin = {
         } else if (sections.length > 0) {
           if (!wantsDetailedItems && sections.length > 1) {
             const totalRemaining = res.totalItems || sections.reduce((acc, s) => acc + (s.items?.length || 0), 0);
-            const breakdown = sections.map(s => `${(s.items || []).length} ${s.category || s.title}`).join(', ');
-            const statusNote = res.totalPurchased > 0
-              ? `You've purchased ${res.totalPurchased} item${res.totalPurchased === 1 ? '' : 's'} so far.`
+            const breakdown = sections.map((s, idx) => {
+              const isLast = idx === sections.length - 1 && sections.length > 1;
+              const count = (s.items || []).length;
+              return `${isLast ? 'and ' : ''}${count} ${s.category || s.title}`;
+            }).join(', ');
+            const statusNote = (typeof res.totalPurchased === 'number' && res.totalPurchased > 0)
+              ? `You have ${res.totalPurchased} item${res.totalPurchased === 1 ? '' : 's'} marked as purchased.`
               : 'Nothing has been marked as purchased yet.';
             
             responses.push(`You still have ${totalRemaining} items to purchase for ${activeProject}: ${breakdown}. ${statusNote} If you want, I can give you the individual items for any trade.`);

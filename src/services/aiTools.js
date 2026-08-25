@@ -705,6 +705,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       const sections = Object.values(grouped).filter(s => s.items.length > 0);
       const totalItems = items.length;
+
+      // Always calculate project-wide live purchased vs needed counts for accurate synthesis
+      const allProjectItems = await purchasingService.getItems(targetProjectId);
+      const totalPurchased = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED).length;
+      const totalNeeded = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED).length;
+      const purchasedItems = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED).map(it => ({ ...it, name: it.itemName }));
+
       const message = totalItems > 0
         ? `Found ${totalItems} item(s) in Purchasing Checklist for ${projLabel}${trade ? ` (${trade})` : ''}.`
         : `No pending items found in Purchasing Checklist for ${projLabel}${trade ? ` under ${trade}` : ''}.`;
@@ -738,6 +745,10 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         unpurchasedOnly,
         totalSections: sections.length,
         totalItems,
+        totalPurchased,
+        totalNeeded,
+        purchasedItems,
+        allItems: allProjectItems.map(it => ({ ...it, name: it.itemName })),
         sections,
         items: items.map(it => ({ ...it, name: it.itemName })),
         message

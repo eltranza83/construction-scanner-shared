@@ -211,4 +211,67 @@ describe('Purchasing Verification & Strict Provenance Guard Suite', () => {
     assert.equal(isExplicitMemoryCommand('Make a note that the inspector prefers morning visits.'), true);
     assert.equal(isExplicitMemoryCommand('Keep in mind that the painter wants check payments.'), true);
   });
+
+  test('G. Fix #1: Live project-wide purchased count is accurately reported in broad summary', async () => {
+    const projectContext = { projectId: 'lot_3', activeProjectName: 'Lot 3' };
+
+    // Initial state: 0 items purchased, 20 needed
+    const resInitial = await executeClientToolCall('get_purchasing_list', {
+      projectId: 'lot_3',
+      unpurchasedOnly: true
+    }, projectContext);
+    assert.equal(resInitial.totalPurchased, 0);
+    assert.equal(resInitial.totalNeeded, 20);
+
+    const synthInitial = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: resInitial }], 'What do we still need to purchase for Lot 3?', projectContext);
+    assert.match(synthInitial, /You still have 20 items to purchase for Lot 3/i);
+    assert.match(synthInitial, /Nothing has been marked as purchased yet/i);
+
+    // User marks Faucets as purchased
+    await purchasingService.updateItemStatus('lot_3', 'Faucets', PURCHASING_STATUSES.PURCHASED);
+
+    // Query broad list with unpurchasedOnly: true -> must calculate totalPurchased: 1
+    const resAfterPurchase = await executeClientToolCall('get_purchasing_list', {
+      projectId: 'lot_3',
+      unpurchasedOnly: true
+    }, projectContext);
+
+    assert.equal(resAfterPurchase.totalPurchased, 1, 'totalPurchased must be 1');
+    assert.equal(resAfterPurchase.totalItems, 19, 'total unpurchased items must be 19');
+
+    const synthAfterPurchase = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: resAfterPurchase }], 'What do we still need to purchase for Lot 3?', projectContext);
+    assert.match(synthAfterPurchase, /You still have 19 items to purchase for Lot 3: 2 Quartz Hardware, 10 Electrical Hardware Fixtures, and 7 Plumbing Hardware Fixtures/i);
+    assert.match(synthAfterPurchase, /You have 1 item marked as purchased/i);
+    assert.doesNotMatch(synthAfterPurchase, /Nothing has been marked as purchased yet/i, 'Must NEVER say nothing purchased when items exist');
+  });
+
+  test('H. Fix #2: Specific item-status question returns direct status answer instead of trade-list dump', async () => {
+    const projectContext = { projectId: 'lot_3', activeProjectName: 'Lot 3' };
+
+    // Mark Faucets as purchased, Ceiling fans are still needed
+    await purchasingService.updateItemStatus('lot_3', 'Faucets', PURCHASING_STATUSES.PURCHASED);
+
+    const toolRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: 'lot_3',
+      trade: 'electrical'
+    }, projectContext);
+
+    // 1. Question about needed item (Ceiling fans)
+    const neededItemSynth = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: toolRes }], 'Did we already buy the ceiling fans?', projectContext);
+    assert.match(neededItemSynth, /No\. The Ceiling fans are still marked as needed on Lot 3\./i);
+    assert.doesNotMatch(neededItemSynth, /• Security lights/i, 'Must not dump the whole trade list');
+
+    // 2. Question about purchased item (Faucets)
+    const faucetToolRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: 'lot_3',
+      trade: 'plumbing'
+    }, projectContext);
+    const purchasedItemSynth = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: faucetToolRes }], 'Have we purchased the faucets?', projectContext);
+    assert.match(purchasedItemSynth, /Yes\. The Faucets are marked as purchased on Lot 3\./i);
+    assert.doesNotMatch(purchasedItemSynth, /• Soap dispenser/i, 'Must not dump the whole trade list');
+
+    // 3. Question about item not on the list
+    const unlistedSynth = synthesizeGroundedEvidence([{ name: 'get_purchasing_list', success: true, result: toolRes }], 'Did we buy the chandelier?', projectContext);
+    assert.match(unlistedSynth, /not currently listed on the Lot 3 purchasing checklist/i);
+  });
 });
