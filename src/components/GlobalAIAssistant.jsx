@@ -954,16 +954,15 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       if (!trimmed) return;
 
       latestTranscript = trimmed;
-      setInput(trimmed); // Live streaming transcript preview
 
       if (silenceDebounceTimer) {
         clearTimeout(silenceDebounceTimer);
       }
 
-      // Allow 2.5 seconds of sustained silence before auto-submitting
+      // Natural 1.3-second conversational pause buffer
       silenceDebounceTimer = setTimeout(() => {
         commitUtterance(latestTranscript);
-      }, Math.max((silenceTimeoutSec || 2.5) * 1000, 2500));
+      }, 1300);
     };
 
     rec.onerror = (e) => {
