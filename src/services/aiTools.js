@@ -185,7 +185,7 @@ export const TOOL_REGISTRY = {
     type: 'WRITE',
     source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'auto_safe',
-    description: 'Stores a verified fact, preference, or reminder in the persistent vault.'
+    description: 'Stores a verified builder preference, verbal quote, or site note in the persistent memory vault ONLY when explicitly commanded by the user (e.g. "Remember that..."). NEVER call for structured purchasing items, financial ledger balances, or municipal inspections.'
   },
   update_memory: {
     type: 'WRITE',

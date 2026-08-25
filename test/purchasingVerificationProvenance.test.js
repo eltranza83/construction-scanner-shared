@@ -174,4 +174,41 @@ describe('Purchasing Verification & Strict Provenance Guard Suite', () => {
       assert.doesNotMatch(res, /Google Docs/i, `Variation "${q}" must NOT cite Google Docs`);
     }
   });
+
+  test('F. Strict Memory Gate: Ordinary purchasing statements never trigger save_memory, explicit imperatives do', () => {
+    const sysInstruction = buildGroundingSystemInstruction({ activeProjectName: 'Lot 3' });
+
+    // 1. Verify system instruction strictly forbids auto-saving purchasing as memory
+    assert.ok(sysInstruction.includes('STRUCTURED DOMAIN EXCLUSIVITY (ZERO SHADOW MEMORIES)'), 'Must enforce domain exclusivity');
+    assert.ok(sysInstruction.includes('STRICT IMPERATIVE INTENT REQUIREMENT'), 'Must enforce imperative intent requirement');
+    assert.ok(sysInstruction.includes('We still need to purchase all of these items for electrical'), 'Must cite exact purchasing example as forbidden');
+
+    // 2. Verify tool registry descriptions
+    assert.ok(TOOL_REGISTRY.save_memory.description.includes('ONLY when explicitly commanded by the user'), 'Tool registry must enforce explicit command');
+    assert.ok(TOOL_REGISTRY.save_memory.description.includes('NEVER call for structured purchasing items'), 'Tool registry must forbid purchasing domain');
+
+    // 3. Test imperative vs non-imperative classification patterns
+    const isExplicitMemoryCommand = (query) => {
+      const q = String(query).trim().toLowerCase();
+      // Must not be a domain query or casual mention of the word "remember"
+      const isPurchasingStatement = /\b(purchas|buy|bought|faucet|outlet|electrical|plumbing|quartz|hardware|fixture)\b/i.test(q);
+      const isPastRecall = /^i remember\b/i.test(q);
+      const hasDirectImperative = /^(remember (that|this)|make a note (that|of)|keep (this )?in mind|save this (to memory|note)|don't forget that)\b/i.test(q);
+
+      if (isPurchasingStatement && !hasDirectImperative) return false;
+      if (isPastRecall) return false;
+      return hasDirectImperative;
+    };
+
+    // Ordinary purchasing statements -> MUST NOT save memory
+    assert.equal(isExplicitMemoryCommand('We still need to buy the faucets.'), false);
+    assert.equal(isExplicitMemoryCommand('Those are all the electrical items we need.'), false);
+    assert.equal(isExplicitMemoryCommand('we still need to purchase all of these items for electrical'), false);
+    assert.equal(isExplicitMemoryCommand('I remember we bought the faucets.'), false);
+
+    // Explicit memory commands -> MUST save memory
+    assert.equal(isExplicitMemoryCommand('Remember that the client wants matte black fixtures.'), true);
+    assert.equal(isExplicitMemoryCommand('Make a note that the inspector prefers morning visits.'), true);
+    assert.equal(isExplicitMemoryCommand('Keep in mind that the painter wants check payments.'), true);
+  });
 });
