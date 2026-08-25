@@ -119,6 +119,14 @@ export async function POST(request) {
     const text = textParts.join('\n').trim();
     const durationMs = Date.now() - startTime;
 
+    console.log('[API ask-brain] User message received:', userQuery);
+    if (toolCalls.length > 0) {
+      console.log('[API ask-brain] Raw Gemini functionCalls count:', toolCalls.length);
+      toolCalls.forEach((tc, idx) => {
+        console.log(`[API ask-brain] Tool #${idx + 1} Name:`, tc.name, '| Raw Args:', JSON.stringify(tc.args || {}));
+      });
+    }
+
     return jsonResponse({
       text,
       toolCalls: toolCalls.length > 0 ? toolCalls : null,

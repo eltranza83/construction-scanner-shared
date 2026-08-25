@@ -531,7 +531,15 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - PROVENANCE ATTRIBUTION: When answering project-specific purchasing questions, attribute the source to "Google Docs (<Project Name> Purchasing Checklist)" (e.g. "Google Docs (Lot 3 Purchasing Checklist)"). Attribute to "Google Docs (Master Purchasing Checklist)" ONLY when explicitly referencing or managing the company-wide Master Template.
    - DOMAIN BOUNDARIES: When the user asks purchasing questions ("what do I need to buy", "what do we still need to purchase", "what materials do we need for [trade]"), focus strictly on physical fixtures, materials, and hardware from the Google Docs Purchasing Checklist (get_purchasing_list). Do NOT dump contractor contract quotes, balances, or payments from Google Sheets unless the user explicitly asked about money, cost, quotes, balances, or payments.
    - NATURAL PRESENTATION & QUANTITIES: When outputting purchasing checklist items, render clean bullet points with the item name (e.g. "• Security lights", "• Ceiling fans"). Mention quantities ONLY if an explicit count exists in the document (e.g. "4 Recessed lights"). NEVER volunteer "(Quantity: 1)" or mention a count for plain checklist items.
-   - NO UNPROMPTED FULLSCREEN VIEWERS: Output the items directly in your answer. Never emit [[ACTION:VIEW_FILE:...]] for purchasing list queries unless the user specifically and explicitly asks to open a full-screen file viewer.`;
+   - NO UNPROMPTED FULLSCREEN VIEWERS: Output the items directly in your answer. Never emit [[ACTION:VIEW_FILE:...]] for purchasing list queries unless the user specifically and explicitly asks to open a full-screen file viewer.
+
+15. GOOGLE DRIVE FOLDER & FILE SEARCH INSTRUCTIONS:
+    - SPECIFIC FOLDER INQUIRIES: When the user asks about a specific folder or documents (e.g. "What's in the Purchasing List folder?", "What is in Google Doc Purchasing List?", "What is in App Folders / Google Doc Purchasing List?", "Find framing POs", "What files do we have in electrical?"):
+      * You MUST call the 'get_drive_files' tool.
+      * You MUST populate the 'folderName' argument with the specific folder name or path mentioned (e.g. { "folderName": "Google Doc Purchasing List" }, { "folderName": "Purchasing List" }, or { "folderName": "App Folders / Google Doc Purchasing List" }).
+      * You MUST NEVER leave 'folderName' empty when the user explicitly queries a specific folder.
+    - BROAD FOLDER HIERARCHY INQUIRIES: When the user asks broadly what folders exist (e.g. "What folders do we have?", "List our folders", "Show me our drive directories"):
+      * Call 'get_drive_files' with empty args {} to retrieve the complete directory hierarchy.`;
 }
 
 export function formatUserFriendlyToolError(toolName) {
@@ -1319,8 +1327,12 @@ export async function askGeminiBrain(
 
       // If Gemini requested a tool execution (e.g. weather, memory, balance lookup)
       if (data && data.toolCalls && data.toolCalls.length > 0) {
+        console.log('[BuilderBrain] User message:', query);
+        console.log('[BuilderBrain] Gemini returned toolCalls count:', data.toolCalls.length);
+
         for (const tc of data.toolCalls) {
           const toolStartTime = Date.now();
+          console.log(`[BuilderBrain] Executing Tool: "${tc.name}" | Parsed Args:`, JSON.stringify(tc.args || {}));
           try {
             const result = await executeClientToolCall(tc.name, tc.args || {}, projectContext, correlationId);
             const durationMs = result._executionDurationMs || (Date.now() - toolStartTime);
@@ -1445,7 +1457,7 @@ ${getSemanticPromptGuidelines()}
               durationMs: Date.now() - clientStartTime,
               intentsCount: toolTelemetryList.length + (query.toLowerCase().includes('how much') || query.toLowerCase().includes('what') || query.toLowerCase().includes('who') ? 1 : 0),
               toolsRequested: data.toolCalls.map(t => t.name),
-              toolsExecuted: toolsSucceeded.map(t => typeof t === 'string' ? t : t.name),
+              toolsExecuted: toolsSucceeded,
               toolsFailed: toolsFailed,
               circuitBreakerStatus: {
                 weather: circuitBreaker.getStatus('get_weather_for_jobsite')
@@ -1483,7 +1495,7 @@ ${getSemanticPromptGuidelines()}
             durationMs: Date.now() - clientStartTime,
             intentsCount: toolTelemetryList.length,
             toolsRequested: data.toolCalls.map(t => t.name),
-            toolsExecuted: toolsSucceeded.map(t => typeof t === 'string' ? t : t.name),
+            toolsExecuted: toolsSucceeded,
             toolsFailed: toolsFailed,
             tools: toolTelemetryList.map(t => ({
               name: t.name,

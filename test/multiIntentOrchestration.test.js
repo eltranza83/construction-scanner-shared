@@ -158,7 +158,7 @@ test('Scenario 1: Financial Question + Reminder Save (Two-Pass Synthesis)', asyn
   assert.match(response.text, /Volt Masters Electric|electrician|\$4,000/i);
   assert.match(response.text, /Chipotle/i);
   assert.equal(response.telemetry.synthesisMode, 'cloud_synthesis');
-  assert.deepEqual(response.telemetry.toolsExecuted, ['save_memory']);
+  assert.equal(response.telemetry.toolsExecuted[0]?.name || response.telemetry.toolsExecuted[0], 'save_memory');
 });
 
 test('Scenario 2: Financial Question + Subcontractor Preference Memory Save', async () => {

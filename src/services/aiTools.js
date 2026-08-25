@@ -1349,14 +1349,26 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const cleanFolder = rawFolder.replace(/\b(folder|folders|directory|the|in|inside)\b/gi, '').trim().toLowerCase();
       const keyword = (args.keyword || '').trim().toLowerCase();
 
+      const allFiles = Array.isArray(driveTree?.allFiles) ? driveTree.allFiles : [];
+      const subfolders = Array.isArray(driveTree?.subfolders) ? driveTree.subfolders : [];
+      const directFiles = Array.isArray(driveTree?.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
+
+      console.log('[get_drive_files] Exact search/folder parameter received:', {
+        rawFolder,
+        cleanFolder,
+        keyword
+      });
+      console.log('[get_drive_files] Drive hierarchy stats at execution:', {
+        allFilesCount: allFiles.length,
+        subfoldersCount: subfolders.length,
+        directFilesCount: directFiles.length,
+        subfolders: subfolders.map(s => s.name || s.folderName)
+      });
+
       const results = [];
       let matchedFolder = null;
       let matchedFolderFileCount = 0;
       let matchedFolderSubfolders = [];
-
-      const allFiles = Array.isArray(driveTree?.allFiles) ? driveTree.allFiles : [];
-      const subfolders = Array.isArray(driveTree?.subfolders) ? driveTree.subfolders : [];
-      const directFiles = Array.isArray(driveTree?.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
 
       // 1. If a specific subfolder is requested, search across all nested subfolders
       if (cleanFolder || rawFolder) {
