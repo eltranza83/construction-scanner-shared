@@ -550,35 +550,121 @@ export class PurchasingService {
     };
   }
 
-  async updateItemStatus(projectId, itemNameOrId, newStatus = PURCHASING_STATUSES.PURCHASED) {
-    const existingItems = await this.storage.getItems(projectId);
-    const searchNorm = this._normalizeQuery(itemNameOrId);
-    const searchStem = this._stemWord(itemNameOrId);
+  /**
+   * 3-Way Purchasing Item Match Resolver
+   * Single authoritative matching engine for status queries and mutations.
+   * Returns:
+   *  - { type: 'EXACT', matches: [item], item: item } (1 exact match by ID or exact normalized name)
+   *  - { type: 'SINGLE_MATCH', matches: [item], item: item } (1 unambiguous fuzzy match)
+   *  - { type: 'AMBIGUOUS', matches: [item1, item2, ...] } (>1 candidate matches, strictly zero mutations allowed)
+   *  - { type: 'NONE', matches: [] } (0 matches)
+   */
+  findMatchingItems(existingItems = [], itemNameOrQuery = '') {
+    if (!itemNameOrQuery || !Array.isArray(existingItems) || existingItems.length === 0) {
+      return { type: 'NONE', matches: [], item: null };
+    }
 
-    // 1. Exact ID or exact normalized name match takes highest precedence
-    let index = existingItems.findIndex(it => {
-      if (it.id === itemNameOrId) return true;
+    const rawQuery = String(itemNameOrQuery).trim();
+    const searchNorm = this._normalizeQuery(rawQuery);
+
+    const stopwords = new Set(['did', 'we', 'already', 'buy', 'bought', 'purchase', 'purchased', 'get', 'got', 'is', 'was', 'are', 'mark', 'as', 'needed', 'the', 'a', 'an', 'for', 'lot', 'check', 'please', 'with', 'and', 'from', 'all', 'any', 'that', 'this', 'have', 'tray', 'stand', 'cap', 'kit']);
+
+    // 1. Exact ID match (absolute highest priority)
+    const exactIdMatch = existingItems.find(it => it.id === rawQuery || it.id === searchNorm);
+    if (exactIdMatch) {
+      return { type: 'EXACT', matches: [exactIdMatch], item: exactIdMatch };
+    }
+
+    // 2. Exact Normalized Name match
+    const exactNameMatches = existingItems.filter(it => {
       const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
       return itNorm === searchNorm;
     });
-
-    // 2. Fuzzy / substring fallback if no exact match found
-    if (index === -1) {
-      index = existingItems.findIndex(it => {
-        const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
-        const itStem = this._stemWord(it.itemName);
-        return itNorm.includes(searchNorm) || searchNorm.includes(itNorm) || itStem === searchStem;
-      });
+    if (exactNameMatches.length === 1) {
+      return { type: 'EXACT', matches: exactNameMatches, item: exactNameMatches[0] };
+    } else if (exactNameMatches.length > 1) {
+      return { type: 'AMBIGUOUS', matches: exactNameMatches, item: null };
     }
 
+    // 3. Multi-word Exact Substring Match if query has multiple meaningful words (e.g. "security lights")
+    if (rawQuery.includes(' ') && searchNorm.length > 5) {
+      const fullSubstringMatches = existingItems.filter(it => {
+        const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
+        return itNorm === searchNorm || itNorm.includes(searchNorm) || searchNorm.includes(itNorm);
+      });
+      if (fullSubstringMatches.length === 1) {
+        return { type: 'SINGLE_MATCH', matches: fullSubstringMatches, item: fullSubstringMatches[0] };
+      } else if (fullSubstringMatches.length > 1) {
+        return { type: 'AMBIGUOUS', matches: fullSubstringMatches, item: null };
+      }
+    }
+
+    // 4. Stemmed Token Matching (e.g. "lights" -> matches "light", "security", "doorbell", etc.)
+    const cleanTokens = rawQuery
+      .toLowerCase()
+      .split(/[^a-zA-Z0-9]+/)
+      .filter(w => w.length > 2 && !stopwords.has(w));
+
+    if (cleanTokens.length > 0) {
+      const tokenStems = cleanTokens.map(ct => this._stemWord(ct));
+
+      const matchingCandidates = existingItems.filter(it => {
+        const itWords = (it.itemName || '').toLowerCase().split(/[^a-zA-Z0-9]+/).filter(w => w.length > 2 && !stopwords.has(w));
+        const itStems = itWords.map(w => this._stemWord(w));
+
+        // For a multi-word search query (e.g. "security lights"), check if ALL query stems match item stems
+        if (tokenStems.length > 1) {
+          const allMatch = tokenStems.every(ts => itStems.includes(ts));
+          if (allMatch) return true;
+          return false;
+        }
+
+        // For a single-word generic query (e.g. "lights", "doorbell", "fans"), check if any item word stem equals the query stem
+        return tokenStems.some(ts => itStems.includes(ts));
+      });
+
+      if (matchingCandidates.length === 1) {
+        return { type: 'SINGLE_MATCH', matches: matchingCandidates, item: matchingCandidates[0] };
+      } else if (matchingCandidates.length > 1) {
+        return { type: 'AMBIGUOUS', matches: matchingCandidates, item: null };
+      }
+    }
+
+    return { type: 'NONE', matches: [], item: null };
+  }
+
+  async updateItemStatus(projectId, itemNameOrId, newStatus = PURCHASING_STATUSES.PURCHASED) {
+    const existingItems = await this.storage.getItems(projectId);
+    const matchResult = this.findMatchingItems(existingItems, itemNameOrId);
+
+    if (matchResult.type === 'AMBIGUOUS') {
+      const candidateList = matchResult.matches.map(m => `• ${m.itemName} (${m.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+      return {
+        success: false,
+        isAmbiguous: true,
+        matches: matchResult.matches,
+        message: `Multiple items match "${itemNameOrId}":\n${candidateList}\nPlease specify which item you would like to mark.`
+      };
+    }
+
+    if (matchResult.type === 'NONE') {
+      return {
+        success: false,
+        isNotFound: true,
+        message: `"${itemNameOrId}" is not currently listed on the ${projectId} purchasing checklist, so no changes were made.`
+      };
+    }
+
+    const item = matchResult.item;
+    const index = existingItems.findIndex(it => it.id === item.id);
     if (index === -1) {
       return {
         success: false,
+        isNotFound: true,
         message: `Item "${itemNameOrId}" was not found in the purchasing list for ${projectId}.`
       };
     }
 
-    const item = existingItems[index];
     const now = new Date().toISOString();
     const updated = {
       ...item,
@@ -600,19 +686,23 @@ export class PurchasingService {
 
   async updateItemQuantity(projectId, itemNameOrId, newQuantity = 1) {
     const existingItems = await this.storage.getItems(projectId);
-    const searchNorm = this._normalizeQuery(itemNameOrId);
+    const matchResult = this.findMatchingItems(existingItems, itemNameOrId);
 
-    const index = existingItems.findIndex(it => {
-      if (it.id === itemNameOrId) return true;
-      const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
-      return itNorm === searchNorm || itNorm.includes(searchNorm);
-    });
-
-    if (index === -1) {
-      return { success: false, message: `Item "${itemNameOrId}" not found.` };
+    if (matchResult.type === 'AMBIGUOUS') {
+      return {
+        success: false,
+        isAmbiguous: true,
+        matches: matchResult.matches,
+        message: `Multiple items match "${itemNameOrId}". Please specify which item quantity to update.`
+      };
     }
 
-    const item = existingItems[index];
+    if (matchResult.type === 'NONE') {
+      return { success: false, isNotFound: true, message: `Item "${itemNameOrId}" not found.` };
+    }
+
+    const item = matchResult.item;
+    const index = existingItems.findIndex(it => it.id === item.id);
     const qty = Math.max(1, parseInt(newQuantity, 10) || 1);
     const updated = { ...item, quantity: qty, updatedAt: new Date().toISOString() };
     existingItems[index] = updated;
@@ -627,16 +717,28 @@ export class PurchasingService {
 
   async removeItem(projectId, itemNameOrId) {
     const existingItems = await this.storage.getItems(projectId);
-    const searchNorm = this._normalizeQuery(itemNameOrId);
-    const searchStem = this._stemWord(itemNameOrId);
+    const matchResult = this.findMatchingItems(existingItems, itemNameOrId);
 
-    const index = existingItems.findIndex(it => {
-      if (it.id === itemNameOrId) return true;
-      const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
-      const itStem = this._stemWord(it.itemName);
-      return itNorm === searchNorm || itNorm.includes(searchNorm) || searchNorm.includes(itNorm) || itStem === searchStem;
-    });
+    if (matchResult.type === 'AMBIGUOUS') {
+      const candidateList = matchResult.matches.map(m => `• ${m.itemName}`).join('\n');
+      return {
+        success: false,
+        isAmbiguous: true,
+        matches: matchResult.matches,
+        message: `Multiple items match "${itemNameOrId}":\n${candidateList}\nPlease specify which item you would like to remove.`
+      };
+    }
 
+    if (matchResult.type === 'NONE') {
+      return {
+        success: false,
+        isNotFound: true,
+        message: `"${itemNameOrId}" is not currently listed on the ${projectId} purchasing checklist.`
+      };
+    }
+
+    const item = matchResult.item;
+    const index = existingItems.findIndex(it => it.id === item.id);
     if (index === -1) {
       return { success: false, message: `Item "${itemNameOrId}" not found in ${projectId}.` };
     }

@@ -1386,16 +1386,19 @@ export async function askGeminiBrain(
             const durationMs = result._executionDurationMs || (Date.now() - toolStartTime);
 
             if (result && (result.error || result.success === false)) {
+              const errorMessage = result.message || result.error || formatUserFriendlyToolError(tc.name);
               toolTelemetryList.push({
                 name: tc.name,
                 args: tc.args,
                 toolType: result.toolType || (tc.name.startsWith('save_') || tc.name.startsWith('update_') || tc.name.startsWith('delete_') ? 'WRITE' : 'READ'),
                 source: result.source || 'Local Project Data',
-                status: 'error',
+                status: result.isAmbiguous ? 'ambiguous' : (result.isNotFound ? 'not_found' : 'error'),
                 success: false,
                 isDuplicate: false,
                 durationMs,
-                error: result.error || formatUserFriendlyToolError(tc.name)
+                error: errorMessage,
+                data: result.data !== undefined ? result.data : result,
+                result
               });
             } else {
               toolTelemetryList.push({

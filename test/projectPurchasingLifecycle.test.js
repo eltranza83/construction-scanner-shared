@@ -418,4 +418,128 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(allPurchasedRes.summary.purchasedCount, 20);
     assert.match(allPurchasedRes.summary.canonicalAnswer, /All 20 items have been purchased for Lot 55\./i);
   });
+
+  test('10. 3-Way Item Resolution Engine & Zero-Write Safety Gate on Ambiguity and Non-Existence', async () => {
+    const lotId = 'lot_55_safety_gate';
+    
+    // Initial 20-item checklist (includes 5 light fixtures)
+    const masterItems = [
+      { id: 'item_quartz_1', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Electrical pass-through caps', status: 'needed', quantity: 1 },
+      { id: 'item_quartz_2', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Sinks', status: 'needed', quantity: 1 },
+      // 5 distinct light fixtures
+      { id: 'item_elec_1', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Security lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_4', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Front porch hanging light', status: 'needed', quantity: 1 },
+      { id: 'item_elec_5', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Exterior column lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_6', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Garage ceiling lights with the cap to install it', status: 'needed', quantity: 1 },
+      { id: 'item_elec_7', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Vanity lights', status: 'needed', quantity: 1 },
+      // Other electrical & plumbing
+      { id: 'item_elec_2', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Contractor doorbell chime kit', status: 'needed', quantity: 1 },
+      { id: 'item_elec_3', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart doorbell', status: 'needed', quantity: 1 },
+      { id: 'item_elec_8', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart switches', status: 'needed', quantity: 8 },
+      { id: 'item_elec_9', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Extension rods', status: 'needed', quantity: 1 },
+      { id: 'item_elec_10', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Ceiling fans', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_1', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Soap dispenser', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_2', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal power button', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_3', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_4', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Water heater with the water heater stand and tray', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_5', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Shower kits', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_6', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Toilets', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_7', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Rough-in shower valves', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_8', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Faucets', status: 'needed', quantity: 1 }
+    ];
+
+    await purchasingService.initializeProjectFromMaster(lotId, masterItems);
+
+    const projectContext = {
+      projectId: lotId,
+      activeProjectName: 'Lot 55'
+    };
+
+    // --- CASE A: Ambiguous Mutation ("Mark the lights as purchased") ---
+    const ambigMutRes = await executeClientToolCall('update_purchasing_item_status', {
+      projectId: lotId,
+      itemName: 'lights',
+      isPurchased: true
+    }, projectContext);
+
+    assert.equal(ambigMutRes.success, false, 'Ambiguous mutation must fail');
+    assert.equal(ambigMutRes.isAmbiguous, true, 'Ambiguity flag must be set');
+    assert.equal(ambigMutRes.matches.length, 5, 'Must find exactly 5 candidate light fixtures');
+    assert.match(ambigMutRes.message, /Multiple items match/i);
+    assert.match(ambigMutRes.message, /Security lights/i);
+    assert.match(ambigMutRes.message, /Vanity lights/i);
+
+    // CRITICAL SAFETY ASSERTION: Zero Firestore writes occurred
+    const itemsAfterAmbig = await purchasingService.getItems(lotId);
+    const purchasedAfterAmbig = itemsAfterAmbig.filter(it => it.status === 'purchased');
+    assert.equal(purchasedAfterAmbig.length, 0, 'SAFETY INVARIANT: Ambiguous mutation must execute ZERO Firestore writes');
+
+    // --- CASE B: Non-Existent Mutation ("Mark the pool heater as purchased") ---
+    const notFoundMutRes = await executeClientToolCall('update_purchasing_item_status', {
+      projectId: lotId,
+      itemName: 'pool heater',
+      isPurchased: true
+    }, projectContext);
+
+    assert.equal(notFoundMutRes.success, false, 'Nonexistent item mutation must fail');
+    assert.equal(notFoundMutRes.isNotFound, true, 'isNotFound flag must be set');
+    assert.match(notFoundMutRes.message, /not currently listed/i);
+    assert.doesNotMatch(notFoundMutRes.message, /temporarily unavailable/i, 'Must never say temporarily unavailable');
+
+    // CRITICAL SAFETY ASSERTION: Zero Firestore writes occurred
+    const itemsAfterNotFound = await purchasingService.getItems(lotId);
+    const purchasedAfterNotFound = itemsAfterNotFound.filter(it => it.status === 'purchased');
+    assert.equal(purchasedAfterNotFound.length, 0, 'SAFETY INVARIANT: Nonexistent item mutation must execute ZERO Firestore writes');
+
+    // --- CASE C: Exact Mutation ("Mark security lights as purchased") ---
+    const exactMutRes = await executeClientToolCall('update_purchasing_item_status', {
+      projectId: lotId,
+      itemName: 'Security lights',
+      isPurchased: true
+    }, projectContext);
+
+    assert.equal(exactMutRes.success, true, 'Exact match mutation must succeed');
+    assert.equal(exactMutRes.itemName, 'Security lights');
+
+    // Verify exactly ONE item was written to Firestore
+    const itemsAfterExact = await purchasingService.getItems(lotId);
+    const purchasedAfterExact = itemsAfterExact.filter(it => it.status === 'purchased');
+    assert.equal(purchasedAfterExact.length, 1, 'Exactly one item must be marked as purchased');
+    assert.equal(purchasedAfterExact[0].itemName, 'Security lights');
+
+    // --- CASE D: Ambiguous Status Query ("Did we buy the lights?") ---
+    const broadListRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: lotId,
+      unpurchasedOnly: false
+    }, projectContext);
+
+    const ambigQuerySynth = synthesizeGroundedEvidence(
+      [{ name: 'get_purchasing_list', success: true, result: broadListRes }],
+      'Did we buy the lights?',
+      projectContext
+    );
+
+    assert.match(ambigQuerySynth, /5 matching items/i, 'Ambiguous query must identify candidate count');
+    assert.match(ambigQuerySynth, /Security lights \(Purchased\)/i, 'Must reflect live purchased status of Security lights');
+    assert.match(ambigQuerySynth, /Vanity lights \(Needed\)/i, 'Must reflect live needed status of Vanity lights');
+    assert.match(ambigQuerySynth, /Which one were you asking about\?/i, 'Must ask for user clarification');
+
+    // --- CASE E: Exact Status Query ("Did we buy the security lights?") ---
+    const exactQuerySynth = synthesizeGroundedEvidence(
+      [{ name: 'get_purchasing_list', success: true, result: broadListRes }],
+      'Did we buy the security lights?',
+      projectContext
+    );
+
+    assert.match(exactQuerySynth, /Yes\. The Security lights are marked as purchased on Lot 55\./i, 'Exact query must return direct answer');
+
+    // --- CASE F: Non-Existent Status Query ("Did we buy the pool heater?") ---
+    const notFoundQuerySynth = synthesizeGroundedEvidence(
+      [{ name: 'get_purchasing_list', success: true, result: broadListRes }],
+      'Did we buy the pool heater?',
+      projectContext
+    );
+
+    assert.match(notFoundQuerySynth, /That item is not currently listed on the Lot 55 purchasing checklist\./i, 'Nonexistent item query must report not listed');
+  });
 });

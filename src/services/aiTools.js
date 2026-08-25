@@ -921,9 +921,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       } else {
         resultPayload = {
           success: false,
+          isAmbiguous: Boolean(updateRes.isAmbiguous),
+          isNotFound: Boolean(updateRes.isNotFound),
+          matches: updateRes.matches || [],
           projectId: targetProjectId,
           source: `Firestore (${projLabel} Purchasing Checklist)`,
-          message: updateRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
+          error: updateRes.message,
+          message: updateRes.message
         };
       }
       break;
@@ -944,9 +948,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       resultPayload = {
         success: removeRes.success,
         found: removeRes.success,
+        isAmbiguous: Boolean(removeRes.isAmbiguous),
+        isNotFound: Boolean(removeRes.isNotFound),
+        matches: removeRes.matches || [],
         projectId: targetProjectId,
         source: `Firestore (${projLabel} Purchasing Checklist)`,
         itemName: removeRes.item?.itemName || itemName,
+        error: removeRes.success ? undefined : removeRes.message,
         message: removeRes.message
       };
       break;

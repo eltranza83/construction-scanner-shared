@@ -10,6 +10,8 @@
  *    never editing core synthesis/reasoning logic.
  */
 
+import { purchasingService } from './purchasingService.js';
+
 export const INTENT_MODALITIES = Object.freeze({
   // Core Default Modalities
   RETRIEVAL: 'retrieval',
@@ -364,29 +366,26 @@ export const RetrievalPlugin = {
 
         if (isItemStatusQuery) {
           const allItems = res.allItems || (res.items || []).concat(res.purchasedItems || []);
-          let matchedItem = null;
-          for (const it of allItems) {
-            const nameLower = (it.name || it.itemName || '').toLowerCase();
-            const words = nameLower.split(/\s+/).filter(w => w.length > 2);
-            if (queryLower.includes(nameLower)) {
-              matchedItem = it;
-              break;
-            }
-            if (words.length > 0 && words.every(w => queryLower.includes(w))) {
-              matchedItem = it;
-              break;
-            }
-          }
+          const cleanSubject = queryLower
+            .replace(/\b(did we|have we|was the|is the|already|buy|bought|purchase|purchased|get|got|for|on|lot\s*\d+|lot|the|a|an)\b/g, ' ')
+            .trim();
 
-          if (matchedItem) {
-            const isPurchased = matchedItem.isPurchased || matchedItem.status === 'purchased';
+          const matchResult = purchasingService.findMatchingItems(allItems, cleanSubject || queryLower);
+
+          if (matchResult.type === 'EXACT' || matchResult.type === 'SINGLE_MATCH') {
+            const item = matchResult.item;
+            const isPurchased = item.isPurchased || item.status === 'purchased';
             if (isPurchased) {
-              responses.push(`Yes. The ${matchedItem.name || matchedItem.itemName} are marked as purchased on ${activeProject}.`);
+              responses.push(`Yes. The ${item.name || item.itemName} are marked as purchased on ${activeProject}.`);
             } else {
-              responses.push(`No. The ${matchedItem.name || matchedItem.itemName} are still marked as needed on ${activeProject}.`);
+              responses.push(`No. The ${item.name || item.itemName} are still marked as needed on ${activeProject}.`);
             }
             continue;
-          } else if (allItems.length > 0 && !/\b(electrical|plumbing|quartz|fixtures|hardware)\b/i.test(queryLower.replace(/\b(did we|buy|purchased?|already)\b/g, '').trim())) {
+          } else if (matchResult.type === 'AMBIGUOUS') {
+            const candidates = matchResult.matches.map(m => `• ${m.name || m.itemName} (${m.status === 'purchased' ? 'Purchased' : 'Needed'})`).join('\n');
+            responses.push(`There are ${matchResult.matches.length} matching items on the ${activeProject} checklist:\n${candidates}\nWhich one were you asking about?`);
+            continue;
+          } else if (allItems.length > 0 && !/\b(electrical|plumbing|quartz|fixtures|hardware)\b/i.test(cleanSubject)) {
             responses.push(`That item is not currently listed on the ${activeProject} purchasing checklist.`);
             continue;
           }
