@@ -707,6 +707,21 @@ export class PurchasingService {
       };
     }
 
+    const statusLabel = newStatus === PURCHASING_STATUSES.PURCHASED ? 'purchased' : 'needed';
+
+    // Idempotency check: If item already has the requested status, perform 0 writes
+    if (item.status === newStatus) {
+      return {
+        success: true,
+        action: 'NO_OP',
+        status: newStatus === PURCHASING_STATUSES.PURCHASED ? 'ALREADY_PURCHASED' : 'ALREADY_NEEDED',
+        isAlreadyInState: true,
+        writesPerformed: 0,
+        item,
+        message: `The ${item.itemName} is already marked as ${statusLabel}.`
+      };
+    }
+
     const now = new Date().toISOString();
     const updated = {
       ...item,
@@ -717,10 +732,10 @@ export class PurchasingService {
     existingItems[index] = updated;
     await this.storage.saveItems(projectId, existingItems);
 
-    const statusLabel = newStatus === PURCHASING_STATUSES.PURCHASED ? 'purchased' : 'needed';
     return {
       success: true,
       action: 'UPDATE_STATUS',
+      writesPerformed: 1,
       item: updated,
       message: `Marked ${updated.itemName} as ${statusLabel}.`
     };

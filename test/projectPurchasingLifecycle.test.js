@@ -1012,6 +1012,31 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     for (let i = 0; i < 7; i++) {
       await purchasingService.updateItemStatus(lotId, allElecItems20[i].itemName, 'needed');
     }
+    // -------------------------------------------------------------
+    // Scenario 21: Idempotent Status Updates (0 writes on already-purchased item)
+    // "Mark the contractors doorbell chime kit as purchased" executed twice
+    // -------------------------------------------------------------
+    const q21 = 'Mark the contractors doorbell chime kit as purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q21), true);
+
+    // 1st Execution: Updates from needed -> purchased (1 write)
+    const res21_1 = await purchasingService.updateItemStatus(lotId, 'Contractor doorbell chime kit', 'purchased');
+    assert.equal(res21_1.success, true);
+    assert.equal(res21_1.action, 'UPDATE_STATUS');
+    assert.equal(res21_1.writesPerformed, 1);
+    assert.match(res21_1.message, /Marked Contractor doorbell chime kit as purchased/i);
+
+    // 2nd Execution: Item already purchased -> NO_OP (0 writes)
+    const res21_2 = await purchasingService.updateItemStatus(lotId, 'Contractor doorbell chime kit', 'purchased');
+    assert.equal(res21_2.success, true);
+    assert.equal(res21_2.action, 'NO_OP');
+    assert.equal(res21_2.status, 'ALREADY_PURCHASED');
+    assert.equal(res21_2.isAlreadyInState, true);
+    assert.equal(res21_2.writesPerformed, 0, 'Must perform exactly 0 writes when already in state');
+    assert.match(res21_2.message, /already marked as purchased/i);
+
+    // Reset doorbell chime kit back to needed before post-test reset
+    await purchasingService.updateItemStatus(lotId, 'Contractor doorbell chime kit', 'needed');
     await purchasingService.updateItemStatus(lotId, 'Security lights', 'purchased');
 
     // -------------------------------------------------------------

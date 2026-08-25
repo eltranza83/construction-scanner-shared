@@ -1050,7 +1050,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const status = isPurchased ? PURCHASING_STATUSES.PURCHASED : PURCHASING_STATUSES.NEEDED;
 
       const updateRes = await purchasingService.updateItemStatus(targetProjectId, itemName, status);
-      if (updateRes.success) {
+      if (updateRes.success && updateRes.action !== 'NO_OP' && !updateRes.isAlreadyInState) {
         const updatedDoc = await purchasingService.exportToGoogleDocMarkdown(targetProjectId);
         saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
       }
@@ -1058,6 +1058,9 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       if (updateRes.success) {
         resultPayload = {
           success: true,
+          action: updateRes.action,
+          isAlreadyInState: Boolean(updateRes.isAlreadyInState),
+          writesPerformed: updateRes.writesPerformed ?? (updateRes.action === 'NO_OP' ? 0 : 1),
           projectId: targetProjectId,
           source: `Firestore (${projLabel} Purchasing Checklist)`,
           item: updateRes.item,
