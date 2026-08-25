@@ -153,7 +153,21 @@ function loadLocalMemories() {
   try {
     if (typeof localStorage === 'undefined') return [];
     const raw = localStorage.getItem(MEMORY_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : [];
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+
+    // Automatically purge the accidental purchasing memory created during test
+    const cleaned = list.filter(m => {
+      const t = String(m?.text || '').toLowerCase();
+      const isErrantPurchasingMemory = t.includes('electrical items') && t.includes('security lights') && t.includes('doorbell chime kit') && t.includes('still need to be purchased');
+      return !isErrantPurchasingMemory;
+    });
+
+    if (cleaned.length !== list.length) {
+      localStorage.setItem(MEMORY_STORAGE_KEY, JSON.stringify(cleaned));
+    }
+    return cleaned;
   } catch (err) {
     console.error('[MemoryService] Failed to load local memories:', err);
     return [];
