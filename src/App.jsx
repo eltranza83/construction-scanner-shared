@@ -671,6 +671,7 @@ export default function App() {
         activeProject={activeProject}
         selectedFolder={selectedFolder}
         googleToken={googleToken}
+        onNavigateTab={setActiveTab}
       />
 
       {/* 3. Navigation Footer - 5 Mobile-Optimized Tabs */}

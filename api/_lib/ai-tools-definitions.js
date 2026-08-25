@@ -204,6 +204,42 @@ export const AI_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: 'open_drive_document',
+    description: 'Open a specific document, PDF, floor plan, or spreadsheet from Google Drive in a new viewer tab.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        fileName: { type: 'STRING', description: 'The name or keyword of the file/PDF to open (e.g., "floor plan", "Lot 3 Floor Plan Review.pdf")' },
+        folderName: { type: 'STRING', description: 'Optional subfolder name where the file resides (e.g., "Floor Plans", "Closing Settlement")' },
+        documentId: { type: 'STRING', description: 'Optional Google Drive file ID if known' }
+      },
+      required: ['fileName']
+    }
+  },
+  {
+    name: 'open_drive_folder',
+    description: 'Open or navigate to a specific Google Drive project subfolder (e.g. "Floor Plans", "Closing Settlement", "App Folders").',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        folderName: { type: 'STRING', description: 'The folder name to open' },
+        folderId: { type: 'STRING', description: 'Optional folder ID' }
+      },
+      required: ['folderName']
+    }
+  },
+  {
+    name: 'navigate_app_tab',
+    description: 'Switch the active application tab to dashboard, brain, xray (X-Ray Floor Plan), or settings.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        tab: { type: 'STRING', description: 'Target tab name: "dashboard", "brain", "xray", or "settings"' }
+      },
+      required: ['tab']
+    }
+  },
+  {
     name: 'get_homeowner_specs',
     description: 'Retrieve homeowner finish specifications, selections, and paint schedules.',
     parameters: {

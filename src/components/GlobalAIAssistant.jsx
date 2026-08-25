@@ -32,6 +32,7 @@ import {
 } from '../services/googleDrive';
 
 import DocumentViewerModal from './DocumentViewerModal';
+import DocumentCard from './DocumentCard';
 import {
   VoiceStateMachine,
   VOICE_STATES,
@@ -171,7 +172,7 @@ export function formatMessageDisplay(text) {
 
 
 
-export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken }) {
+export default function GlobalAIAssistant({ activeProject, selectedFolder, googleToken, onNavigateTab }) {
   const projectId = activeProject?.id || selectedFolder?.name || 'default_site';
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
@@ -610,7 +611,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       const currentDashboard = loadProjectDashboard(projectId);
-      const answerPayload = await askGeminiBrain(query, [], projectName, apiKey, currentDashboard, projectId, messages, currentLiveTree, fileAttachment, forceDeepReasoning, googleToken);
+      const answerPayload = await askGeminiBrain(query, [], projectName, apiKey, currentDashboard, projectId, messages, currentLiveTree, fileAttachment, forceDeepReasoning, googleToken, { onNavigateTab });
       const answer = typeof answerPayload === 'object' && answerPayload.text !== undefined ? answerPayload.text : String(answerPayload || '');
       const telemetry = typeof answerPayload === 'object' && answerPayload.telemetry ? answerPayload.telemetry : null;
 
@@ -761,21 +762,41 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       // Format inline lists with clean linebreaks
       cleanAnswer = cleanAnswer.replace(/:\s*1\.\s+/g, ':\n\n1. ');
 
+      const actionDocTools = (telemetry?.tools || []).filter(t => t.name === 'open_drive_document' || t.name === 'open_drive_folder');
+      const attachedDocs = [];
+      for (const at of actionDocTools) {
+        if (at.result?.fileName || at.result?.file) {
+          attachedDocs.push({
+            name: at.result.fileName || at.result.file?.name,
+            id: at.result.documentId || at.result.file?.id,
+            folderName: at.result.folderName,
+            webViewLink: at.result.webViewLink || at.result.file?.webViewLink,
+            mimeType: at.result.mimeType,
+            error: at.result.success === false ? at.result.error : null
+          });
+        }
+      }
+      if (attachedDocs.length === 0 && viewFiles.length > 0) {
+        for (const vf of viewFiles) {
+          attachedDocs.push({
+            name: vf.fileName,
+            id: vf.fileId,
+            folderName: vf.folderName,
+            webViewLink: vf.fileId ? `https://drive.google.com/file/d/${vf.fileId}/view` : null
+          });
+        }
+      }
+
       const aiMsg = {
         sender: 'ai',
         text: cleanAnswer,
+        documents: attachedDocs.length > 0 ? attachedDocs : undefined,
         viewFiles: viewFiles.length > 0 ? viewFiles : undefined,
         telemetry,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
       };
       setMessages((prev) => [...prev, aiMsg]);
       speakText(cleanAnswer, query);
-
-      // Auto-open fullscreen document preview modal strictly only when explicitly confirmed action AND not a list/data query
-      const isConfirmedAction = actionViewFileMatches.length > 0 && !isListOrDataQuery;
-      if (viewFiles.length > 0 && isConfirmedAction) {
-        handleOpenDocumentPreview(viewFiles[0]);
-      }
 
 
       // Determine data provenance source
@@ -1702,80 +1723,29 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                         </div>
                       )}
 
-                      {/* Interactive Document & Receipt Viewer Cards */}
-                      {m.viewFiles && m.viewFiles.length > 0 && (
-                        <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                      {/* Unified Document & File Action Cards */}
+                      {m.documents && m.documents.length > 0 && (
+                        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                          {m.documents.map((doc, dIdx) => (
+                            <DocumentCard
+                              key={dIdx}
+                              file={doc}
+                              folderName={doc.folderName}
+                              error={doc.error}
+                            />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Interactive Document & Receipt Viewer Cards (Legacy Fallback) */}
+                      {!m.documents && m.viewFiles && m.viewFiles.length > 0 && (
+                        <div style={{ marginTop: '8px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                           {m.viewFiles.map((vf, vIdx) => (
-                            <div
+                            <DocumentCard
                               key={vIdx}
-                              style={{
-                                backgroundColor: 'rgba(0, 0, 0, 0.45)',
-                                border: '1px solid rgba(245, 158, 11, 0.5)',
-                                borderRadius: '8px',
-                                padding: '10px',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                gap: '8px'
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                <FileText size={18} style={{ color: 'var(--color-amber-400)', flexShrink: 0 }} />
-                                <div style={{ flex: 1, minWidth: 0 }}>
-                                  <div style={{ fontWeight: 800, fontSize: '0.82rem', color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                    {vf.fileName}
-                                  </div>
-                                  {vf.folderName && (
-                                    <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)' }}>
-                                      📁 {vf.folderName}
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                              <div style={{ display: 'flex', gap: '6px' }}>
-                                <button
-                                  type="button"
-                                  onClick={() => handleOpenDocumentPreview(vf)}
-                                  style={{
-                                    flex: 1,
-                                    padding: '7px 10px',
-                                    backgroundColor: 'var(--color-amber-500)',
-                                    color: '#000',
-                                    border: 'none',
-                                    borderRadius: '6px',
-                                    fontWeight: 800,
-                                    fontSize: '0.78rem',
-                                    cursor: 'pointer',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '5px'
-                                  }}
-                                >
-                                  <Eye size={14} /> Tap to View Full Screen
-                                </button>
-                                <a
-                                  href={`https://drive.google.com/file/d/${vf.fileId}/view`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    padding: '7px 10px',
-                                    backgroundColor: 'var(--color-zinc-900)',
-                                    color: 'var(--color-zinc-300)',
-                                    border: '1px solid var(--color-zinc-700)',
-                                    borderRadius: '6px',
-                                    fontSize: '0.75rem',
-                                    fontWeight: 700,
-                                    textDecoration: 'none',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    gap: '4px'
-                                  }}
-                                >
-                                  <ExternalLink size={13} /> Drive
-                                </a>
-                              </div>
-                            </div>
+                              file={{ name: vf.fileName, id: vf.fileId, webViewLink: `https://drive.google.com/file/d/${vf.fileId}/view` }}
+                              folderName={vf.folderName}
+                            />
                           ))}
                         </div>
                       )}

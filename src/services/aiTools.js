@@ -47,6 +47,7 @@ import {
   RESOURCE_TYPES,
   MASTER_PROJECT_ID
 } from './googleDocsPurchasingService.js';
+import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -54,6 +55,21 @@ export { AI_TOOL_DECLARATIONS, executeWeatherTool };
  * Explicit Tool Classification & Provenance Registry
  */
 export const TOOL_REGISTRY = {
+  open_drive_document: {
+    type: 'ACTION',
+    source: 'Google Drive Document Viewer',
+    description: 'Opens a document, PDF, floor plan, or spreadsheet from Google Drive in a new viewer tab.'
+  },
+  open_drive_folder: {
+    type: 'ACTION',
+    source: 'Google Drive Folder Viewer',
+    description: 'Opens a Google Drive subfolder in Google Drive.'
+  },
+  navigate_app_tab: {
+    type: 'ACTION',
+    source: 'SiteTactix App Navigation',
+    description: 'Navigates the user to a specific app tab.'
+  },
   get_weather_for_jobsite: {
     type: 'READ',
     source: 'Weather API',
@@ -1169,6 +1185,41 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           message: syncResult.voiceSummary
         };
       }
+      break;
+    }
+
+    case 'open_drive_document': {
+      const actionRes = await executeClientAction(ACTION_TYPES.OPEN_DOCUMENT, {
+        fileName: args.fileName,
+        folderName: args.folderName,
+        documentId: args.documentId
+      }, {
+        driveTree,
+        activeProjectName: projectContext?.activeProject?.name || projectContext?.projectName || 'Lot 3'
+      });
+      resultPayload = actionRes;
+      break;
+    }
+
+    case 'open_drive_folder': {
+      const actionRes = await executeClientAction(ACTION_TYPES.OPEN_FOLDER, {
+        folderName: args.folderName,
+        folderId: args.folderId
+      }, {
+        driveTree,
+        activeProjectName: projectContext?.activeProject?.name || projectContext?.projectName || 'Lot 3'
+      });
+      resultPayload = actionRes;
+      break;
+    }
+
+    case 'navigate_app_tab': {
+      const actionRes = await executeClientAction(ACTION_TYPES.NAVIGATE_TO, {
+        tab: args.tab
+      }, {
+        onNavigateTab: projectContext?.onNavigateTab
+      });
+      resultPayload = actionRes;
       break;
     }
 

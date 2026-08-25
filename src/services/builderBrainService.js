@@ -7,7 +7,7 @@ import { determineTaskModel, AI_CONFIG } from '../config/aiConfig.js';
 import { executeClientToolCall, circuitBreaker, resetWriteIdempotencyState } from './aiTools.js';
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
-import { searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
+import { getMemories, searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
 import {
   compileUserPreferencesPrompt,
   analyzeInteractionForPreference,
@@ -800,7 +800,8 @@ export async function askGeminiBrain(
   driveTreeOverride = null,
   fileAttachment = null,
   forceDeepReasoning = false,
-  googleTokenOverride = null
+  googleTokenOverride = null,
+  options = {}
 ) {
   const clientStartTime = Date.now();
   const correlationId = `corr_${clientStartTime}_${Math.random().toString(36).slice(2, 8)}`;
@@ -894,6 +895,8 @@ export async function askGeminiBrain(
     userId,
     accessToken,
     activeProjectName,
+    projectName: activeProjectName,
+    onNavigateTab: options?.onNavigateTab,
     items: reminders,
     pendingR,
     dashboardData: dashData,

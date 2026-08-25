@@ -241,7 +241,7 @@ export const PlanningPlugin = {
   description: 'Phase timeline, mobilization scheduling, and trade sequencing inquiries.',
   promptGuideline: 'PLANNING: Outline sequencing dependencies, trade prerequisites, and milestone roadmaps.',
   classifier: (cleanQuery) => {
-    return /\b(plan|schedule|timeline|next phase|sequencing|when should we|roadmap)\b/i.test(cleanQuery);
+    return /\b(plan|schedule|timeline|next phase|sequencing|when should we|roadmap)\b/i.test(cleanQuery) && !/\b(floor\s*plan|blueprint|pdf|file|doc)\b/i.test(cleanQuery);
   }
 };
 
@@ -259,11 +259,37 @@ export const ConfirmationPlugin = {
 export const ActionCommandPlugin = {
   id: INTENT_MODALITIES.ACTION_COMMAND,
   name: 'Action / Command',
-  priority: 90,
-  description: 'Imperative modifications, document writes, reminders, and database updates.',
-  promptGuideline: 'ACTION & COMMAND: Execute the requested mutation tool accurately and confirm success.',
+  priority: 15,
+  description: 'Imperative modifications, document writes, client actions, reminders, and database updates.',
+  promptGuideline: 'ACTION & COMMAND: Execute the requested mutation or client action tool accurately. Confirm success ONLY after verifying the client tool executed successfully. If the tool reports an error, missing file, or empty folder, state the failure reason faithfully without claiming it succeeded.',
   classifier: (cleanQuery) => {
-    return /\b(add|create|update|mark|delete|remove|sync|save|remind me|schedule)\b/i.test(cleanQuery) && !/\b(how do i|how to)\b/i.test(cleanQuery);
+    return /\b(add|create|update|mark|delete|remove|sync|save|remind me|schedule an?|open|launch|navigate|switch to)\b/i.test(cleanQuery) && !/\b(how do i|how to|what is the schedule|what's the schedule|schedule for)\b/i.test(cleanQuery);
+  },
+  synthesizeEvidence: (evidenceList, query, projectContext) => {
+    const responses = [];
+    for (const t of evidenceList) {
+      const res = t.result;
+      if (!res) continue;
+
+      if (t.name === 'open_drive_document') {
+        if (res.success) {
+          responses.push(`Opened "${res.fileName}" (${res.folderName || 'Google Drive'}).`);
+        } else {
+          responses.push(res.error || `I couldn't open that document.`);
+        }
+      } else if (t.name === 'open_drive_folder') {
+        if (res.success) {
+          responses.push(`Opened the "${res.folderName}" folder in Google Drive (${res.fileCount} files).`);
+        } else {
+          responses.push(res.error || `I couldn't open that folder.`);
+        }
+      } else if (t.name === 'navigate_app_tab') {
+        responses.push(res.message || `Switched to the ${res.tab} tab.`);
+      } else if (res.message) {
+        responses.push(res.message);
+      }
+    }
+    return responses.length > 0 ? responses.join('\n\n') : null;
   }
 };
 
@@ -543,8 +569,8 @@ export class SemanticIntentRegistry {
   synthesize(toolTelemetryList = [], userQuery = '', projectContext = {}) {
     const successfulTools = (toolTelemetryList || []).filter(t => t.success && t.result);
     if (successfulTools.length === 0) {
-      const errorTool = (toolTelemetryList || []).find(t => !t.success && t.error);
-      return errorTool ? `Notice: ${errorTool.error}` : null;
+      const errorTool = (toolTelemetryList || []).find(t => !t.success && (t.error || t.result?.error));
+      return errorTool ? (errorTool.error || errorTool.result?.error || 'Action could not be completed.') : null;
     }
 
     const classification = this.classify(userQuery, [], projectContext, successfulTools);
