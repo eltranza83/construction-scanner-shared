@@ -313,7 +313,10 @@ export const RetrievalPlugin = {
   name: 'Content Retrieval',
   priority: 999,
   description: 'Standard factual lookup and full content record retrieval.',
-  promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly and faithfully. For broad purchasing list inquiries across multiple categories (e.g. "what do we have on the list?", "show me the list"), summarize by category heading and item counts (e.g. Quartz Hardware (2 items), Electrical (10 items), Plumbing (8 items)) to keep voice output conversational and concise, offering to read specific sections. If the user asks for a specific trade (e.g. "what electrical items do we need?") or explicitly asks for "all items" / "item by item", present the full line-item checklist.',
+  promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly and faithfully. ' +
+    'For broad purchasing list questions (e.g. "what do we still need to purchase for Lot 3?"): give a concise summary with total count and breakdown by trade (e.g. "You still have 20 items to purchase for Lot 3: 2 Quartz, 10 Electrical, and 8 Plumbing. Nothing has been marked as purchased yet. If you want, I can give you the individual items for any trade."). ' +
+    'For specific trade/item questions (e.g. "what electrical items do we need?"): give the detailed list of items. ' +
+    'For purchased-status questions ("what have we already purchased?"): if 0 items, state nothing has been marked as purchased yet; if 1-5 items, list the items; if 6+ items, summarize count and trade breakdown.',
   classifier: () => true, // default catch-all
   synthesizeEvidence: (evidenceList, query, projectContext) => {
     const activeProject = projectContext?.activeProjectName || projectContext?.projectId || 'Active Project';
@@ -324,24 +327,40 @@ export const RetrievalPlugin = {
       const toolName = t.name || t.tool?.name;
       if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
-        const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(query || '') || (sections.length === 1);
-        if (sections.length > 0) {
+        const queryLower = (query || '').toLowerCase();
+        const isPurchasedQuery = res.unpurchasedOnly === false || res.status === 'purchased' || /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought)\b/i.test(queryLower);
+        const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);
+
+        if (isPurchasedQuery && (res.status === 'purchased' || /\b(purchased|already bought|already purchased)\b/i.test(queryLower))) {
+          const purchasedItems = res.items || sections.flatMap(s => s.items || []);
+          const totalPurchased = purchasedItems.length;
+
+          if (totalPurchased === 0) {
+            responses.push(`Nothing has been marked as purchased yet for ${activeProject}.`);
+          } else if (totalPurchased <= 5) {
+            const itemNames = purchasedItems.map(i => i.name || i.itemName).join(', ');
+            responses.push(`You've purchased ${totalPurchased} item${totalPurchased === 1 ? '' : 's'} for ${activeProject} so far: ${itemNames}.`);
+          } else {
+            const catSummary = sections.map(s => `${(s.items || []).length} in ${s.category || s.title}`).join(', ');
+            responses.push(`You've purchased ${totalPurchased} items so far for ${activeProject} (${catSummary}).`);
+          }
+        } else if (sections.length > 0) {
           if (!wantsDetailedItems && sections.length > 1) {
-            const summaryLines = [`On your ${activeProject} Purchasing Checklist, you have ${sections.length} main sections:`];
-            for (const s of sections) {
-              const count = (s.items || []).length;
-              summaryLines.push(`• ${s.category || s.title} (${count} item${count === 1 ? '' : 's'})`);
-            }
-            summaryLines.push(`\nWhich section would you like me to read off?`);
-            responses.push(summaryLines.join('\n'));
+            const totalRemaining = res.totalItems || sections.reduce((acc, s) => acc + (s.items?.length || 0), 0);
+            const breakdown = sections.map(s => `${(s.items || []).length} ${s.category || s.title}`).join(', ');
+            const statusNote = res.totalPurchased > 0
+              ? `You've purchased ${res.totalPurchased} item${res.totalPurchased === 1 ? '' : 's'} so far.`
+              : 'Nothing has been marked as purchased yet.';
+            
+            responses.push(`You still have ${totalRemaining} items to purchase for ${activeProject}: ${breakdown}. ${statusNote} If you want, I can give you the individual items for any trade.`);
           } else {
             const lines = [];
             for (const s of sections) {
               lines.push(`${s.category || s.title}:`);
               for (const item of (s.items || [])) {
-                const qtyStr = item.quantity && item.hasExplicitQuantity ? ` (${item.quantity})` : '';
+                const qtyStr = item.quantity && (item.quantity > 1 || item.hasExplicitQuantity) ? ` (${item.quantity})` : '';
                 const statusStr = item.isPurchased ? ' - Purchased' : '';
-                lines.push(`• ${item.name}${qtyStr}${statusStr}`);
+                lines.push(`• ${item.name || item.itemName}${qtyStr}${statusStr}`);
               }
               lines.push('');
             }

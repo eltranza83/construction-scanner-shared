@@ -435,16 +435,41 @@ test('Multi-Domain Grounded Evidence Synthesis Suite', async (t) => {
       }
     }];
 
-    // 1. Broad inquiry -> concise overview by categories
+    // 1. Broad inquiry -> concise summary with breakdown
     const broadRes = synthesizeGroundedEvidence(multiSectionTelemetry, 'what do we have on the list again', projectContext);
-    assert.match(broadRes, /2 main sections/i);
-    assert.match(broadRes, /Quartz Hardware \(2 items\)/i);
-    assert.match(broadRes, /Electrical Hardware Fixtures \(3 items\)/i);
-    assert.match(broadRes, /Which section would you like me to read off\?/i);
+    assert.match(broadRes, /You still have 5 items to purchase for Lot 3/i);
+    assert.match(broadRes, /2 Quartz Hardware/i);
+    assert.match(broadRes, /3 Electrical Hardware Fixtures/i);
+    assert.match(broadRes, /Nothing has been marked as purchased yet/i);
+    assert.match(broadRes, /individual items for any trade/i);
 
     // 2. Explicit request for all items -> lists all lines
     const detailRes = synthesizeGroundedEvidence(multiSectionTelemetry, 'read all items on the list', projectContext);
     assert.match(detailRes, /• Sinks/i);
     assert.match(detailRes, /• Security lights/i);
+
+    // 3. Purchased status inquiry (0 items)
+    const emptyPurchasedTelemetry = [{
+      name: 'get_purchasing_list',
+      success: true,
+      result: {
+        status: 'purchased',
+        items: []
+      }
+    }];
+    const zeroPurchasedRes = synthesizeGroundedEvidence(emptyPurchasedTelemetry, 'what have we already purchased?', projectContext);
+    assert.equal(zeroPurchasedRes, 'Nothing has been marked as purchased yet for Lot 3.');
+
+    // 4. Purchased status inquiry (1-5 items -> lists them)
+    const somePurchasedTelemetry = [{
+      name: 'get_purchasing_list',
+      success: true,
+      result: {
+        status: 'purchased',
+        items: [{ name: 'Faucets' }, { name: 'Sinks' }]
+      }
+    }];
+    const somePurchasedRes = synthesizeGroundedEvidence(somePurchasedTelemetry, 'what have we already purchased?', projectContext);
+    assert.equal(somePurchasedRes, "You've purchased 2 items for Lot 3 so far: Faucets, Sinks.");
   });
 });
