@@ -9,6 +9,8 @@
  * AI Tools / UI -> Document Content Provider -> Google Drive API (OAuth) -> Google Drive (Source of Truth)
  */
 
+import { normalizePurchasingDocumentSpacing } from './googleDocsPurchasingService.js';
+
 export const DOCUMENT_STATES = {
   DOCUMENT_MISSING: 'DOCUMENT_MISSING',
   DOCUMENT_EMPTY: 'DOCUMENT_EMPTY',
@@ -241,8 +243,13 @@ export async function writeDocumentContent(params = {}) {
   }
 
   // 1. Custom Provider Override (for unit tests / mock environments)
+  const normalizedContent = normalizePurchasingDocumentSpacing(content);
+
   if (customContentProvider && typeof customContentProvider.writeDocumentContent === 'function') {
-    return await customContentProvider.writeDocumentContent(params);
+    return await customContentProvider.writeDocumentContent({
+      ...params,
+      content: normalizedContent
+    });
   }
 
   const accessToken = resolveGoogleAccessToken(projectContext);
@@ -260,7 +267,7 @@ export async function writeDocumentContent(params = {}) {
           Authorization: `Bearer ${accessToken}`,
           'Content-Type': 'text/plain;charset=utf-8'
         },
-        body: content,
+        body: normalizedContent,
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -270,7 +277,7 @@ export async function writeDocumentContent(params = {}) {
         const updatedTime = new Date().toISOString();
         const newCacheKey = documentId + ':' + updatedTime;
         contentCache.set(newCacheKey, {
-          content,
+          content: normalizedContent,
           modifiedTime: updatedTime,
           format: 'google_doc'
         });
@@ -301,7 +308,7 @@ export async function writeDocumentContent(params = {}) {
           action: 'write_document_text',
           fileId: documentId,
           fileName,
-          content,
+          content: normalizedContent,
           expectedVersion
         }),
         signal: controller.signal

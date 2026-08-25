@@ -166,6 +166,77 @@ export function updateMasterVersionInDoc(docText = '', newVersion = 'v1.1') {
 }
 
 /**
+ * Normalizes purchasing document text to enforce clean, single-page formatting
+ * and permanently prevent whitespace drift / repeated blank line accumulation.
+ * 
+ * Rules:
+ * 1. CRLF normalization (\r\n and \r -> \n).
+ * 2. Trailing whitespace on every line stripped.
+ * 3. Exactly 1 blank line before section tags / section headings.
+ * 4. 0 blank lines between checklist items.
+ * 5. Collapses any 3+ consecutive newlines to standard spacing.
+ * 6. Single trailing newline at EOF.
+ */
+export function normalizePurchasingDocumentSpacing(docText = '') {
+  if (!docText || typeof docText !== 'string') return '';
+
+  // 1. Standardize line endings
+  const standardized = docText.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rawLines = standardized.split('\n');
+  const cleanedLines = [];
+
+  for (let i = 0; i < rawLines.length; i++) {
+    cleanedLines.push(rawLines[i].trimEnd());
+  }
+
+  // 2. Rebuild cleanly based on semantic document components
+  const resultLines = [];
+
+  for (let i = 0; i < cleanedLines.length; i++) {
+    const line = cleanedLines[i];
+    const trimmed = line.trim();
+
+    if (!trimmed) {
+      // Skip raw blank lines; semantic rules below will inject appropriate single spacing
+      continue;
+    }
+
+    const isDocTitle = trimmed.startsWith('# ') && !trimmed.startsWith('## ');
+    const isSectionTag = trimmed.startsWith('<!--') && (trimmed.includes('section:') || trimmed.includes('version:'));
+    const isSectionHeader = trimmed.startsWith('## ') || trimmed.startsWith('### ') || /^\d+[\.\)]\s+[A-Za-z\s&]+(?:Hardware|Fixtures|Supplies|Materials|Package|List|Notes|Gear|Wiring|Equipment|Trade|Category)/i.test(trimmed);
+    const isItem = /^[-*•+o\u2610\u2611\u2612☐☑☒]/.test(trimmed) || /^\[[ xX]?\]/.test(trimmed) || /^\([ xX]?\)/.test(trimmed);
+
+    if (resultLines.length > 0) {
+      if (isSectionTag) {
+        // Section tag gets exactly 1 blank line before it unless after doc title
+        const lastInResult = resultLines[resultLines.length - 1];
+        if (lastInResult !== '') {
+          resultLines.push('');
+        }
+      } else if (isSectionHeader) {
+        // Section header gets 1 blank line before it UNLESS preceded directly by its section tag
+        const lastInResult = resultLines[resultLines.length - 1];
+        if (lastInResult !== '' && !lastInResult.startsWith('<!--')) {
+          resultLines.push('');
+        }
+      } else if (isItem) {
+        // Items directly follow header or previous item with 0 blank lines
+      } else if (!isDocTitle) {
+        // General text / preamble lines get 1 blank line if preceding line is a header
+        const lastInResult = resultLines[resultLines.length - 1];
+        if (lastInResult !== '' && !lastInResult.startsWith('#')) {
+          resultLines.push('');
+        }
+      }
+    }
+
+    resultLines.push(line);
+  }
+
+  return resultLines.join('\n') + '\n';
+}
+
+/**
  * Default LocalStorage Persistence Adapter
  */
 export class LocalStoragePurchasingAdapter {
@@ -198,10 +269,11 @@ export class LocalStoragePurchasingAdapter {
 
   saveMasterDocument(content, docType = 'purchasing_checklist') {
     const key = this.getMasterKey(docType);
+    const normalized = normalizePurchasingDocumentSpacing(content);
     if (this.storage?.setItem) {
-      this.storage.setItem(key, content);
+      this.storage.setItem(key, normalized);
     }
-    return content;
+    return normalized;
   }
 
   getProjectDocument(projectId, defaultDoc = null, docType = 'purchasing_checklist') {
@@ -212,14 +284,15 @@ export class LocalStoragePurchasingAdapter {
 
   saveProjectDocument(projectId, content, docType = 'purchasing_checklist') {
     const key = this.getProjectKey(projectId, docType);
+    const normalized = normalizePurchasingDocumentSpacing(content);
     if (this.storage?.setItem) {
-      this.storage.setItem(key, content);
-      const docIdMatch = content ? String(content).match(/DocumentId:\s*([^\s\n]+)/i) : null;
+      this.storage.setItem(key, normalized);
+      const docIdMatch = normalized ? String(normalized).match(/DocumentId:\s*([^\s\n]+)/i) : null;
       if (docIdMatch) {
-        this.storage.setItem('sitetactix_doc_cache_' + docIdMatch[1].trim(), content);
+        this.storage.setItem('sitetactix_doc_cache_' + docIdMatch[1].trim(), normalized);
       }
     }
-    return content;
+    return normalized;
   }
 
   getAuditLogs(limit = 50) {
@@ -322,11 +395,12 @@ export function loadMasterPurchasingDoc(storageOrAdapter, defaultDoc = null) {
 
 export function saveMasterPurchasingDoc(storageOrAdapter, content = '', autoIncrement = false) {
   const adapter = resolvePurchasingAdapter(storageOrAdapter);
-  let finalContent = content;
+  let finalContent = normalizePurchasingDocumentSpacing(content);
   if (autoIncrement) {
-    const currentVer = parseMasterVersion(content);
+    const currentVer = parseMasterVersion(finalContent);
     const nextVer = incrementMasterVersion(currentVer);
-    finalContent = updateMasterVersionInDoc(content, nextVer);
+    finalContent = updateMasterVersionInDoc(finalContent, nextVer);
+    finalContent = normalizePurchasingDocumentSpacing(finalContent);
   }
   return adapter.saveMasterDocument(finalContent);
 }
@@ -344,7 +418,8 @@ export function saveProjectPurchasingDoc(storageOrAdapter, projectId = 'default'
     return saveMasterPurchasingDoc(storageOrAdapter, content);
   }
   const adapter = resolvePurchasingAdapter(storageOrAdapter);
-  return adapter.saveProjectDocument(projectId, content);
+  const normalized = normalizePurchasingDocumentSpacing(content);
+  return adapter.saveProjectDocument(projectId, normalized);
 }
 
 export function getPurchasingAuditLog(storageOrAdapter, limit = 50) {
@@ -493,6 +568,7 @@ export function parseGoogleDocPurchasingStructure(docData) {
     fullText = docData.text;
   }
 
+  fullText = (fullText || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
   const masterVersion = parseMasterVersion(fullText);
   const lines = fullText.split('\n');
   let currentSection = null;
