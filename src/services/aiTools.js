@@ -1351,71 +1351,115 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const results = [];
       let matchedFolder = null;
       let matchedFolderFileCount = 0;
+      let matchedFolderSubfolders = [];
 
+      const allFiles = Array.isArray(driveTree?.allFiles) ? driveTree.allFiles : [];
       const subfolders = Array.isArray(driveTree?.subfolders) ? driveTree.subfolders : [];
       const directFiles = Array.isArray(driveTree?.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
 
-      // 1. If a specific subfolder is requested, search inside that subfolder
+      // 1. If a specific subfolder is requested, search across all nested subfolders
       if (folderQuery) {
-        matchedFolder = subfolders.find(s => (s.name || s.folderName || '').toLowerCase().includes(folderQuery));
+        // First try exact ID or exact name/path match
+        matchedFolder = subfolders.find(s => {
+          const sName = (s.name || s.folderName || '').toLowerCase();
+          const sPath = (s.folderPath || '').toLowerCase();
+          const sId = String(s.folderId || s.id || '').toLowerCase();
+          return sName === folderQuery || sPath === folderQuery || sId === folderQuery;
+        }) || subfolders.find(s => {
+          const sName = (s.name || s.folderName || '').toLowerCase();
+          const sPath = (s.folderPath || '').toLowerCase();
+          return sName.includes(folderQuery) || folderQuery.includes(sName) || sPath.includes(folderQuery);
+        });
+
         if (matchedFolder) {
           const filesInSub = Array.isArray(matchedFolder.files) ? matchedFolder.files : (Array.isArray(matchedFolder.children) ? matchedFolder.children : []);
           matchedFolderFileCount = filesInSub.length;
+          matchedFolderSubfolders = matchedFolder.subfolderNames || [];
+
           for (const f of filesInSub) {
             const fileName = (f.name || '').toLowerCase();
             if (!keyword || fileName.includes(keyword)) {
               results.push({
                 name: f.name,
                 folderName: matchedFolder.name || matchedFolder.folderName,
+                folderPath: matchedFolder.folderPath || matchedFolder.name || matchedFolder.folderName,
                 type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
-                link: f.webViewLink || null
+                link: f.webViewLink || f.link || null
               });
             }
           }
         }
       } else {
-        // 2. Search all direct files and subfolder files
-        for (const f of directFiles) {
-          const fileName = (f.name || '').toLowerCase();
-          if (!keyword || fileName.includes(keyword)) {
-            results.push({
-              name: f.name,
-              folderName: 'Root',
-              type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
-              link: f.webViewLink || null
-            });
-          }
-        }
-
-        for (const sub of subfolders) {
-          const subName = sub.name || sub.folderName || 'Subfolder';
-          const filesInSub = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
-          for (const f of filesInSub) {
+        // 2. Search all files across all nested folders
+        if (allFiles.length > 0) {
+          for (const f of allFiles) {
             const fileName = (f.name || '').toLowerCase();
             if (!keyword || fileName.includes(keyword)) {
               results.push({
                 name: f.name,
-                folderName: subName,
+                folderName: f.folderName || 'Root',
+                folderPath: f.folderPath || f.folderName || 'Root',
                 type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
-                link: f.webViewLink || null
+                link: f.webViewLink || f.link || null
               });
+            }
+          }
+        } else {
+          for (const f of directFiles) {
+            const fileName = (f.name || '').toLowerCase();
+            if (!keyword || fileName.includes(keyword)) {
+              results.push({
+                name: f.name,
+                folderName: 'Root',
+                folderPath: 'Root',
+                type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
+                link: f.webViewLink || f.link || null
+              });
+            }
+          }
+
+          for (const sub of subfolders) {
+            const subName = sub.name || sub.folderName || 'Subfolder';
+            const subPath = sub.folderPath || subName;
+            const filesInSub = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
+            for (const f of filesInSub) {
+              const fileName = (f.name || '').toLowerCase();
+              if (!keyword || fileName.includes(keyword)) {
+                results.push({
+                  name: f.name,
+                  folderName: subName,
+                  folderPath: subPath,
+                  type: f.isFolder || f.mimeType?.includes('folder') ? 'folder' : 'file',
+                  link: f.webViewLink || f.link || null
+                });
+              }
             }
           }
         }
       }
 
-      const isFolderEmpty = Boolean(matchedFolder && matchedFolderFileCount === 0);
+      const isFolderEmpty = Boolean(matchedFolder && matchedFolderFileCount === 0 && matchedFolderSubfolders.length === 0);
       const folderDisplayName = matchedFolder ? (matchedFolder.name || matchedFolder.folderName) : null;
+      const folderDisplayPath = matchedFolder ? (matchedFolder.folderPath || folderDisplayName) : null;
+
+      let customMessage = undefined;
+      if (isFolderEmpty) {
+        customMessage = `The "${folderDisplayName}" directory exists in Google Drive for this project, but it does not currently contain any files.`;
+      } else if (matchedFolder && matchedFolderFileCount === 0 && matchedFolderSubfolders.length > 0) {
+        customMessage = `Inside "${folderDisplayName}", we have the following subfolders: ${matchedFolderSubfolders.join(', ')}.`;
+      } else if (results.length === 0) {
+        customMessage = 'I cannot locate any matching files in Google Drive for this project.';
+      }
 
       resultPayload = {
-        found: results.length > 0 || isFolderEmpty,
+        found: results.length > 0 || isFolderEmpty || (matchedFolder && matchedFolderSubfolders.length > 0),
         isFolderEmpty,
         folderName: folderDisplayName,
+        folderPath: folderDisplayPath,
+        subfolders: matchedFolderSubfolders,
         count: results.length,
-        message: isFolderEmpty
-          ? `The "${folderDisplayName}" directory exists in Google Drive for this project, but it does not currently contain any files.`
-          : (results.length === 0 ? 'I cannot locate any matching files in Google Drive for this project.' : undefined),
-        files: results.slice(0, 30)
+        message: customMessage,
+        files: results.slice(0, 50)
       };
       break;
     }

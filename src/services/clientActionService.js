@@ -86,7 +86,7 @@ export function validateActionPayload(actionType, payload) {
 }
 
 /**
- * Searches driveTree for matching files using fuzzy/token matching
+ * Searches driveTree for matching files using fuzzy/token matching across all nested folders
  */
 export function findDriveFile(driveTree, fileQuery, folderQuery = null) {
   if (!driveTree) return null;
@@ -95,35 +95,20 @@ export function findDriveFile(driveTree, fileQuery, folderQuery = null) {
   const cleanFolderQuery = (folderQuery || '').toLowerCase().trim();
   const fileTokens = cleanFileQuery.split(/[^a-z0-9]+/).filter(t => t.length > 2 && !['the', 'pdf', 'file', 'doc', 'open', 'review'].includes(t));
 
+  const allFiles = Array.isArray(driveTree.allFiles) ? driveTree.allFiles : [];
   const directFiles = Array.isArray(driveTree.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
   const subfolders = Array.isArray(driveTree.subfolders) ? driveTree.subfolders : [];
 
   const candidates = [];
 
-  // Search direct files
-  for (const f of directFiles) {
-    const fName = (f.name || '').toLowerCase();
-    let score = 0;
-    if (fName === cleanFileQuery) score = 100;
-    else if (fName.includes(cleanFileQuery)) score = 80;
-    else {
-      const matchCount = fileTokens.filter(t => fName.includes(t)).length;
-      if (matchCount > 0) score = (matchCount / (fileTokens.length || 1)) * 60;
-    }
-    if (score > 0) {
-      candidates.push({ file: f, folderName: 'Root', score });
-    }
-  }
-
-  // Search inside subfolders
-  for (const sub of subfolders) {
-    const subName = (sub.name || sub.folderName || '').toLowerCase();
-    const folderMatch = !cleanFolderQuery || subName.includes(cleanFolderQuery);
-    if (!folderMatch && cleanFolderQuery) continue;
-
-    const filesInSub = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
-    for (const f of filesInSub) {
+  // 1. If allFiles manifest is present, search allFiles directly
+  if (allFiles.length > 0) {
+    for (const f of allFiles) {
       const fName = (f.name || '').toLowerCase();
+      const fPath = (f.folderPath || f.folderName || '').toLowerCase();
+      const folderMatch = !cleanFolderQuery || fPath.includes(cleanFolderQuery) || fPath === cleanFolderQuery;
+      if (!folderMatch && cleanFolderQuery) continue;
+
       let score = folderMatch && cleanFolderQuery ? 20 : 0;
       if (fName === cleanFileQuery) score += 100;
       else if (fName.includes(cleanFileQuery)) score += 80;
@@ -131,8 +116,56 @@ export function findDriveFile(driveTree, fileQuery, folderQuery = null) {
         const matchCount = fileTokens.filter(t => fName.includes(t)).length;
         if (matchCount > 0) score += (matchCount / (fileTokens.length || 1)) * 60;
       }
+
       if (score > 0 || (cleanFolderQuery && cleanFileQuery.length === 0)) {
-        candidates.push({ file: f, folderName: sub.name || sub.folderName, score: score || 50 });
+        candidates.push({
+          file: f,
+          folderName: f.folderPath || f.folderName || 'Root',
+          folderPath: f.folderPath || f.folderName || 'Root',
+          score: score || 50
+        });
+      }
+    }
+  } else {
+    // 2. Fallback: Search direct files + subfolders array
+    for (const f of directFiles) {
+      const fName = (f.name || '').toLowerCase();
+      let score = 0;
+      if (fName === cleanFileQuery) score = 100;
+      else if (fName.includes(cleanFileQuery)) score = 80;
+      else {
+        const matchCount = fileTokens.filter(t => fName.includes(t)).length;
+        if (matchCount > 0) score = (matchCount / (fileTokens.length || 1)) * 60;
+      }
+      if (score > 0) {
+        candidates.push({ file: f, folderName: 'Root', folderPath: 'Root', score });
+      }
+    }
+
+    for (const sub of subfolders) {
+      const subName = (sub.name || sub.folderName || '').toLowerCase();
+      const subPath = (sub.folderPath || sub.name || sub.folderName || '').toLowerCase();
+      const folderMatch = !cleanFolderQuery || subName.includes(cleanFolderQuery) || subPath.includes(cleanFolderQuery);
+      if (!folderMatch && cleanFolderQuery) continue;
+
+      const filesInSub = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
+      for (const f of filesInSub) {
+        const fName = (f.name || '').toLowerCase();
+        let score = folderMatch && cleanFolderQuery ? 20 : 0;
+        if (fName === cleanFileQuery) score += 100;
+        else if (fName.includes(cleanFileQuery)) score += 80;
+        else {
+          const matchCount = fileTokens.filter(t => fName.includes(t)).length;
+          if (matchCount > 0) score += (matchCount / (fileTokens.length || 1)) * 60;
+        }
+        if (score > 0 || (cleanFolderQuery && cleanFileQuery.length === 0)) {
+          candidates.push({
+            file: f,
+            folderName: sub.name || sub.folderName,
+            folderPath: sub.folderPath || sub.name || sub.folderName,
+            score: score || 50
+          });
+        }
       }
     }
   }
@@ -142,23 +175,82 @@ export function findDriveFile(driveTree, fileQuery, folderQuery = null) {
 }
 
 /**
- * Searches driveTree for matching subfolder
+ * Searches driveTree for matching subfolder by Folder ID, Name, or Breadcrumb Path
  */
 export function findDriveFolder(driveTree, folderQuery) {
-  if (!driveTree) return null;
-  const cleanFolderQuery = (folderQuery || '').toLowerCase().trim();
+  if (!driveTree || !folderQuery) return null;
+  const cleanQuery = String(folderQuery).toLowerCase().trim();
+
+  // Check foldersById index if available
+  if (driveTree.foldersById && driveTree.foldersById[folderQuery]) {
+    const node = driveTree.foldersById[folderQuery];
+    return {
+      folder: node,
+      folderName: node.folderName,
+      folderPath: node.folderPath || node.folderName,
+      folderId: node.folderId,
+      webViewLink: `https://drive.google.com/drive/folders/${node.folderId}`,
+      fileCount: (node.files || []).length,
+      subfolderCount: (node.subfolderIds || []).length,
+      files: node.files || []
+    };
+  }
+
   const subfolders = Array.isArray(driveTree.subfolders) ? driveTree.subfolders : [];
 
+  // Exact ID match
+  const byId = subfolders.find(s => String(s.folderId || s.id) === folderQuery);
+  if (byId) {
+    const files = Array.isArray(byId.files) ? byId.files : (Array.isArray(byId.children) ? byId.children : []);
+    return {
+      folder: byId,
+      folderName: byId.name || byId.folderName,
+      folderPath: byId.folderPath || byId.name || byId.folderName,
+      folderId: byId.id || byId.folderId || null,
+      webViewLink: byId.webViewLink || (byId.folderId ? `https://drive.google.com/drive/folders/${byId.folderId}` : null),
+      fileCount: files.length,
+      subfolderCount: (byId.subfolderNames || []).length,
+      subfolderNames: byId.subfolderNames || [],
+      files
+    };
+  }
+
+  // Exact name or exact path match
+  const exactMatch = subfolders.find(s => {
+    const name = (s.name || s.folderName || '').toLowerCase();
+    const path = (s.folderPath || '').toLowerCase();
+    return name === cleanQuery || path === cleanQuery;
+  });
+  if (exactMatch) {
+    const files = Array.isArray(exactMatch.files) ? exactMatch.files : (Array.isArray(exactMatch.children) ? exactMatch.children : []);
+    return {
+      folder: exactMatch,
+      folderName: exactMatch.name || exactMatch.folderName,
+      folderPath: exactMatch.folderPath || exactMatch.name || exactMatch.folderName,
+      folderId: exactMatch.id || exactMatch.folderId || null,
+      webViewLink: exactMatch.webViewLink || (exactMatch.folderId ? `https://drive.google.com/drive/folders/${exactMatch.folderId}` : null),
+      fileCount: files.length,
+      subfolderCount: (exactMatch.subfolderNames || []).length,
+      subfolderNames: exactMatch.subfolderNames || [],
+      files
+    };
+  }
+
+  // Fuzzy contains match
   for (const sub of subfolders) {
     const subName = (sub.name || sub.folderName || '').toLowerCase();
-    if (subName === cleanFolderQuery || subName.includes(cleanFolderQuery) || cleanFolderQuery.includes(subName)) {
+    const subPath = (sub.folderPath || '').toLowerCase();
+    if (subName.includes(cleanQuery) || cleanQuery.includes(subName) || subPath.includes(cleanQuery)) {
       const files = Array.isArray(sub.files) ? sub.files : (Array.isArray(sub.children) ? sub.children : []);
       return {
         folder: sub,
         folderName: sub.name || sub.folderName,
+        folderPath: sub.folderPath || sub.name || sub.folderName,
         folderId: sub.id || sub.folderId || null,
-        webViewLink: sub.webViewLink || null,
+        webViewLink: sub.webViewLink || (sub.folderId ? `https://drive.google.com/drive/folders/${sub.folderId}` : null),
         fileCount: files.length,
+        subfolderCount: (sub.subfolderNames || []).length,
+        subfolderNames: sub.subfolderNames || [],
         files
       };
     }
@@ -228,7 +320,8 @@ export const ACTION_EXECUTORS = {
       success: true,
       actionType: ACTION_TYPES.OPEN_DOCUMENT,
       fileName: file.name,
-      folderName: targetFile.folderName,
+      folderName: targetFile.folderPath || targetFile.folderName || 'Google Drive',
+      folderPath: targetFile.folderPath || targetFile.folderName || 'Google Drive',
       documentId: file.id || null,
       webViewLink: fileLink,
       mimeType: file.mimeType || 'application/pdf',

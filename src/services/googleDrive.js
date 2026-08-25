@@ -571,48 +571,176 @@ export async function listFilesWithDescriptionInFolder(accessToken, folderId) {
 }
 
 /**
- * Fetches the folder hierarchy and file manifest for a project's Google Drive root folder.
+ * Helper to fetch all child files and subfolders within a specific parent folder,
+ * handling Google Drive API pagination (nextPageToken) automatically.
+ */
+async function fetchFolderChildren(accessToken, parentFolderId) {
+  const items = [];
+  let pageToken = null;
+  const safeParentId = escapeDriveQueryString(parentFolderId);
+
+  do {
+    const q = `'${safeParentId}' in parents and trashed=false`;
+    let url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,mimeType,webViewLink)&pageSize=100`;
+    if (pageToken) {
+      url += `&pageToken=${encodeURIComponent(pageToken)}`;
+    }
+
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+    if (!res.ok) {
+      console.warn(`[GoogleDrive] Failed to fetch items for folder ${parentFolderId}: HTTP ${res.status}`);
+      break;
+    }
+
+    const data = await res.json();
+    if (Array.isArray(data.files)) {
+      items.push(...data.files);
+    }
+    pageToken = data.nextPageToken || null;
+  } while (pageToken);
+
+  return items;
+}
+
+/**
+ * Fetches the complete, depth-unlimited folder hierarchy and file manifest
+ * for a project's Google Drive root folder using Breadth-First Search (BFS).
+ *
+ * Guarantees:
+ * 1. Discovers every folder and file at ANY nesting depth without arbitrary limits.
+ * 2. Uses `visitedFolderIds` Set to prevent loops/duplicate crawling.
+ * 3. Builds full breadcrumb paths for every file and folder.
+ * 4. Indexes folders by folder ID and builds a flat `allFiles` manifest.
+ * 5. Handles API pagination via `nextPageToken`.
  */
 export async function fetchProjectDriveTree(accessToken, rootFolderId) {
   if (!accessToken || !rootFolderId) return null;
+
   try {
-    const safeParentId = escapeDriveQueryString(rootFolderId);
-    const rootQuery = `'${safeParentId}' in parents and trashed=false`;
-    const rootUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(rootQuery)}&fields=files(id,name,mimeType,webViewLink)&pageSize=100`;
-    const rootRes = await fetch(rootUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-    if (!rootRes.ok) return null;
-    const rootData = await rootRes.json();
-    const rootItems = rootData.files || [];
+    const visitedFolderIds = new Set([rootFolderId]);
+    const folderQueue = [{
+      folderId: rootFolderId,
+      folderName: 'Root',
+      folderPath: '',
+      depth: 0
+    }];
 
-    const folders = rootItems.filter((i) => i.mimeType === 'application/vnd.google-apps.folder');
-    const directFiles = rootItems.filter((i) => i.mimeType !== 'application/vnd.google-apps.folder');
+    const directFiles = [];
+    const subfolders = [];
+    const foldersById = {};
+    const allFiles = [];
 
-    const subfolderResults = await Promise.all(
-      folders.slice(0, 10).map(async (folder) => {
-        try {
-          const safeSubId = escapeDriveQueryString(folder.id);
-          const subQuery = `'${safeSubId}' in parents and trashed=false`;
-          const subUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(subQuery)}&fields=files(id,name,mimeType,webViewLink)&pageSize=50`;
-          const subRes = await fetch(subUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
-          if (!subRes.ok) return { folderName: folder.name, folderId: folder.id, files: [] };
-          const subData = await subRes.json();
-          return {
-            folderName: folder.name,
+    // Initialize root folder in index
+    foldersById[rootFolderId] = {
+      folderId: rootFolderId,
+      folderName: 'Root',
+      folderPath: '',
+      parentFolderId: null,
+      subfolderIds: [],
+      files: [],
+      depth: 0
+    };
+
+    while (folderQueue.length > 0) {
+      const current = folderQueue.shift();
+      const rawChildren = await fetchFolderChildren(accessToken, current.folderId);
+
+      const childFolders = rawChildren.filter((i) => i.mimeType === 'application/vnd.google-apps.folder');
+      const childFiles = rawChildren.filter((i) => i.mimeType !== 'application/vnd.google-apps.folder');
+
+      const currentFolderNode = foldersById[current.folderId] || {
+        folderId: current.folderId,
+        folderName: current.folderName,
+        folderPath: current.folderPath,
+        parentFolderId: null,
+        subfolderIds: [],
+        files: [],
+        depth: current.depth
+      };
+      foldersById[current.folderId] = currentFolderNode;
+
+      // 1. Process files in current folder
+      const processedFiles = childFiles.map((f) => {
+        const fileObj = {
+          id: f.id,
+          name: f.name,
+          link: f.webViewLink || (f.id ? `https://drive.google.com/file/d/${f.id}/view` : null),
+          webViewLink: f.webViewLink || (f.id ? `https://drive.google.com/file/d/${f.id}/view` : null),
+          mimeType: f.mimeType,
+          folderId: current.folderId,
+          folderName: current.folderName,
+          folderPath: current.folderPath || 'Root'
+        };
+        allFiles.push(fileObj);
+        return fileObj;
+      });
+
+      currentFolderNode.files = processedFiles;
+
+      if (current.folderId === rootFolderId) {
+        directFiles.push(...processedFiles);
+      }
+
+      // 2. Process and enqueue child folders
+      for (const folder of childFolders) {
+        const childPath = current.folderPath
+          ? `${current.folderPath} / ${folder.name}`
+          : folder.name;
+
+        currentFolderNode.subfolderIds.push(folder.id);
+
+        if (!foldersById[folder.id]) {
+          foldersById[folder.id] = {
             folderId: folder.id,
-            files: (subData.files || []).map((f) => ({ id: f.id, name: f.name, link: f.webViewLink, mimeType: f.mimeType }))
+            folderName: folder.name,
+            folderPath: childPath,
+            parentFolderId: current.folderId,
+            subfolderIds: [],
+            files: [],
+            depth: current.depth + 1
           };
-        } catch {
-          return { folderName: folder.name, folderId: folder.id, files: [] };
         }
-      })
-    );
+
+        if (!visitedFolderIds.has(folder.id)) {
+          visitedFolderIds.add(folder.id);
+          folderQueue.push({
+            folderId: folder.id,
+            folderName: folder.name,
+            folderPath: childPath,
+            depth: current.depth + 1
+          });
+        }
+      }
+    }
+
+    // Build the subfolders array for backward compatibility and deep querying
+    for (const [fId, node] of Object.entries(foldersById)) {
+      if (fId !== rootFolderId) {
+        const childFolderNodes = (node.subfolderIds || []).map((id) => foldersById[id]?.folderName).filter(Boolean);
+        subfolders.push({
+          folderId: node.folderId,
+          folderName: node.folderName,
+          folderPath: node.folderPath,
+          parentFolderId: node.parentFolderId,
+          depth: node.depth,
+          subfolderNames: childFolderNodes,
+          files: node.files,
+          fileCount: (node.files || []).length,
+          subfolderCount: (node.subfolderIds || []).length,
+          webViewLink: `https://drive.google.com/drive/folders/${node.folderId}`
+        });
+      }
+    }
 
     return {
-      directFiles: directFiles.map((f) => ({ id: f.id, name: f.name, link: f.webViewLink, mimeType: f.mimeType })),
-      subfolders: subfolderResults
+      rootFolderId,
+      directFiles,
+      subfolders,
+      foldersById,
+      allFiles
     };
   } catch (err) {
-    console.warn('Error fetching project drive tree:', err);
+    console.warn('[GoogleDrive] Error fetching complete recursive drive tree:', err);
     return null;
   }
 }
