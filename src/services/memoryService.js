@@ -110,6 +110,8 @@ export function computeCosineSimilarity(vecA, vecB) {
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
+export const cosineSimilarity = computeCosineSimilarity;
+
 /**
  * Generates a unique ID for memories.
  */

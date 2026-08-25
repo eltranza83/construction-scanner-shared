@@ -9,6 +9,7 @@ import {
   searchMemories,
   detectAmbiguity,
   computeCosineSimilarity,
+  cosineSimilarity,
   extractTags,
   sanitizeMemoryRecord,
   formatMemoriesForPrompt,
@@ -167,6 +168,41 @@ describe('SiteTactix Second Brain — Persistent Memory Service Suite', () => {
     const searchResults = await searchMemories('How does the painter like to get paid?', { projectId: 'Lot 12' });
     assert.ok(searchResults.length > 0, 'Should find matching painter memory');
     assert.equal(searchResults[0].text, 'Painter prefers ACH wire transfer payments.');
+  });
+
+  test('Test 6b — Focused Cosine Similarity Math Verification (Identical, Orthogonal, Known Vectors, & Edge Cases)', () => {
+    // 1. Identical vectors -> 1.0 (and scalar scaled vectors -> 1.0)
+    assert.equal(computeCosineSimilarity([1, 2, 3], [1, 2, 3]), 1.0);
+    assert.equal(cosineSimilarity([1, 2, 3], [1, 2, 3]), 1.0);
+    assert.equal(computeCosineSimilarity([1, 0, 0], [1, 0, 0]), 1.0);
+    assert.equal(computeCosineSimilarity([1, 2, 3], [2, 4, 6]), 1.0); // Scaled in same direction
+
+    // 2. Orthogonal vectors -> 0.0
+    assert.equal(computeCosineSimilarity([1, 0, 0], [0, 1, 0]), 0.0);
+    assert.equal(computeCosineSimilarity([1, 0], [0, 1]), 0.0);
+    assert.equal(computeCosineSimilarity([2, -1], [1, 2]), 0.0); // Dot product: 2*1 + (-1)*2 = 0
+
+    // 3. Different vectors with unambiguous known mathematical cosine values
+    // [1, 0] vs [1, 1] -> cos(45 deg) = 1 / sqrt(2) = 0.7071067811865475
+    const cos45 = computeCosineSimilarity([1, 0], [1, 1]);
+    assert.ok(Math.abs(cos45 - (1 / Math.SQRT2)) < 1e-10, `Expected ~0.7071, got ${cos45}`);
+
+    // [3, 4] vs [4, 3] -> dot=24, normA=5, normB=5 -> 24/25 = 0.96
+    const sim3443 = computeCosineSimilarity([3, 4], [4, 3]);
+    assert.ok(Math.abs(sim3443 - 0.96) < 1e-10, `Expected 0.96, got ${sim3443}`);
+
+    // Opposite vectors -> -1.0
+    assert.equal(computeCosineSimilarity([1, 0], [-1, 0]), -1.0);
+    assert.equal(computeCosineSimilarity([3, 4], [-3, -4]), -1.0);
+
+    // 4. Mismatched, empty, null, and zero vectors -> 0
+    assert.equal(computeCosineSimilarity([], []), 0);
+    assert.equal(computeCosineSimilarity([1, 2], [1, 2, 3]), 0); // Mismatched lengths
+    assert.equal(computeCosineSimilarity(null, [1, 2]), 0);
+    assert.equal(computeCosineSimilarity([1, 2], undefined), 0);
+    assert.equal(computeCosineSimilarity('not an array', [1, 2]), 0);
+    assert.equal(computeCosineSimilarity([0, 0, 0], [0, 0, 0]), 0); // Zero vector norm is 0
+    assert.equal(computeCosineSimilarity([0, 0], [1, 2]), 0);
   });
 
   test('Test 7 — Ambiguity Detection: Flags speculative phrasing and avoids hard fact storage', () => {
