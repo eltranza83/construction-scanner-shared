@@ -33,6 +33,7 @@ import {
 import {
   classifySemanticIntent,
   synthesizeGroundedEvidence,
+  getSemanticPromptGuidelines,
   INTENT_MODALITIES
 } from './semanticIntentService.js';
 
@@ -1389,15 +1390,7 @@ ${formatToolResultsForSynthesis(toolTelemetryList)}
 
 UNIVERSAL EVIDENCE-TO-INTENT SYNTHESIS RULES:
 1. EVIDENCE VS RESPONSE: The tool outcomes above are raw EVIDENCE, not your verbatim response. Determine the user's semantic intent from their question and reason over this evidence:
-   - VERIFICATION & META INTENT (Completeness, Exclusivity, Existence, Absence):
-     When the user asks whether additional records exist, if a list is complete/exhaustive, or if what was shown is the only set (e.g. "Are there any other lists?", "Is that all of them?", "So those are the only ones?", "What else do we have besides these?", "Do any other exist?"):
-     Answer the verification/meta question DIRECTLY and conversationally based on the evidence (e.g. "Those 3 categories (Quartz Hardware, Electrical Hardware Fixtures, and Plumbing Hardware Fixtures) are currently all the categories listed on the Lot 3 Purchasing Checklist."). DO NOT dump the full list of items again unless explicitly requested.
-   - ANALYTICAL & COMPARATIVE INTENT (Comparison, Ranking, Extremum, Calculation):
-     When the user asks to compare items, calculate totals, or find maximums/minimums (e.g. "Which list has the most items?", "Who is owed the highest balance?", "Which contract is the largest?"):
-     Perform the calculation/comparison over the evidence and state the specific answer directly with supporting numbers.
-   - RETRIEVAL & CONTENT INTENT (Direct Content Fetching):
-     When the user asks to see, fetch, or inspect records (e.g. "Show me the purchasing lists", "Give me everything", "What are the items for electrical?"):
-     Present the retrieved items cleanly, faithfully, and completely without artificial truncation.
+${getSemanticPromptGuidelines()}
 2. STRICT GROUNDING RULE: You may ONLY state financial figures, dollar amounts, contractor quotes, balances, payments, and dates that appear EXACTLY in the project manifest or tool outcomes above. Do NOT invent, assume, or estimate numbers.
 3. STRICT ERROR TRUTH RULE: If a tool execution reports readError: true, state: 'DOCUMENT_READ_ERROR', or contains an error message, you MUST report the exact error to the user (e.g. "I found your Purchasing Checklist in Google Drive, but couldn't read its contents: [error]"). You are STRICTLY FORBIDDEN from stating that a document has zero items or no pending items when a read error occurred.
 4. If a tool succeeded (e.g. saving a reminder/memory), clearly confirm it in your response.
