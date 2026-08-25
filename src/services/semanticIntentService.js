@@ -376,8 +376,7 @@ export const RetrievalPlugin = {
             .replace(/^(how many|how much|do we have any|do we have|is there a|is there an|is there|are there any|are there|what is the quantity of|what's the count of|what count of|did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
             .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got|have|need)\s+/i, '')
             .replace(/^(the|those|these|that|a|an)\s+/i, '')
-            .replace(/\s+(for|on|in)\s+lot\s*\d+.*$/i, '')
-            .replace(/\s+(do we have|are there|on the list|on the checklist|on our checklist|in the list|already|yet|so far|now|recently|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
+            .replace(/\s+(?:do we have|are there|are on|have we got|do we need|are needed|on the purchasing list|on the list|on the checklist|on our checklist|in the purchasing list|in the list|for lot\s*\d+|on lot\s*\d+|in lot\s*\d+|already|yet|so far|now|recently|been purchased|been bought|purchased|needed).*$/i, '')
             .replace(/[?.!]+$/, '')
             .trim();
 
