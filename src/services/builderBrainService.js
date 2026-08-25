@@ -742,18 +742,61 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
     }
   }
 
-  // 4. Contractor / Vendor Entity Claims
-  const vendorRegex = /\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*\s+(?:Electric|Plumbing|Framing|Roofing|Masonry|Concrete|HVAC|Supply|Pros|Masters|Services|LLC|Inc|Corp|Contractors?))\b/g;
-  const vendorMatches = [...synthesizedText.matchAll(vendorRegex)];
+  // 5. Purchasing Count & Numerical Integrity Validation
+  let purchasingDiscrepancyDetected = false;
+  let suggestedCorrection = null;
 
-  for (const vm of vendorMatches) {
-    checkedCount++;
-    const vendorName = vm[1].trim();
-    if (groundTruth.includes(vendorName.toLowerCase())) {
-      supportedClaims.push(vendorName);
-    } else {
-      unsupportedClaims.push(vendorName);
-      unsupportedEntities.push(vendorName);
+  const purchasingTool = (toolResults || []).find(t => (t.name === 'get_purchasing_list' || t.tool?.name === 'get_purchasing_list') && t.success);
+  const purchasingData = purchasingTool?.data || purchasingTool?.result;
+
+  if (purchasingData?.summary) {
+    const summary = purchasingData.summary;
+    const needed = summary.neededCount;
+    const purchased = summary.purchasedCount;
+    const total = summary.totalChecklistCount;
+    const tradeBreakdown = summary.tradeBreakdown || {};
+
+    // Check project-wide needed count claims (e.g. "still have 18 items", "need 18 items", "18 items remaining", "18 items to purchase")
+    const neededClaimRegex = /\b(?:have|still have|need(?: to purchase)?|remaining|left to (?:buy|purchase)|pending)\s+(\d+)\s+(?:items|materials|fixtures)\b/gi;
+    const neededMatches = [...synthesizedText.matchAll(neededClaimRegex)];
+    for (const nm of neededMatches) {
+      checkedCount++;
+      const claimedCount = parseInt(nm[1], 10);
+      if (claimedCount === needed || (needed === 0 && claimedCount === total)) {
+        supportedClaims.push(nm[0]);
+      } else {
+        unsupportedClaims.push(`${nm[0]} (Expected: ${needed})`);
+        purchasingDiscrepancyDetected = true;
+        suggestedCorrection = summary.canonicalAnswer;
+      }
+    }
+
+    // Check trade breakdown count claims (e.g. "8 electrical", "8 in electrical", "2 quartz", "8 plumbing")
+    const tradeClaimRegex = /\b(\d+)\s+(?:in\s+)?(quartz|electrical|plumbing|hvac|paint|drywall|general)(?:\s+(?:hardware|fixtures|supplies|materials|items))?\b/gi;
+    const tradeMatches = [...synthesizedText.matchAll(tradeClaimRegex)];
+    for (const tm of tradeMatches) {
+      checkedCount++;
+      const claimedTradeCount = parseInt(tm[1], 10);
+      const tradeName = tm[2].toLowerCase();
+
+      // Find matching trade in breakdown
+      let matchedBreakdown = null;
+      for (const [title, counts] of Object.entries(tradeBreakdown)) {
+        if (title.toLowerCase().includes(tradeName)) {
+          matchedBreakdown = counts;
+          break;
+        }
+      }
+
+      if (matchedBreakdown) {
+        if (claimedTradeCount === matchedBreakdown.needed || claimedTradeCount === matchedBreakdown.total || claimedTradeCount === matchedBreakdown.purchased) {
+          supportedClaims.push(tm[0]);
+        } else {
+          unsupportedClaims.push(`${tm[0]} (Expected needed: ${matchedBreakdown.needed})`);
+          purchasingDiscrepancyDetected = true;
+          suggestedCorrection = summary.canonicalAnswer;
+        }
+      }
     }
   }
 
@@ -768,7 +811,9 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
     supportedClaims,
     unsupportedClaims,
     unsupportedEntities,
-    unsupportedFiles
+    unsupportedFiles,
+    purchasingDiscrepancyDetected,
+    suggestedCorrection
   };
 }
 
@@ -1448,9 +1493,12 @@ ${getSemanticPromptGuidelines()}
 
         if (synthesisText) {
           const groundingReport = verifyResponseGrounding(synthesisText, projectContext, toolTelemetryList);
+          const finalResponseText = (groundingReport.purchasingDiscrepancyDetected && groundingReport.suggestedCorrection)
+            ? groundingReport.suggestedCorrection
+            : synthesisText;
 
           return {
-            text: synthesisText,
+            text: finalResponseText,
             telemetry: {
               schemaVersion: '1.0',
               correlationId,

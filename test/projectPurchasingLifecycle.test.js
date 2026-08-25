@@ -315,4 +315,107 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     const isInit = await purchasingService.isProjectInitialized(lot55Proj);
     assert.equal(isInit, true, 'Sentinel metadata must be initialized');
   });
+
+  test('9. Anti-Double-Subtraction & Authoritative Purchasing Numerical Integrity Guard', async () => {
+    const lotId = 'lot_55_numerical_guard';
+    
+    // 1. Initial 20-item checklist (2 Quartz, 10 Electrical, 8 Plumbing)
+    const masterItems = [
+      // 2 Quartz
+      { id: 'item_quartz_1', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Electrical pass-through caps', status: 'needed', quantity: 1 },
+      { id: 'item_quartz_2', categoryId: 'quartz', categoryTitle: 'Quartz Hardware', itemName: 'Sinks', status: 'needed', quantity: 1 },
+      // 10 Electrical
+      { id: 'item_elec_1', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Security lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_2', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Contractor doorbell chime kit', status: 'needed', quantity: 1 },
+      { id: 'item_elec_3', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart doorbell', status: 'needed', quantity: 1 },
+      { id: 'item_elec_4', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Front porch hanging light', status: 'needed', quantity: 1 },
+      { id: 'item_elec_5', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Exterior column lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_6', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Garage ceiling lights with the cap to install it', status: 'needed', quantity: 1 },
+      { id: 'item_elec_7', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Vanity lights', status: 'needed', quantity: 1 },
+      { id: 'item_elec_8', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Smart switches', status: 'needed', quantity: 8 },
+      { id: 'item_elec_9', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Extension rods', status: 'needed', quantity: 1 },
+      { id: 'item_elec_10', categoryId: 'electrical', categoryTitle: 'Electrical Hardware Fixtures', itemName: 'Ceiling fans', status: 'needed', quantity: 1 },
+      // 8 Plumbing
+      { id: 'item_plumb_1', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Soap dispenser', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_2', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal power button', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_3', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Garbage disposal', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_4', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Water heater with the water heater stand and tray', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_5', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Shower kits', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_6', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Toilets', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_7', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Rough-in shower valves', status: 'needed', quantity: 1 },
+      { id: 'item_plumb_8', categoryId: 'plumbing', categoryTitle: 'Plumbing Hardware Fixtures', itemName: 'Faucets', status: 'needed', quantity: 1 }
+    ];
+
+    await purchasingService.initializeProjectFromMaster(lotId, masterItems);
+
+    const projectContext = {
+      projectId: lotId,
+      activeProjectName: 'Lot 55'
+    };
+
+    // 2. Mark Security lights as purchased
+    const markRes = await executeClientToolCall('update_purchasing_item_status', {
+      projectId: lotId,
+      itemName: 'Security lights',
+      isPurchased: true
+    }, projectContext);
+    assert.equal(markRes.success, true);
+
+    // 3. Broad query execution
+    const broadToolRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: lotId,
+      unpurchasedOnly: true
+    }, projectContext);
+
+    // Assert authoritative summary block math
+    assert.equal(broadToolRes.summary.neededCount, 19);
+    assert.equal(broadToolRes.summary.purchasedCount, 1);
+    assert.equal(broadToolRes.summary.totalChecklistCount, 20);
+    assert.equal(broadToolRes.summary.tradeBreakdown['Quartz Hardware'].needed, 2);
+    assert.equal(broadToolRes.summary.tradeBreakdown['Electrical Hardware Fixtures'].needed, 9);
+    assert.equal(broadToolRes.summary.tradeBreakdown['Electrical Hardware Fixtures'].purchased, 1);
+    assert.equal(broadToolRes.summary.tradeBreakdown['Electrical Hardware Fixtures'].total, 10);
+    assert.equal(broadToolRes.summary.tradeBreakdown['Plumbing Hardware Fixtures'].needed, 8);
+
+    // Assert canonical answer formulation
+    assert.match(broadToolRes.summary.canonicalAnswer, /You still have 19 items to purchase for Lot 55: 2 Quartz Hardware, 9 Electrical Hardware Fixtures, and 8 Plumbing Hardware Fixtures\./i);
+    assert.match(broadToolRes.summary.canonicalAnswer, /You have 1 item marked as purchased\./i);
+
+    // 4. Trade-specific query execution
+    const elecToolRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: lotId,
+      trade: 'electrical',
+      unpurchasedOnly: true
+    }, projectContext);
+    assert.equal(elecToolRes.totalItems, 9, 'Electrical unpurchased items must be 9, never 8');
+    assert.equal(elecToolRes.items.length, 9);
+
+    // 5. Test Numerical Integrity Guard against hallucinated/double-subtracted text
+    const hallucinatedText = 'You still have 18 items to purchase for Lot 55: 2 Quartz Hardware, 8 Electrical Hardware Fixtures, and 8 Plumbing Hardware Fixtures. You have 1 item marked as purchased.';
+    const toolTelemetry = [{ name: 'get_purchasing_list', success: true, result: broadToolRes, data: broadToolRes }];
+    
+    const { verifyResponseGrounding } = await import('../src/services/builderBrainService.js');
+    const groundingReport = verifyResponseGrounding(hallucinatedText, projectContext, toolTelemetry);
+    
+    assert.equal(groundingReport.purchasingDiscrepancyDetected, true, 'Guard must detect double-subtracted 18 and 8');
+    assert.match(groundingReport.suggestedCorrection, /19 items/i);
+    assert.match(groundingReport.suggestedCorrection, /9 Electrical/i);
+
+    // 6. Test Numerical Integrity Guard against verified correct text
+    const accurateText = 'You still have 19 items to purchase for Lot 55: 2 Quartz Hardware, 9 Electrical Hardware Fixtures, and 8 Plumbing Hardware Fixtures. You have 1 item marked as purchased.';
+    const accurateReport = verifyResponseGrounding(accurateText, projectContext, toolTelemetry);
+    assert.equal(accurateReport.purchasingDiscrepancyDetected, false, 'Guard must NOT flag mathematically accurate text');
+
+    // 7. Edge Cases: All purchased (100% complete)
+    for (const it of masterItems) {
+      await purchasingService.updateItemStatus(lotId, it.itemName, PURCHASING_STATUSES.PURCHASED);
+    }
+    const allPurchasedRes = await executeClientToolCall('get_purchasing_list', {
+      projectId: lotId,
+      unpurchasedOnly: true
+    }, projectContext);
+    assert.equal(allPurchasedRes.summary.neededCount, 0);
+    assert.equal(allPurchasedRes.summary.purchasedCount, 20);
+    assert.match(allPurchasedRes.summary.canonicalAnswer, /All 20 items have been purchased for Lot 55\./i);
+  });
 });

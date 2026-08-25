@@ -754,7 +754,58 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const allProjectItems = await purchasingService.getItems(targetProjectId);
       const totalPurchased = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED).length;
       const totalNeeded = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED).length;
+      const grandTotal = allProjectItems.length;
+
+      const unpurchasedItems = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED).map(it => ({ ...it, name: it.itemName }));
       const purchasedItems = allProjectItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED).map(it => ({ ...it, name: it.itemName }));
+
+      // Build authoritative trade breakdown with side-by-side needed, purchased, and total
+      const tradeBreakdown = {};
+      for (const catKey of categoryOrder) {
+        const catTitle = STRUCTURED_TRADE_MAP[catKey]?.title || catKey;
+        const catItems = allProjectItems.filter(it => (it.categoryId || 'general') === catKey);
+        if (catItems.length > 0) {
+          tradeBreakdown[catTitle] = {
+            needed: catItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED).length,
+            purchased: catItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED).length,
+            total: catItems.length
+          };
+        }
+      }
+
+      // Generate canonical pre-synthesized answer
+      let canonicalAnswer = '';
+      if (totalNeeded === 0 && grandTotal > 0) {
+        canonicalAnswer = `All ${grandTotal} items have been purchased for ${projLabel}.`;
+      } else if (grandTotal === 0) {
+        canonicalAnswer = `No purchasing items found on the checklist for ${projLabel}.`;
+      } else {
+        const breakdownParts = Object.entries(tradeBreakdown)
+          .filter(([_, counts]) => counts.needed > 0)
+          .map(([title, counts]) => `${counts.needed} ${title}`);
+        
+        let breakdownStr = '';
+        if (breakdownParts.length > 1) {
+          const last = breakdownParts.pop();
+          breakdownStr = `${breakdownParts.join(', ')}, and ${last}`;
+        } else if (breakdownParts.length === 1) {
+          breakdownStr = breakdownParts[0];
+        }
+
+        const purchasedNote = totalPurchased > 0
+          ? `You have ${totalPurchased} item${totalPurchased === 1 ? '' : 's'} marked as purchased.`
+          : 'Nothing has been marked as purchased yet.';
+
+        canonicalAnswer = `You still have ${totalNeeded} items to purchase for ${projLabel}${breakdownStr ? `: ${breakdownStr}` : ''}. ${purchasedNote} If you want, I can give you the individual items for any trade.`;
+      }
+
+      const summary = {
+        neededCount: totalNeeded,
+        purchasedCount: totalPurchased,
+        totalChecklistCount: grandTotal,
+        tradeBreakdown,
+        canonicalAnswer
+      };
 
       const message = totalItems > 0
         ? `Found ${totalItems} item(s) in Purchasing Checklist for ${projLabel}${trade ? ` (${trade})` : ''}.`
@@ -791,6 +842,9 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
         totalItems,
         totalPurchased,
         totalNeeded,
+        grandTotal,
+        summary,
+        unpurchasedItems,
         purchasedItems,
         allItems: allProjectItems.map(it => ({ ...it, name: it.itemName })),
         sections,

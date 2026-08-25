@@ -555,12 +555,21 @@ export class PurchasingService {
     const searchNorm = this._normalizeQuery(itemNameOrId);
     const searchStem = this._stemWord(itemNameOrId);
 
-    const index = existingItems.findIndex(it => {
+    // 1. Exact ID or exact normalized name match takes highest precedence
+    let index = existingItems.findIndex(it => {
       if (it.id === itemNameOrId) return true;
       const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
-      const itStem = this._stemWord(it.itemName);
-      return itNorm === searchNorm || itNorm.includes(searchNorm) || searchNorm.includes(itNorm) || itStem === searchStem;
+      return itNorm === searchNorm;
     });
+
+    // 2. Fuzzy / substring fallback if no exact match found
+    if (index === -1) {
+      index = existingItems.findIndex(it => {
+        const itNorm = it.normalizedName || this._normalizeQuery(it.itemName);
+        const itStem = this._stemWord(it.itemName);
+        return itNorm.includes(searchNorm) || searchNorm.includes(itNorm) || itStem === searchStem;
+      });
+    }
 
     if (index === -1) {
       return {

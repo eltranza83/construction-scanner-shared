@@ -340,6 +340,7 @@ export const RetrievalPlugin = {
   priority: 999,
   description: 'Standard factual lookup and full content record retrieval.',
   promptGuideline: 'CONTENT RETRIEVAL: Present the retrieved data cleanly and faithfully. ' +
+    'For purchasing queries: always quote the exact counts from the pre-aggregated `summary` object (summary.neededCount, summary.purchasedCount, summary.tradeBreakdown). These numbers are already calculated net of purchased items; never perform your own subtraction or recompute counts. ' +
     'For broad purchasing list questions (e.g. "what do we still need to purchase for Lot 3?"): give a concise summary with total count and breakdown by trade (e.g. "You still have 20 items to purchase for Lot 3: 2 Quartz, 10 Electrical, and 8 Plumbing. Nothing has been marked as purchased yet. If you want, I can give you the individual items for any trade."). If items have been purchased, state how many items are marked as purchased (e.g. "You have 1 item marked as purchased."). ' +
     'For specific trade questions (e.g. "what electrical items do we need?"): give the detailed list of items for that trade. ' +
     'For specific item status questions (e.g. "did we already buy the ceiling fans?", "have we purchased the faucets?"): answer directly with the status of that specific item (e.g. "No. The ceiling fans are still marked as needed on Lot 3." or "Yes. The faucets are marked as purchased on Lot 3."). Do not dump the whole trade list. ' +
