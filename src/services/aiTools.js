@@ -113,12 +113,12 @@ export const TOOL_REGISTRY = {
   },
   deprecate_purchasing_master_item: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
+    source: 'Firestore (Purchasing Master Template)',
     description: 'Marks an item as deprecated in the Company Master Purchasing Template.'
   },
   get_purchasing_audit_log: {
     type: 'READ',
-    source: 'Google Docs (Master Purchasing Checklist)',
+    source: 'Firestore (Purchasing Master Template)',
     description: 'Retrieves the historical audit log of purchasing modifications and synchronization events.'
   },
   get_subcontractor_balance: {

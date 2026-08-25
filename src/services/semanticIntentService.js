@@ -125,10 +125,10 @@ export const VerificationMetaPlugin = {
   classifier: (cleanQuery) => {
     const matched = 
       /\b(any other|any more|anything else|anything more|anything further|anything additional|anyone else|any others|another|besides|except|other than)\b/i.test(cleanQuery) ||
-      /\b(is that all|is this all|are those all|are these all|is that everything|is this everything|are they all)\b/i.test(cleanQuery) ||
-      /\b(only one|only ones|the only|all we have|all that exists|all that are listed|all that is listed)\b/i.test(cleanQuery) ||
+      /\b(is that all|is this all|are those all|are these all|those are all|these are all|that is all|that's all|is that everything|is this everything|that is everything|that's everything|are they all)\b/i.test(cleanQuery) ||
+      /\b(only one|only ones|the only|all we have|all that exists|all that are listed|all that is listed|all that we need|all we still need)\b/i.test(cleanQuery) ||
       /\b(do we have more|are there more|is there more|do we have other|are there other|is there another|do we have anything)\b/i.test(cleanQuery) ||
-      /\b(does anything else exist|do any other exist|is anything missing|are any missing)\b/i.test(cleanQuery);
+      /\b(does anything else exist|do any other exist|is anything missing|are any missing|did we miss|did we forget|miss anything|forget anything|nothing else is needed|nothing else needed|nothing else)\b/i.test(cleanQuery);
     
     return matched ? { matched: true, confidence: 0.95, specificity: 1.1 } : false;
   },
@@ -141,12 +141,38 @@ export const VerificationMetaPlugin = {
       const toolName = t.name || t.tool?.name;
       if (toolName === 'get_purchasing_list') {
         const sections = res.sections || [];
-        const totalSections = sections.length;
-        const names = sections.map(s => s.category || s.title || 'Category').join(', ');
-        if (totalSections === 0) {
-          responses.push(`There are currently no purchasing categories or items listed on the ${activeProject} Purchasing Checklist.`);
+        const totalItems = res.totalItems || sections.reduce((acc, s) => acc + (s.items?.length || 0), 0);
+        const queryLower = (query || '').toLowerCase();
+        
+        let matchedSection = null;
+        if (res.trade && res.trade !== 'all') {
+          matchedSection = sections.find(s => s.sectionId === res.trade) || sections[0];
         } else {
-          responses.push(`Those ${totalSections} categories (${names}) are currently all the categories listed on the ${activeProject} Purchasing Checklist.`);
+          for (const s of sections) {
+            const catLower = (s.category || s.title || '').toLowerCase();
+            if (queryLower.includes(s.sectionId) || queryLower.includes(catLower) || (s.sectionId === 'electrical' && queryLower.includes('electric'))) {
+              matchedSection = s;
+              break;
+            }
+          }
+        }
+
+        if (queryLower.includes('categor') || (queryLower.includes('list') && !queryLower.includes('item'))) {
+          const totalSections = sections.length;
+          const names = sections.map(s => s.category || s.title || 'Category').join(', ');
+          if (totalSections === 0) {
+            responses.push(`There are currently no purchasing categories or items listed on the ${activeProject} Purchasing Checklist.`);
+          } else {
+            responses.push(`Those ${totalSections} categories (${names}) are currently all the categories listed on the ${activeProject} Purchasing Checklist.`);
+          }
+        } else if (matchedSection) {
+          const itemCount = (matchedSection.items || []).length;
+          responses.push(`Yes, according to the Firestore (${activeProject} Purchasing Checklist), those are all ${itemCount} unpurchased ${matchedSection.category || matchedSection.title} items currently listed.`);
+        } else if (sections.length > 0) {
+          const names = sections.map(s => `${(s.items || []).length} in ${s.category || s.title}`).join(', ');
+          responses.push(`Yes, according to the Firestore (${activeProject} Purchasing Checklist), those are all ${totalItems} unpurchased items currently listed (${names}).`);
+        } else {
+          responses.push(`There are currently no unpurchased items listed on the Firestore (${activeProject} Purchasing Checklist).`);
         }
       } else if (toolName === 'get_subcontractor_balance' || toolName === 'get_vendor_history') {
         const records = res.results || [];

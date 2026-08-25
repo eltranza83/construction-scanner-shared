@@ -278,7 +278,8 @@ test('Multi-Domain Grounded Evidence Synthesis Suite', async (t) => {
     assert.doesNotMatch(metaRes, /• Security lights/);
 
     const sameIntentDifferentWording = synthesizeGroundedEvidence(telemetry, 'So those are the only ones?', projectContext);
-    assert.match(sameIntentDifferentWording, /all the categories listed/i);
+    assert.match(sameIntentDifferentWording, /according to the Firestore \(Lot 3 Purchasing Checklist\)/i);
+    assert.match(sameIntentDifferentWording, /those are all 20 unpurchased items/i);
   });
 
   await t.test('2. Purchasing Domain: Answers Analytical inquiry specifically with calculation', () => {
