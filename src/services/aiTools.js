@@ -49,6 +49,7 @@ import {
 } from './googleDocsPurchasingService.js';
 import { purchasingService, PURCHASING_STATUSES, TRADE_SECTION_MAP as STRUCTURED_TRADE_MAP } from './purchasingService.js';
 import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
+import { fetchGoogleDocText } from './googleDrive.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -643,25 +644,63 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
 
       // 1. Query structured PurchasingService (authoritative source of truth)
+      const isInitialized = await purchasingService.isProjectInitialized(targetProjectId);
       let items = await purchasingService.getItems(targetProjectId, {
         category: trade,
         status: args.status ? args.status : (unpurchasedOnly ? PURCHASING_STATUSES.NEEDED : null),
         item: args.item || args.keyword
       });
 
-      // If project has no items in Firestore/cache, check if we need to auto-initialize or migrate from existing Google Doc
-      if (items.length === 0 && !args.item) {
-        const allItems = await purchasingService.getItems(targetProjectId);
-        if (allItems.length === 0) {
-          // Check if there is an existing project doc in local/drive to migrate non-destructively
-          const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
-          let rawDoc = discovery.content || loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
-          if (rawDoc && (rawDoc.includes('- [ ]') || rawDoc.includes('- [x]') || rawDoc.includes('## '))) {
-            await purchasingService.migrateFromGoogleDocContent(targetProjectId, rawDoc);
-          } else {
-            // Initialize from Company Master Defaults
-            await purchasingService.initializeProjectFromMaster(targetProjectId);
+      // If project is not initialized in Firestore, attempt Google Drive discovery & live document ingestion
+      if (!isInitialized && items.length === 0 && !args.item) {
+        const hasRealItems = (doc) => doc && typeof doc === 'string' && (doc.includes('- [ ]') || doc.includes('- [x]'));
+
+        let rawDoc = null;
+        const contextDoc = projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null);
+        if (hasRealItems(contextDoc)) {
+          rawDoc = contextDoc;
+        }
+
+        const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
+        if (!rawDoc && hasRealItems(discovery.content)) {
+          rawDoc = discovery.content;
+        }
+
+        // If content is not in memory but we have a Google Drive document ID and token, fetch live content from Drive
+        const googleToken = projectContext?.googleToken || projectContext?.accessToken;
+        if (!rawDoc && discovery.documentId && googleToken && typeof fetchGoogleDocText === 'function') {
+          try {
+            rawDoc = await fetchGoogleDocText(googleToken, discovery.documentId);
+          } catch (err) {
+            console.warn('[get_purchasing_list] Failed to fetch Google Doc text from Drive:', err);
+            // Strict error guard: Do NOT silently populate Master Template if file exists but is unreadable!
+            resultPayload = {
+              success: false,
+              found: false,
+              readError: true,
+              state: 'DOCUMENT_READ_ERROR',
+              documentId: discovery.documentId || null,
+              documentName: discovery.fileName || 'Purchasing Checklist',
+              projectId: targetProjectId,
+              source: `Google Drive (${projLabel})`,
+              message: `I found "${discovery.fileName || 'Purchasing Checklist'}" in Google Drive for ${projLabel}, but was unable to retrieve its contents. Please verify Google Drive permissions so I can import your checklist.`
+            };
+            break;
           }
+        }
+
+        if (rawDoc && (rawDoc.includes('- [ ]') || rawDoc.includes('- [x]'))) {
+          await purchasingService.migrateFromGoogleDocContent(targetProjectId, rawDoc, {
+            sourceDocId: discovery.documentId,
+            sourceDocName: discovery.fileName
+          });
+          items = await purchasingService.getItems(targetProjectId, {
+            category: trade,
+            status: args.status ? args.status : (unpurchasedOnly ? PURCHASING_STATUSES.NEEDED : null)
+          });
+        } else if (targetProjectId === 'lot_3' || args.initializeFromMaster) {
+          // Lot 3 or explicit master initialization only
+          await purchasingService.initializeProjectFromMaster(targetProjectId);
           items = await purchasingService.getItems(targetProjectId, {
             category: trade,
             status: args.status ? args.status : (unpurchasedOnly ? PURCHASING_STATUSES.NEEDED : null)

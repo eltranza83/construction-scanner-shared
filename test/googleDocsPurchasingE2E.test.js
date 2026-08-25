@@ -53,9 +53,9 @@ describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', 
   });
 
   test('1. TOOL_REGISTRY has exact truthful provenance for purchasing tools', () => {
-    assert.equal(TOOL_REGISTRY.get_purchasing_list.source, 'Google Docs (Master Purchasing Checklist)');
-    assert.equal(TOOL_REGISTRY.add_purchasing_item.source, 'Google Docs (Master Purchasing Checklist)');
-    assert.equal(TOOL_REGISTRY.update_purchasing_item_status.source, 'Google Docs (Master Purchasing Checklist)');
+    assert.equal(TOOL_REGISTRY.get_purchasing_list.source, 'Firestore (Purchasing Checklist)');
+    assert.equal(TOOL_REGISTRY.add_purchasing_item.source, 'Firestore (Purchasing Checklist)');
+    assert.equal(TOOL_REGISTRY.update_purchasing_item_status.source, 'Firestore (Purchasing Checklist)');
   });
 
   test('2. get_purchasing_list retrieves and filters trade items', async () => {

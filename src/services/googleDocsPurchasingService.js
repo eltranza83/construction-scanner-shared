@@ -336,30 +336,48 @@ export function resolvePurchasingAdapter(storageOrAdapter) {
 /**
  * Helper to generate deterministic stable item_id
  */
-export function generateItemId(rawName = '') {
+export function generateItemId(rawName = '', categoryId = null, existingItem = null) {
+  if (existingItem && existingItem.id) {
+    return existingItem.id;
+  }
   const clean = String(rawName || '').trim().toLowerCase()
     .replace(/<!--.*?-->/g, '')
     .replace(/[-—–:]\s*(?:qty|quantity|count):.*$/i, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+  if (categoryId) {
+    const cleanCat = String(categoryId).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return `item_${cleanCat}_${clean || 'generic'}`;
+  }
   return `item_${clean || 'generic'}`;
+}
+
+export function toCanonicalProjectId(rawIdOrName = '') {
+  if (!rawIdOrName || typeof rawIdOrName !== 'string') return 'default';
+  const str = rawIdOrName.trim();
+  if (str.toLowerCase() === 'master' || str.toLowerCase() === 'purchasing_master') return 'master';
+
+  // Match lot pattern e.g. "Lot 55", "Lot-55", "lot 3", "Lot 3B"
+  const lotMatch = str.match(/^lot[\s_-]*([0-9]+[a-zA-Z]?)$/i);
+  if (lotMatch) {
+    return `lot_${lotMatch[1].toLowerCase()}`;
+  }
+
+  // Slugify generic string
+  return str.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^_+|_+$/g, '') || 'default';
 }
 
 /**
  * Resolves target resource type and project ID cleanly.
  */
 export function resolvePurchasingTarget(args = {}, projectContext = {}) {
-  const targetResource = (args.targetResource || '').trim().toLowerCase();
-  const explicitProjectId = (args.projectId || '').trim();
+  const explicitProjectId = args.projectId || args.targetResource || args.project;
+  const isMasterExplicit = explicitProjectId && (
+    explicitProjectId.toLowerCase() === 'master' || 
+    explicitProjectId.toLowerCase() === 'purchasing_master'
+  );
 
-  if (targetResource === 'master' || targetResource === 'purchasing_master' || targetResource === 'template' || targetResource === 'global') {
-    return {
-      resourceType: RESOURCE_TYPES.PURCHASING_MASTER,
-      projectId: null
-    };
-  }
-
-  if (explicitProjectId.toLowerCase() === 'master' || explicitProjectId.toLowerCase() === 'purchasing_master') {
+  if (isMasterExplicit) {
     return {
       resourceType: RESOURCE_TYPES.PURCHASING_MASTER,
       projectId: null
@@ -367,6 +385,32 @@ export function resolvePurchasingTarget(args = {}, projectContext = {}) {
   }
 
   let projId = explicitProjectId;
+
+  // Check if explicit is an internal ID like proj_123 that can be resolved from context or storage
+  if (projId && projId.startsWith('proj_')) {
+    if (projectContext?.activeProject?.id === projId && projectContext?.activeProject?.name) {
+      projId = projectContext.activeProject.name;
+    } else if (Array.isArray(projectContext?.projects)) {
+      const match = projectContext.projects.find(p => p.id === projId);
+      if (match?.name) projId = match.name;
+    } else if (typeof localStorage !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('jobscan_projects');
+        if (stored) {
+          const list = JSON.parse(stored);
+          const match = list.find(p => p.id === projId);
+          if (match?.name) projId = match.name;
+        }
+      } catch (_) {}
+    }
+  }
+
+  if (!projId && projectContext?.activeProjectName && typeof projectContext.activeProjectName === 'string') {
+    projId = projectContext.activeProjectName.trim();
+  }
+  if (!projId && projectContext?.activeProject?.name && typeof projectContext.activeProject.name === 'string') {
+    projId = projectContext.activeProject.name.trim();
+  }
   if (!projId && projectContext?.projectId && typeof projectContext.projectId === 'string') {
     projId = projectContext.projectId.trim();
   }
@@ -376,13 +420,12 @@ export function resolvePurchasingTarget(args = {}, projectContext = {}) {
   if (!projId && projectContext?.id && typeof projectContext.id === 'string') {
     projId = projectContext.id.trim();
   }
-  if (!projId) {
-    projId = 'default';
-  }
+
+  const canonicalId = toCanonicalProjectId(projId);
 
   return {
-    resourceType: RESOURCE_TYPES.PROJECT_PURCHASING,
-    projectId: projId
+    resourceType: canonicalId === 'master' ? RESOURCE_TYPES.PURCHASING_MASTER : RESOURCE_TYPES.PROJECT_PURCHASING,
+    projectId: canonicalId
   };
 }
 

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createProjectFolder, listProjectFolders } from '../services/settingsDrive';
 import { getDriveErrorMessage, getFolderErrorMessage, getValidationErrorMessage } from '../services/appErrors';
+import { toCanonicalProjectId } from '../services/googleDocsPurchasingService';
 
 export function useSettingsProjects({
   activeProject,
@@ -110,8 +111,10 @@ export function useSettingsProjects({
       return;
     }
 
+    const canonicalId = toCanonicalProjectId(projectNameInput.trim());
     const newProj = {
-      id: `proj_${Date.now()}`,
+      id: canonicalId,
+      canonicalId,
       name: projectNameInput.trim(),
       folderId: tempSelectedFolder.id,
       folderName: tempSelectedFolder.name

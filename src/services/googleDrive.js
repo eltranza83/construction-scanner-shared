@@ -62,6 +62,29 @@ export async function fetchDriveFileBlob(accessToken, fileId) {
   return await response.blob();
 }
 
+export async function fetchGoogleDocText(accessToken, fileId) {
+  if (!accessToken || !fileId) {
+    throw new Error('Missing accessToken or fileId for Google Doc text export.');
+  }
+  const exportUrl = `${GOOGLE_DRIVE_API_BASE}/files/${fileId}/export?mimeType=text/plain`;
+  try {
+    const response = await authenticatedDriveFetch(accessToken, exportUrl);
+    if (response.ok) {
+      return await response.text();
+    }
+  } catch (err) {
+    if (err.status === 401) throw err;
+  }
+
+  // Fallback to direct media fetch if not a native Google Doc
+  const mediaResponse = await authenticatedDriveFetch(accessToken, getDriveFileMediaUrl(fileId));
+  if (!mediaResponse.ok) {
+    const errText = await mediaResponse.text();
+    throw new Error(`Failed to retrieve document text: ${errText}`);
+  }
+  return await mediaResponse.text();
+}
+
 export async function fetchDriveFileAsObjectUrl(accessToken, fileId) {
   const blob = await fetchDriveFileBlob(accessToken, fileId);
   return URL.createObjectURL(blob);

@@ -111,12 +111,21 @@ export const STANDARD_MASTER_ITEMS = [
   { id: 'plumb_faucets', categoryId: 'plumbing', itemName: 'Faucets', quantity: 1, status: 'needed' }
 ];
 
-export function generateItemId(rawName = '') {
+export function generateItemId(rawName = '', categoryId = null, existingItem = null) {
+  if (existingItem && existingItem.id) {
+    return existingItem.id;
+  }
   const clean = String(rawName || '')
     .toLowerCase()
     .trim()
+    .replace(/<!--.*?-->/g, '')
+    .replace(/[-—–:]\s*(?:qty|quantity|count):.*$/i, '')
     .replace(/[^a-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '');
+  if (categoryId) {
+    const cleanCat = String(categoryId).trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    return clean ? `item_${cleanCat}_${clean}` : `item_${cleanCat}_${Date.now()}`;
+  }
   return clean ? `item_${clean}` : `item_${Date.now()}`;
 }
 
@@ -271,6 +280,34 @@ export class LocalStoragePurchasingAdapter {
     this.memoryStore.set(key, items);
     return items;
   }
+
+  async getMetadata(projectId) {
+    const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const key = `sitetactix_purchasing_meta_${cleanId}`;
+    const storageObj = this.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (storageObj?.getItem) {
+      const raw = storageObj.getItem(key);
+      if (raw) {
+        try {
+          return JSON.parse(raw) || null;
+        } catch (_) {}
+      }
+    }
+    return this.memoryStore.get(key) || null;
+  }
+
+  async saveMetadata(projectId, meta = {}) {
+    const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+    const key = `sitetactix_purchasing_meta_${cleanId}`;
+    const payload = { ...meta, updatedAt: new Date().toISOString() };
+    const serialized = JSON.stringify(payload);
+    const storageObj = this.storage || (typeof localStorage !== 'undefined' ? localStorage : null);
+    if (storageObj?.setItem) {
+      storageObj.setItem(key, serialized);
+    }
+    this.memoryStore.set(key, payload);
+    return payload;
+  }
 }
 
 /**
@@ -322,6 +359,41 @@ export class FirestorePurchasingAdapter {
       console.warn('[FirestorePurchasingAdapter] Error writing to Firestore:', err);
     }
     return items;
+  }
+
+  async getMetadata(projectId) {
+    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    if (!database) {
+      return await this.fallback.getMetadata(projectId);
+    }
+    try {
+      const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const metaRef = doc(database, 'projects', cleanId, 'purchasing_meta', 'status');
+      const snap = await getDoc(metaRef);
+      if (snap.exists()) {
+        const data = snap.data();
+        await this.fallback.saveMetadata(projectId, data);
+        return data;
+      }
+      return await this.fallback.getMetadata(projectId);
+    } catch (err) {
+      return await this.fallback.getMetadata(projectId);
+    }
+  }
+
+  async saveMetadata(projectId, meta = {}) {
+    await this.fallback.saveMetadata(projectId, meta);
+    const database = this.db || (typeof window !== 'undefined' ? getFirebaseDb() : null);
+    if (!database) return meta;
+
+    try {
+      const cleanId = String(projectId || 'default').trim().toLowerCase().replace(/[^a-z0-9_-]/g, '_');
+      const metaRef = doc(database, 'projects', cleanId, 'purchasing_meta', 'status');
+      await setDoc(metaRef, { ...meta, updatedAt: new Date().toISOString() }, { merge: true });
+    } catch (err) {
+      console.warn('[FirestorePurchasingAdapter] Error writing metadata to Firestore:', err);
+    }
+    return meta;
   }
 }
 
@@ -570,15 +642,36 @@ export class PurchasingService {
     };
   }
 
-  async initializeProjectFromMaster(projectId, defaultItems = STANDARD_MASTER_ITEMS) {
+  async isProjectInitialized(projectId) {
+    if (typeof this.storage.getMetadata === 'function') {
+      const meta = await this.storage.getMetadata(projectId);
+      if (meta && meta.initialized) return true;
+    }
+    const items = await this.storage.getItems(projectId);
+    return items && items.length > 0;
+  }
+
+  async setProjectInitialized(projectId, meta = {}) {
+    if (typeof this.storage.saveMetadata === 'function') {
+      return await this.storage.saveMetadata(projectId, {
+        initialized: true,
+        ...meta
+      });
+    }
+    return { initialized: true, ...meta };
+  }
+
+  async initializeProjectFromMaster(projectId, defaultItems = STANDARD_MASTER_ITEMS, options = {}) {
+    const isInit = await this.isProjectInitialized(projectId);
     const existing = await this.storage.getItems(projectId);
-    if (existing && existing.length > 0) {
+    if (isInit && existing && existing.length > 0) {
       return { success: true, count: existing.length, items: existing, alreadyInitialized: true };
     }
 
     const now = new Date().toISOString();
     const cloned = defaultItems.map(it => ({
       ...it,
+      id: it.id || generateItemId(it.itemName),
       projectId,
       normalizedName: this._normalizeQuery(it.itemName),
       status: it.status || PURCHASING_STATUSES.NEEDED,
@@ -588,6 +681,12 @@ export class PurchasingService {
     }));
 
     await this.storage.saveItems(projectId, cloned);
+    await this.setProjectInitialized(projectId, {
+      source: 'master_template',
+      sourceDocId: options.sourceDocId || null,
+      itemCount: cloned.length
+    });
+
     return { success: true, count: cloned.length, items: cloned, alreadyInitialized: false };
   }
 
@@ -676,7 +775,7 @@ export class PurchasingService {
     return { success: true, projectsSynced: targetProjectIds, details: results };
   }
 
-  async migrateFromGoogleDocContent(projectId, docText = '') {
+  async migrateFromGoogleDocContent(projectId, docText = '', options = {}) {
     if (!docText || typeof docText !== 'string') {
       return { success: false, count: 0, items: [] };
     }
@@ -708,14 +807,21 @@ export class PurchasingService {
           .replace(/^[\u2610\u2611\u2612\u25cb\u25cf\u25a2\u2751☐☑☒\-*•+o\s]+/, '')
           .replace(/^\[[ xX]?\]\s*/, '')
           .trim();
-
         if (cleanedText) {
           const parsed = parseQuantity(cleanedText);
           const itemCategory = classifyTradeCategory(parsed.itemName, currentCategory.id);
           const now = new Date().toISOString();
 
+          const existingItems = await this.storage.getItems(projectId);
+          const existingMatch = existingItems.find(it => {
+            const sameCategory = !it.categoryId || it.categoryId === itemCategory.id;
+            const sameName = (it.normalizedName && it.normalizedName === this._normalizeQuery(parsed.itemName)) ||
+                             (it.itemName && it.itemName.toLowerCase() === parsed.itemName.toLowerCase());
+            return sameCategory && sameName;
+          });
+
           migrated.push({
-            id: parsed.itemId || generateItemId(parsed.itemName),
+            id: parsed.itemId || generateItemId(parsed.itemName, itemCategory.id, existingMatch),
             projectId,
             categoryId: itemCategory.id,
             categoryTitle: itemCategory.title,
@@ -724,7 +830,7 @@ export class PurchasingService {
             quantity: parsed.quantity || 1,
             status: isPurchased ? PURCHASING_STATUSES.PURCHASED : PURCHASING_STATUSES.NEEDED,
             notes: parsed.notes || '',
-            source: 'master_template',
+            source: options.source || 'google_doc_migration',
             createdAt: now,
             updatedAt: now
           });
@@ -733,10 +839,26 @@ export class PurchasingService {
     }
 
     if (migrated.length > 0) {
-      await this.storage.saveItems(projectId, migrated);
+      // Idempotent merge with existing items
+      const existing = await this.storage.getItems(projectId);
+      const existingMap = new Map(existing.map(it => [it.id, it]));
+      for (const item of migrated) {
+        if (!existingMap.has(item.id)) {
+          existingMap.set(item.id, item);
+        }
+      }
+      const combined = Array.from(existingMap.values());
+      await this.storage.saveItems(projectId, combined);
+      await this.setProjectInitialized(projectId, {
+        source: options.source || 'google_doc_migration',
+        sourceDocId: options.sourceDocId || null,
+        sourceDocName: options.sourceDocName || null,
+        itemCount: combined.length
+      });
+      return { success: true, count: combined.length, items: combined };
     }
 
-    return { success: true, count: migrated.length, items: migrated };
+    return { success: true, count: 0, items: [] };
   }
 }
 

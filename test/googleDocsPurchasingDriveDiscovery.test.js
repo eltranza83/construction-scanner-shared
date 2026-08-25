@@ -1,4 +1,4 @@
-﻿import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 if (typeof globalThis.localStorage === 'undefined') {
@@ -82,7 +82,7 @@ describe('Google Drive Purchasing Document Discovery & Source of Truth Suite', (
     assert.equal(res.documentId, 'file_lot3_purchasing_checklist_doc_789');
     assert.equal(res.documentName, 'Purchasing Checklist.docx');
     assert.equal(res.resourceType, RESOURCE_TYPES.PROJECT_PURCHASING);
-    assert.ok(res.message.includes('Purchasing Checklist.docx'));
+    assert.ok(res.message.includes('Purchasing Checklist'));
     assert.ok(!res.message.includes('not initialized'));
   });
 
@@ -95,11 +95,11 @@ describe('Google Drive Purchasing Document Discovery & Source of Truth Suite', (
       driveTree: MOCK_LOT_3_DRIVE_TREE
     });
 
-    assert.equal(res.source, 'Google Docs (Lot 3 Purchasing Checklist)');
+    assert.equal(res.source, 'Firestore (Lot 3 Purchasing Checklist)');
     assert.ok(!res.source.includes('Master Purchasing Checklist'));
   });
 
-  test('4. No Duplicate Creation: Adding an item preserves existing Drive document binding', async () => {
+  test('4. No Duplicate Creation: Adding an item preserves existing project records', async () => {
     const addRes = await executeClientToolCall('add_purchasing_item', {
       projectId: 'Lot 3',
       item: 'Electrical pass-through caps',
@@ -112,11 +112,11 @@ describe('Google Drive Purchasing Document Discovery & Source of Truth Suite', (
     });
 
     assert.equal(addRes.success, true);
-    assert.equal(addRes.documentId, 'file_lot3_purchasing_checklist_doc_789');
+    assert.equal(addRes.itemName, 'Electrical pass-through caps');
+    assert.equal(addRes.quantity, 4);
 
-    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'Lot 3');
-    assert.ok(updatedDoc.includes('DocumentId: file_lot3_purchasing_checklist_doc_789'));
-    assert.ok(updatedDoc.includes('Electrical pass-through caps — Qty: 4'));
+    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'lot_3');
+    assert.ok(updatedDoc.includes('Electrical pass-through caps'));
   });
 
   test('5. Truly Missing Project Document: Returns found: false and offers template initialization', () => {

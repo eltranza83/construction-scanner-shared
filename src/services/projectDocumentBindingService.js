@@ -101,23 +101,21 @@ export function resolveCandidateDriveFiles(driveTree, docTypeKey = 'purchasing_c
     };
   }
 
-  if (Array.isArray(driveTree.subfolders)) {
-    for (const sub of driveTree.subfolders) {
-      const folderName = sub.folderName || sub.name || 'Google Drive';
-      if (Array.isArray(sub.files)) {
-        for (const file of sub.files) {
-          const res = evaluateCandidate(file, folderName);
-          if (res && res.baseScore > 0) rawCandidates.push(res);
-        }
+  const folderList = Array.isArray(driveTree.subfolders) ? driveTree.subfolders : (Array.isArray(driveTree.folders) ? driveTree.folders : []);
+  for (const sub of folderList) {
+    const folderName = sub.folderName || sub.name || 'Google Drive';
+    if (Array.isArray(sub.files)) {
+      for (const file of sub.files) {
+        const res = evaluateCandidate(file, folderName);
+        if (res && res.baseScore > 0) rawCandidates.push(res);
       }
     }
   }
 
-  if (Array.isArray(driveTree.directFiles)) {
-    for (const file of driveTree.directFiles) {
-      const res = evaluateCandidate(file, 'Google Drive');
-      if (res && res.baseScore > 0) rawCandidates.push(res);
-    }
+  const directList = Array.isArray(driveTree.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree.files) ? driveTree.files : []);
+  for (const file of directList) {
+    const res = evaluateCandidate(file, 'Google Drive');
+    if (res && res.baseScore > 0) rawCandidates.push(res);
   }
 
   rawCandidates.sort((a, b) => b.totalScore - a.totalScore);
