@@ -942,9 +942,77 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(normCalls19b[0].args.trade, undefined, 'Invalid trade "pool" must be purged from trade filter');
     assert.equal(normCalls19b[0].args.itemName, 'pool', 'Moved invalid trade to itemName');
 
-    const res19b = await executeClientToolCall('get_purchasing_list', normCalls19b[0].args, { ...projectContext, userQuery: q19b });
-    assert.notEqual(res19b.itemLookup, null);
-    assert.match(res19b.itemLookup.canonicalAnswer, /You have 3 pool heater \(Needed\) on the Lot 55 purchasing checklist\./i);
+    // -------------------------------------------------------------
+    // Scenario 20: Trade-Scoped Collection Count Inquiries vs Single-Item Quantity
+    // -------------------------------------------------------------
+    // Mark 5 more electrical items as purchased so electrical has 7 purchased items
+    const allElecItems20 = (await purchasingService.getItems(lotId)).filter(i => (i.categoryId || 'general') === 'electrical');
+    for (let i = 0; i < 7; i++) {
+      await purchasingService.updateItemStatus(lotId, allElecItems20[i].itemName, 'purchased');
+    }
+
+    // 20a: "How many electrical items have we purchased?" (Collection count: 7 purchased)
+    const q20a = 'How many electrical items have we purchased?';
+    assert.equal(isPurchaseStatusMutationCommand(q20a), false);
+    const res20a = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20a });
+    assert.equal(res20a.itemLookup, null, 'Must NOT create itemLookup for trade collection count');
+    assert.match(res20a.summary.canonicalAnswer, /You have purchased 7 Electrical Hardware Fixtures items for Lot 55/i);
+    assert.doesNotMatch(res20a.summary.canonicalAnswer, /not currently (listed|on)/i);
+
+    // 20b: "How many plumbing items have we purchased?" (0 plumbing purchased)
+    const q20b = 'How many plumbing items have we purchased?';
+    assert.equal(isPurchaseStatusMutationCommand(q20b), false);
+    const res20b = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20b });
+    assert.equal(res20b.itemLookup, null);
+    assert.match(res20b.summary.canonicalAnswer, /No plumbing hardware fixtures have been marked as purchased yet for Lot 55/i);
+
+    // 20c: "How many electrical items do we still need?"
+    const q20c = 'How many electrical items do we still need?';
+    assert.equal(isPurchaseStatusMutationCommand(q20c), false);
+    const res20c = await executeClientToolCall('get_purchasing_list', { projectId: lotId }, { ...projectContext, userQuery: q20c });
+    assert.equal(res20c.itemLookup, null);
+    assert.match(res20c.summary.canonicalAnswer, /You still need to purchase \d+ Electrical Hardware Fixtures items for Lot 55/i);
+
+    // 20d: "How many plumbing fixtures do we still need?" (8 plumbing needed)
+    const q20d = 'How many plumbing fixtures do we still need?';
+    assert.equal(isPurchaseStatusMutationCommand(q20d), false);
+    const res20d = await executeClientToolCall('get_purchasing_list', { projectId: lotId }, { ...projectContext, userQuery: q20d });
+    assert.equal(res20d.itemLookup, null);
+    assert.match(res20d.summary.canonicalAnswer, /You still need to purchase 8 Plumbing Hardware Fixtures items for Lot 55/i);
+
+    // 20e: "How many items have we purchased in electrical?"
+    const q20e = 'How many items have we purchased in electrical?';
+    assert.equal(isPurchaseStatusMutationCommand(q20e), false);
+    const res20e = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20e });
+    assert.equal(res20e.itemLookup, null);
+    assert.match(res20e.summary.canonicalAnswer, /You have purchased 7 Electrical Hardware Fixtures items for Lot 55/i);
+
+    // 20f: "How many purchased electrical items do we have?"
+    const q20f = 'How many purchased electrical items do we have?';
+    assert.equal(isPurchaseStatusMutationCommand(q20f), false);
+    const res20f = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20f });
+    assert.equal(res20f.itemLookup, null);
+    assert.match(res20f.summary.canonicalAnswer, /You have purchased 7 Electrical Hardware Fixtures items for Lot 55/i);
+
+    // 20g: "How many pool heaters do we have?" (Single-item quantity: Qty 3)
+    const q20g = 'How many pool heaters do we have?';
+    assert.equal(isPurchaseStatusMutationCommand(q20g), false);
+    const res20g = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20g });
+    assert.notEqual(res20g.itemLookup, null, 'Must create itemLookup for specific item quantity');
+    assert.match(res20g.itemLookup.canonicalAnswer, /You have 3 Pool heater \(Needed\) on the Lot 55 purchasing checklist\./i);
+
+    // 20h: "How many ceiling fans do we have?" (Single-item quantity: Qty 1)
+    const q20h = 'How many ceiling fans do we have?';
+    assert.equal(isPurchaseStatusMutationCommand(q20h), false);
+    const res20h = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q20h });
+    assert.notEqual(res20h.itemLookup, null, 'Must create itemLookup for specific item quantity');
+    assert.match(res20h.itemLookup.canonicalAnswer, /You have 1 Ceiling fans \((Purchased|Needed)\) on the Lot 55 purchasing checklist\./i);
+
+    // Reset electrical items back to needed before baseline reset
+    for (let i = 0; i < 7; i++) {
+      await purchasingService.updateItemStatus(lotId, allElecItems20[i].itemName, 'needed');
+    }
+    await purchasingService.updateItemStatus(lotId, 'Security lights', 'purchased');
 
     // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:

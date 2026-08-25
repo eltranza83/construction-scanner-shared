@@ -366,10 +366,16 @@ export const RetrievalPlugin = {
         }
 
         // Dynamic fallback item lookup when tool was executed without query-specific itemLookup
-        const isListInquiry = (!/\b(how many|how much|count of|quantity of)\b/i.test(queryLower)) && (
-          /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(queryLower) ||
-          /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(queryLower) ||
-          /\b(show|list|all items|everything)\b/i.test(queryLower)
+        const collectionCountRegex = /\b(how many|how much|count of|quantity of|number of|total number of)\s+(?:total\s+)?(?:(?:[a-z\s]+)\s+)?(?:items|materials|fixtures|stuff|things|supplies|categories|sections)\b/i;
+        const genericCountRegex = /\b(how many|how much)\s+(?:have we|did we|do we|are there)\s+(?:purchased|bought|got|to buy|needed|left|remaining)\b/i;
+        const isCollectionCountInquiry = collectionCountRegex.test(queryLower) || genericCountRegex.test(queryLower);
+
+        const isListInquiry = isCollectionCountInquiry || (
+          (!/\b(how many|how much|count of|quantity of)\b/i.test(queryLower)) && (
+            /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(queryLower) ||
+            /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(queryLower) ||
+            /\b(show|list|all items|everything)\b/i.test(queryLower)
+          )
         );
 
         const isItemStatusQuery = !isListInquiry &&

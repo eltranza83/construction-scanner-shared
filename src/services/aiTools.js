@@ -778,11 +778,27 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const isPurchasedInquiry = args.status === PURCHASING_STATUSES.PURCHASED ||
         /\b(what have we (already )?(purchased|bought)|what did we (already )?(purchase|buy)|what items are purchased|what items have been purchased|what is purchased|what's purchased|already purchased|purchased items|list purchased|show purchased)\b/i.test(userPrompt);
 
+      // Infer trade from query if not explicitly passed
+      let effectiveTrade = trade;
+      if (!effectiveTrade && userPrompt) {
+        const matchedTradeKey = Object.keys(STRUCTURED_TRADE_MAP).find(k => {
+          const title = STRUCTURED_TRADE_MAP[k]?.title.toLowerCase() || '';
+          return new RegExp(`\\b(${k}|${title.replace(/&/g, '(?:&|and)')})\\b`, 'i').test(userPrompt);
+        });
+        if (matchedTradeKey) {
+          effectiveTrade = matchedTradeKey;
+        }
+      }
+
+      const collectionCountRegex = /\b(how many|how much|count of|quantity of|number of|total number of)\s+(?:total\s+)?(?:(?:[a-z\s]+)\s+)?(?:items|materials|fixtures|stuff|things|supplies|categories|sections)\b/i;
+      const genericCountRegex = /\b(how many|how much)\s+(?:have we|did we|do we|are there)\s+(?:purchased|bought|got|to buy|needed|left|remaining)\b/i;
+      const isCollectionCountInquiry = collectionCountRegex.test(userPrompt) || genericCountRegex.test(userPrompt);
+
       // Generate canonical pre-synthesized answer
       let canonicalAnswer = '';
-      if (trade) {
-        const matchedTradeKey = Object.keys(STRUCTURED_TRADE_MAP).find(k => k === trade.toLowerCase() || STRUCTURED_TRADE_MAP[k]?.title.toLowerCase().includes(trade.toLowerCase()));
-        const matchedTradeTitle = (matchedTradeKey && STRUCTURED_TRADE_MAP[matchedTradeKey]?.title) || trade;
+      if (effectiveTrade) {
+        const matchedTradeKey = Object.keys(STRUCTURED_TRADE_MAP).find(k => k === effectiveTrade.toLowerCase() || STRUCTURED_TRADE_MAP[k]?.title.toLowerCase().includes(effectiveTrade.toLowerCase()));
+        const matchedTradeTitle = (matchedTradeKey && STRUCTURED_TRADE_MAP[matchedTradeKey]?.title) || effectiveTrade;
         const tradeAllItems = allProjectItems.filter(it => (it.categoryId || 'general') === (matchedTradeKey || 'general'));
         const tradePurchasedItems = tradeAllItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED);
         const tradeNeededItems = tradeAllItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED);
@@ -798,21 +814,30 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
             canonicalAnswer = `No ${matchedTradeTitle.toLowerCase()} have been marked as purchased yet for ${projLabel}.`;
           } else {
             const itemLines = tradePurchasedItems.map(it => `• ${it.itemName}${it.quantity && it.quantity > 1 ? ` — Qty: ${it.quantity}` : ''} (Purchased)`).join('\n');
-            canonicalAnswer = `Purchased ${matchedTradeTitle} for ${projLabel} (${tradePurchasedItems.length} item${tradePurchasedItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+            const prefix = isCollectionCountInquiry
+              ? `You have purchased ${tradePurchasedItems.length} ${matchedTradeTitle} item${tradePurchasedItems.length === 1 ? '' : 's'} for ${projLabel}`
+              : `Purchased ${matchedTradeTitle} for ${projLabel} (${tradePurchasedItems.length} item${tradePurchasedItems.length === 1 ? '' : 's'})`;
+            canonicalAnswer = `${prefix}:\n${itemLines}`;
           }
         } else if (isTradeNeededOnly) {
           if (tradeNeededItems.length === 0) {
             canonicalAnswer = `All ${matchedTradeTitle.toLowerCase()} have been purchased for ${projLabel}.`;
           } else {
             const itemLines = tradeNeededItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (Needed)`).join('\n');
-            canonicalAnswer = `${matchedTradeTitle} needed for ${projLabel} (${tradeNeededItems.length} item${tradeNeededItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+            const prefix = isCollectionCountInquiry
+              ? `You still need to purchase ${tradeNeededItems.length} ${matchedTradeTitle} item${tradeNeededItems.length === 1 ? '' : 's'} for ${projLabel}`
+              : `${matchedTradeTitle} needed for ${projLabel} (${tradeNeededItems.length} item${tradeNeededItems.length === 1 ? '' : 's'})`;
+            canonicalAnswer = `${prefix}:\n${itemLines}`;
           }
         } else {
           if (tradeAllItems.length === 0) {
             canonicalAnswer = `No purchasing items found under ${matchedTradeTitle} for ${projLabel}.`;
           } else {
             const itemLines = tradeAllItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (${it.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
-            canonicalAnswer = `${matchedTradeTitle} for ${projLabel} (${tradeAllItems.length} item${tradeAllItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+            const prefix = isCollectionCountInquiry
+              ? `You have ${tradeAllItems.length} total ${matchedTradeTitle} items on the ${projLabel} checklist (${tradePurchasedItems.length} purchased, ${tradeNeededItems.length} needed)`
+              : `${matchedTradeTitle} for ${projLabel} (${tradeAllItems.length} item${tradeAllItems.length === 1 ? '' : 's'})`;
+            canonicalAnswer = `${prefix}:\n${itemLines}`;
           }
         }
       } else if (isPurchasedInquiry) {
@@ -859,10 +884,12 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       // Check if user's question was an item status or quantity query (e.g. "Did we buy the lights?", "How many pool heaters do we have?")
       let itemLookup = null;
-      const isListInquiry = (!/\b(how many|how much|count of|quantity of)\b/i.test(userPrompt)) && (
-        /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(userPrompt) ||
-        /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(userPrompt) ||
-        /\b(show|list|all items|everything)\b/i.test(userPrompt)
+      const isListInquiry = isCollectionCountInquiry || (
+        (!/\b(how many|how much|count of|quantity of)\b/i.test(userPrompt)) && (
+          /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(userPrompt) ||
+          /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(userPrompt) ||
+          /\b(show|list|all items|everything)\b/i.test(userPrompt)
+        )
       );
 
       if (userPrompt && !isListInquiry) {
