@@ -263,7 +263,10 @@ export class LocalStoragePurchasingAdapter {
 
   getMasterDocument(defaultDoc = null, docType = 'purchasing_checklist') {
     const key = this.getMasterKey(docType);
-    const stored = this.storage?.getItem ? this.storage.getItem(key) : null;
+    let stored = this.storage?.getItem ? this.storage.getItem(key) : null;
+    if (!stored && this.storage?.getItem) {
+      stored = this.storage.getItem('sitetactix_purchasing_doc_purchasing_master');
+    }
     return stored || defaultDoc || (docType === 'purchasing_checklist' ? DEFAULT_MASTER_TEMPLATE_DOC : '');
   }
 

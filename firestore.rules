@@ -72,6 +72,15 @@ service cloud.firestore {
       allow update: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid) && request.resource.data.uid == resource.data.uid;
       allow delete: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
     }
+
+    match /projects/{projectId}/purchasing_items/{itemId} {
+      allow read, write: if signedIn();
+    }
+
+    match /purchasing_templates/{templateId}/items/{itemId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
   }
 }
 

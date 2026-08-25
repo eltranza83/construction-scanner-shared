@@ -47,6 +47,7 @@ import {
   RESOURCE_TYPES,
   MASTER_PROJECT_ID
 } from './googleDocsPurchasingService.js';
+import { purchasingService, PURCHASING_STATUSES, TRADE_SECTION_MAP as STRUCTURED_TRADE_MAP } from './purchasingService.js';
 import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
@@ -77,33 +78,38 @@ export const TOOL_REGISTRY = {
   },
   get_purchasing_list: {
     type: 'READ',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Retrieves materials and fixtures from the Master Purchasing Google Doc, filtered by trade.'
+    source: 'Firestore (Purchasing Checklist)',
+    description: 'Retrieves materials and fixtures from the Firestore Purchasing Database, filtered by trade or status.'
   },
   add_purchasing_item: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Inserts or updates quantity of a purchasing item in the correct trade section of the Google Doc.'
+    source: 'Firestore (Purchasing Checklist)',
+    description: 'Inserts or updates quantity of a purchasing item in the correct trade category in Firestore.'
   },
   update_purchasing_item_status: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Marks an item as purchased/completed in the Google Docs Master Purchasing List.'
+    source: 'Firestore (Purchasing Checklist)',
+    description: 'Marks an item as needed or purchased in the Firestore Purchasing Database.'
   },
   remove_purchasing_item: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Removes or deletes an item/material from the Google Docs Purchasing Checklist.'
+    source: 'Firestore (Purchasing Checklist)',
+    description: 'Removes or deletes an item/material from the Firestore Purchasing Checklist.'
+  },
+  export_purchasing_doc: {
+    type: 'ACTION',
+    source: 'Purchasing Exporter',
+    description: 'Generates a clean printable/exportable Markdown Google Doc checklist from Firestore.'
   },
   remove_purchasing_section: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Removes or deletes an entire section/category heading and its contents from the Google Docs Purchasing Checklist.'
+    source: 'Firestore (Purchasing Checklist)',
+    description: 'Removes or deletes an entire section/category heading and its contents from the Purchasing Checklist.'
   },
   sync_purchasing_master_to_projects: {
     type: 'WRITE',
-    source: 'Google Docs (Master Purchasing Checklist)',
-    description: 'Non-destructively synchronizes standard items from Master Purchasing into active project purchasing lists.'
+    source: 'Firestore (Purchasing Master Template)',
+    description: 'Non-destructively synchronizes standard items from Master Purchasing template into active project purchasing lists.'
   },
   deprecate_purchasing_master_item: {
     type: 'WRITE',
@@ -630,90 +636,110 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
     }
 
     case 'get_purchasing_list': {
-      const trade = args.trade || null;
-      const unpurchasedOnly = args.unpurchasedOnly !== false;
-      const target = resolvePurchasingTarget(args, projectContext);
+      const trade = args.trade || args.category || null;
+      const unpurchasedOnly = args.unpurchasedOnly !== false && args.status !== 'purchased';
+      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext) || 'lot_3';
+      const projLabel = projectContext?.activeProjectName || targetProjectId || 'Lot';
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
-      const projLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master' : (projectContext?.activeProjectName || target.projectId || 'Lot');
-      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? 'Google Docs (Master Purchasing Checklist)'
-        : `Google Docs (${projLabel} Purchasing Checklist)`;
 
-      const discovery = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
-        : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
+      // 1. Query structured PurchasingService (authoritative source of truth)
+      let items = await purchasingService.getItems(targetProjectId, {
+        category: trade,
+        status: args.status ? args.status : (unpurchasedOnly ? PURCHASING_STATUSES.NEEDED : null),
+        item: args.item || args.keyword
+      });
 
-      const hasDoc = Boolean(discovery.found || target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER);
-      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
-
-      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? loadMasterPurchasingDoc(storage)
-        : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
-
-      // LIVE GOOGLE DRIVE CONTENT READ:
-      // If bound to a Google Drive document, fetch current live content directly from Drive (Source of Truth)
-      if (discovery.found && discovery.documentId && target.resourceType !== RESOURCE_TYPES.PURCHASING_MASTER) {
-        const contentRes = await fetchDocumentContent({
-          documentId: discovery.documentId,
-          fileName: discovery.fileName,
-          modifiedTime: discovery.modifiedTime,
-          projectContext
-        });
-
-        if (contentRes.success && contentRes.content !== null && contentRes.content !== undefined) {
-          rawDoc = contentRes.content;
-          // Update local cache with freshly fetched live content
-          saveProjectPurchasingDoc(storage, target.projectId, rawDoc);
-        } else if (!contentRes.success && contentRes.state === DOCUMENT_STATES.DOCUMENT_READ_ERROR) {
-          const hasRealLocalItems = rawDoc && (rawDoc.includes('- [ ]') || rawDoc.includes('- [x]') || rawDoc.includes('☐') || rawDoc.includes('☑'));
-          const isSessionUnconfigured = contentRes.error && contentRes.error.includes('session not connected');
-
-          if (!isSessionUnconfigured || !hasRealLocalItems) {
-            resultPayload = {
-              found: true,
-              hasExistingDocument: true,
-              readError: true,
-              state: DOCUMENT_STATES.DOCUMENT_READ_ERROR,
-              documentId: discovery.documentId,
-              documentName: docName,
-              resourceType: target.resourceType,
-              projectId: target.projectId,
-              source: sourceLabel,
-              message: `I found the ${projLabel} Purchasing Checklist ("${docName}") in Google Drive, but I was unable to read its current contents: ${contentRes.error}`,
-              error: contentRes.error,
-              sections: [],
-              totalItems: null
-            };
-            break;
+      // If project has no items in Firestore/cache, check if we need to auto-initialize or migrate from existing Google Doc
+      if (items.length === 0 && !args.item) {
+        const allItems = await purchasingService.getItems(targetProjectId);
+        if (allItems.length === 0) {
+          // Check if there is an existing project doc in local/drive to migrate non-destructively
+          const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
+          let rawDoc = discovery.content || loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
+          if (rawDoc && (rawDoc.includes('- [ ]') || rawDoc.includes('- [x]') || rawDoc.includes('## '))) {
+            await purchasingService.migrateFromGoogleDocContent(targetProjectId, rawDoc);
+          } else {
+            // Initialize from Company Master Defaults
+            await purchasingService.initializeProjectFromMaster(targetProjectId);
           }
+          items = await purchasingService.getItems(targetProjectId, {
+            category: trade,
+            status: args.status ? args.status : (unpurchasedOnly ? PURCHASING_STATUSES.NEEDED : null)
+          });
         }
       }
 
-      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
-      const queryResults = queryPurchasingList(parsed, { trade, unpurchasedOnly });
+      // Group into trade sections matching expected UI structure
+      const categoryOrder = ['quartz', 'electrical', 'plumbing', 'hvac', 'paint_drywall', 'general'];
+      const grouped = {};
+      for (const catKey of categoryOrder) {
+        grouped[catKey] = {
+          sectionId: catKey,
+          category: STRUCTURED_TRADE_MAP[catKey]?.title || catKey,
+          title: STRUCTURED_TRADE_MAP[catKey]?.title || catKey,
+          items: []
+        };
+      }
 
-      let message = '';
-      if (queryResults.length > 0) {
-        message = `Found ${queryResults.reduce((sum, s) => sum + s.items.length, 0)} item(s) in ${docName} for ${projLabel}.`;
-      } else if (hasDoc) {
-        message = `Project ${projLabel} has an active purchasing document "${docName}" in Google Drive (ID: ${discovery.documentId || 'active'}), but currently has no pending items listed${trade ? ` for ${trade}` : ''}.`;
-      } else {
-        message = `No purchasing checklist document has been configured or discovered for project ${projLabel} yet. Would you like to initialize one from the Master Purchasing Template?`;
+      for (const it of items) {
+        const cat = it.categoryId || 'general';
+        if (!grouped[cat]) {
+          grouped[cat] = {
+            sectionId: cat,
+            category: it.categoryTitle || cat,
+            title: it.categoryTitle || cat,
+            items: []
+          };
+        }
+        grouped[cat].items.push({
+          itemId: it.id,
+          id: it.id,
+          name: it.itemName,
+          itemName: it.itemName,
+          quantity: it.quantity,
+          isPurchased: it.status === PURCHASING_STATUSES.PURCHASED,
+          status: it.status,
+          notes: it.notes || ''
+        });
+      }
+
+      const sections = Object.values(grouped).filter(s => s.items.length > 0);
+      const totalItems = items.length;
+      const message = totalItems > 0
+        ? `Found ${totalItems} item(s) in Purchasing Checklist for ${projLabel}${trade ? ` (${trade})` : ''}.`
+        : `No pending items found in Purchasing Checklist for ${projLabel}${trade ? ` under ${trade}` : ''}.`;
+
+      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
+
+      if (discovery.readError) {
+        resultPayload = {
+          success: false,
+          found: false,
+          readError: true,
+          state: discovery.state || 'DOCUMENT_READ_ERROR',
+          documentId: discovery.documentId || null,
+          documentName: discovery.fileName || null,
+          projectId: targetProjectId,
+          source: `Firestore (${projLabel} Purchasing Checklist)`,
+          message: discovery.message || `Found "${discovery.fileName}", but was unable to read its current contents.`
+        };
+        break;
       }
 
       resultPayload = {
-        found: queryResults.length > 0 || hasDoc,
-        hasExistingDocument: hasDoc,
-        documentId: discovery.documentId || null,
-        documentName: docName,
-        resourceType: target.resourceType,
-        projectId: target.projectId,
-        source: sourceLabel,
+        found: totalItems > 0,
+        hasExistingDocument: true,
+        documentId: discovery?.documentId || null,
+        documentName: discovery?.fileName || null,
+        resourceType: RESOURCE_TYPES.PROJECT_PURCHASING,
+        projectId: targetProjectId,
+        source: `Firestore (${projLabel} Purchasing Checklist)`,
         trade: trade || 'all',
         unpurchasedOnly,
-        totalSections: queryResults.length,
-        totalItems: queryResults.reduce((sum, s) => sum + s.items.length, 0),
-        sections: queryResults,
+        totalSections: sections.length,
+        totalItems,
+        sections,
+        items: items.map(it => ({ ...it, name: it.itemName })),
         message
       };
       break;
@@ -723,315 +749,114 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const itemInput = args.item || '';
       const quantity = args.quantity || 1;
       const category = args.category || null;
-      const target = resolvePurchasingTarget(args, projectContext);
+      const isMaster = args.projectId === 'master' || args.targetResource === 'master';
+      const targetProjectId = isMaster ? 'purchasing_master' : (resolveTargetProjectId(args.projectId, projectContext) || 'lot_3');
+      const projLabel = isMaster ? 'Master' : (projectContext?.activeProjectName || targetProjectId || 'Lot');
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
-      const projLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master' : (projectContext?.activeProjectName || target.projectId || 'Lot');
-      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? 'Google Docs (Master Purchasing Checklist)'
-        : `Google Docs (${projLabel} Purchasing Checklist)`;
 
-      const discovery = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? { found: true, documentId: 'master_doc', fileName: 'Master Purchasing Checklist' }
-        : discoverAndBindProjectPurchasingDoc(storage, target.projectId, projectContext);
-
-      const docName = discovery.fileName || (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER ? 'Master Purchasing Checklist' : 'Purchasing Checklist');
-
-      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? loadMasterPurchasingDoc(storage)
-        : (discovery.content || loadProjectPurchasingDoc(storage, target.projectId, projectContext?.[target.projectId]?.purchasingDocContent || (projectContext?.projectId === target.projectId ? projectContext?.purchasingDocContent : null)));
-
-      // 1. LIVE DRIVE READ: Fetch current live version before modifying
-      if (discovery.found && discovery.documentId && target.resourceType !== RESOURCE_TYPES.PURCHASING_MASTER) {
-        const fetchRes = await fetchDocumentContent({
-          documentId: discovery.documentId,
-          fileName: discovery.fileName,
-          modifiedTime: discovery.modifiedTime,
-          projectContext
-        });
-        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
-          rawDoc = fetchRes.content;
-        }
-      }
-
-      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
-      const insertion = calculateSectionInsertion(parsed, itemInput, quantity, category);
-
-      let updatedDoc = rawDoc;
-      if (insertion.action === 'UPDATE_QUANTITY') {
-        const before = rawDoc.slice(0, insertion.replaceRange.startIndex);
-        const after = rawDoc.slice(insertion.replaceRange.endIndex);
-        updatedDoc = before + insertion.replacementText + after;
-      } else if (insertion.action === 'INSERT_ITEM' || insertion.action === 'CREATE_SECTION_AND_INSERT') {
-        const before = rawDoc.slice(0, insertion.insertionIndex);
-        const after = rawDoc.slice(insertion.insertionIndex);
-        updatedDoc = before + insertion.textToInsert + after;
-      }
-
-      // 2. SAFE WRITE-BACK PIPELINE: Write to Google Drive first
-      if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
+      const addResult = await purchasingService.addItem(targetProjectId, itemInput, quantity, category);
+      const updatedDoc = await purchasingService.exportToGoogleDocMarkdown(targetProjectId);
+      if (isMaster) {
         saveMasterPurchasingDoc(storage, updatedDoc, true);
-        const nextMasterVer = incrementMasterVersion(parsed.masterVersion || 'v1.0');
-        recordPurchasingAuditLog(storage, {
-          resourceType: RESOURCE_TYPES.PURCHASING_MASTER,
-          source: 'Master',
-          masterVersion: nextMasterVer,
-          itemId: insertion.itemId,
-          itemName: itemInput,
-          projectsAffected: ['purchasing_master'],
-          action: insertion.action,
-          userCommand: args.userCommand || projectContext?.lastUserMessage
-        });
       } else {
-        // Write to Drive if document is bound
-        if (discovery.found && discovery.documentId) {
-          const writeRes = await writeDocumentContent({
-            documentId: discovery.documentId,
-            fileName: discovery.fileName,
-            content: updatedDoc,
-            projectContext
-          });
-
-          if (!writeRes.success) {
-            resultPayload = {
-              success: false,
-              writeError: true,
-              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
-              documentId: discovery.documentId,
-              documentName: docName,
-              source: sourceLabel,
-              message: `Failed to write item to Google Drive document "${docName}": ${writeRes.error}`,
-              error: writeRes.error
-            };
-            break;
-          }
-        }
-
-        // 3. ONLY ON CONFIRMED DRIVE WRITE SUCCESS: Update local cache
-        saveProjectPurchasingDoc(storage, target.projectId, updatedDoc);
-      }
-
-      if (projectContext) {
-        if (!projectContext[target.projectId]) projectContext[target.projectId] = {};
-        projectContext[target.projectId].purchasingDocContent = updatedDoc;
-        if (projectContext.projectId === target.projectId || !projectContext.projectId) {
-          projectContext.purchasingDocContent = updatedDoc;
-        }
+        saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
       }
 
       resultPayload = {
         success: true,
-        state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
-        resourceType: target.resourceType,
-        projectId: target.projectId,
-        source: sourceLabel,
-        documentId: discovery.documentId || null,
-        documentName: docName,
-        item: itemInput,
-        quantity: insertion.newQuantity || quantity,
-        isDuplicate: insertion.action === 'UPDATE_QUANTITY',
-        updatedQuantity: insertion.newQuantity || quantity,
-        action: insertion.action,
-        category: insertion.category?.canonicalTitle || insertion.category?.title,
-        sectionId: insertion.category?.sectionId || insertion.category?.categoryId,
-        message: insertion.message
+        projectId: targetProjectId,
+        resourceType: isMaster ? 'purchasing_master' : 'project_purchasing',
+        source: `Firestore (${projLabel} Purchasing Checklist)`,
+        itemId: addResult.item.id,
+        itemName: addResult.item.itemName,
+        quantity: addResult.item.quantity,
+        isDuplicate: addResult.isDuplicate,
+        action: addResult.action,
+        updatedQuantity: addResult.item.quantity,
+        category: addResult.item.categoryTitle,
+        sectionId: addResult.item.categoryId,
+        message: addResult.message
       };
       break;
     }
 
     case 'update_purchasing_item_status': {
-      const itemName = args.itemName || '';
+      const itemName = args.itemName || args.item || '';
       const isPurchased = args.isPurchased !== false;
-      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext);
-      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext) || 'lot_3';
       const projLabel = projectContext?.activeProjectName || targetProjectId || 'Lot';
-      const sourceLabel = `Google Docs (${projLabel} Purchasing Checklist)`;
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const status = isPurchased ? PURCHASING_STATUSES.PURCHASED : PURCHASING_STATUSES.NEEDED;
 
-      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, projectContext);
-      const docName = discovery.fileName || 'Purchasing Checklist';
-
-      let rawDoc = discovery.content || loadProjectPurchasingDoc(storage, targetProjectId, projectContext?.[targetProjectId]?.purchasingDocContent || (projectContext?.projectId === targetProjectId ? projectContext?.purchasingDocContent : null));
-
-      // 1. LIVE DRIVE READ
-      if (discovery.found && discovery.documentId) {
-        const fetchRes = await fetchDocumentContent({
-          documentId: discovery.documentId,
-          fileName: discovery.fileName,
-          modifiedTime: discovery.modifiedTime,
-          projectContext
-        });
-        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
-          rawDoc = fetchRes.content;
-        }
+      const updateRes = await purchasingService.updateItemStatus(targetProjectId, itemName, status);
+      if (updateRes.success) {
+        const updatedDoc = await purchasingService.exportToGoogleDocMarkdown(targetProjectId);
+        saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
       }
 
-      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
-      const markRes = calculateMarkPurchased(parsed, itemName, isPurchased);
-
-      if (markRes.found) {
-        const before = rawDoc.slice(0, markRes.replaceRange.startIndex);
-        const after = rawDoc.slice(markRes.replaceRange.endIndex);
-        const updatedDoc = before + markRes.replacementText + after;
-
-        // 2. SAFE WRITE-BACK
-        if (discovery.found && discovery.documentId) {
-          const writeRes = await writeDocumentContent({
-            documentId: discovery.documentId,
-            fileName: discovery.fileName,
-            content: updatedDoc,
-            projectContext
-          });
-
-          if (!writeRes.success) {
-            resultPayload = {
-              success: false,
-              writeError: true,
-              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
-              documentId: discovery.documentId,
-              documentName: docName,
-              source: sourceLabel,
-              message: `Failed to update item status in Google Drive document "${docName}": ${writeRes.error}`,
-              error: writeRes.error
-            };
-            break;
-          }
-        }
-
-        // 3. Update local cache after confirmed Drive write
-        saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
-        if (projectContext) {
-          if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
-          projectContext[targetProjectId].purchasingDocContent = updatedDoc;
-          if (projectContext.projectId === targetProjectId || !projectContext.projectId) {
-            projectContext.purchasingDocContent = updatedDoc;
-          }
-        }
-
+      if (updateRes.success) {
         resultPayload = {
           success: true,
-          state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
           projectId: targetProjectId,
-          documentId: discovery.documentId || null,
-          documentName: docName,
-          source: sourceLabel,
-          itemId: markRes.item.itemId,
-          itemName: markRes.item.itemName,
-          category: markRes.category?.canonicalTitle || markRes.category?.title,
-          sectionId: markRes.category?.sectionId || markRes.category?.categoryId,
+          source: `Firestore (${projLabel} Purchasing Checklist)`,
+          item: updateRes.item,
+          itemId: updateRes.item.id,
+          name: updateRes.item.itemName,
+          itemName: updateRes.item.itemName,
+          category: updateRes.item.categoryTitle,
+          sectionId: updateRes.item.categoryId,
           isPurchased,
-          message: markRes.message
+          status,
+          message: updateRes.message
         };
       } else {
         resultPayload = {
           success: false,
           projectId: targetProjectId,
-          documentId: discovery.documentId || null,
-          documentName: docName,
-          source: sourceLabel,
-          message: markRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
+          source: `Firestore (${projLabel} Purchasing Checklist)`,
+          message: updateRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
         };
       }
       break;
     }
 
     case 'remove_purchasing_item': {
+      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext) || 'lot_3';
+      const projLabel = projectContext?.activeProjectName || targetProjectId || 'Lot';
       const storage = typeof localStorage !== 'undefined' ? localStorage : null;
-      const target = resolvePurchasingTarget(args, projectContext);
-      const targetProjectId = target.projectId;
       const itemName = args.itemName || args.item;
-      const category = args.category || null;
 
-      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, driveTree);
-      const docName = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
-        ? 'Master Purchasing Template' 
-        : (discovery.fileName || `${targetProjectId} Purchasing Checklist.docx`);
-      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
-        ? 'Google Docs (Master Purchasing Checklist)' 
-        : `Google Docs (${targetProjectId} Purchasing Checklist)`;
-
-      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
-        ? loadMasterPurchasingDoc(storage)
-        : loadProjectPurchasingDoc(storage, targetProjectId);
-
-      if (discovery.found && discovery.documentId && fetchDocumentContent) {
-        const fetchRes = await fetchDocumentContent({
-          documentId: discovery.documentId,
-          fileName: discovery.fileName,
-          modifiedTime: discovery.modifiedTime,
-          projectContext
-        });
-        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
-          rawDoc = fetchRes.content;
-        }
+      const removeRes = await purchasingService.removeItem(targetProjectId, itemName);
+      if (removeRes.success) {
+        const updatedDoc = await purchasingService.exportToGoogleDocMarkdown(targetProjectId);
+        saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
       }
 
-      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
-      const removeRes = calculateRemoveItem(parsed, itemName, category);
+      resultPayload = {
+        success: removeRes.success,
+        found: removeRes.success,
+        projectId: targetProjectId,
+        source: `Firestore (${projLabel} Purchasing Checklist)`,
+        itemName: removeRes.item?.itemName || itemName,
+        message: removeRes.message
+      };
+      break;
+    }
 
-      if (removeRes.found) {
-        const before = rawDoc.slice(0, removeRes.replaceRange.startIndex);
-        const after = rawDoc.slice(removeRes.replaceRange.endIndex);
-        const updatedDoc = before + removeRes.replacementText + after;
+    case 'export_purchasing_doc': {
+      const targetProjectId = resolveTargetProjectId(args.projectId, projectContext) || 'lot_3';
+      const projLabel = projectContext?.activeProjectName || targetProjectId || 'Lot';
 
-        // Write to Google Drive if bound
-        if (discovery.found && discovery.documentId) {
-          const writeRes = await writeDocumentContent({
-            documentId: discovery.documentId,
-            fileName: discovery.fileName,
-            content: updatedDoc,
-            projectContext
-          });
+      const markdown = await purchasingService.exportToGoogleDocMarkdown(targetProjectId, {
+        title: `Master Fixtures & Hardware Purchasing Checklist - ${projLabel}`
+      });
 
-          if (!writeRes.success) {
-            resultPayload = {
-              success: false,
-              writeError: true,
-              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
-              documentId: discovery.documentId,
-              documentName: docName,
-              source: sourceLabel,
-              message: `Failed to remove item from Google Drive document "${docName}": ${writeRes.error}`,
-              error: writeRes.error
-            };
-            break;
-          }
-        }
-
-        // Update local cache
-        if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
-          saveMasterPurchasingDoc(storage, updatedDoc, true);
-        } else {
-          saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
-          if (projectContext) {
-            if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
-            projectContext[targetProjectId].purchasingDocContent = updatedDoc;
-            if (projectContext.projectId === targetProjectId || !projectContext.projectId) {
-              projectContext.purchasingDocContent = updatedDoc;
-            }
-          }
-        }
-
-        resultPayload = {
-          success: true,
-          state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
-          projectId: targetProjectId,
-          documentId: discovery.documentId || null,
-          documentName: docName,
-          source: sourceLabel,
-          itemId: removeRes.item.itemId,
-          itemName: removeRes.item.itemName,
-          category: removeRes.category?.canonicalTitle || removeRes.category?.title,
-          message: removeRes.message
-        };
-      } else {
-        resultPayload = {
-          success: false,
-          projectId: targetProjectId,
-          documentId: discovery.documentId || null,
-          documentName: docName,
-          source: sourceLabel,
-          message: removeRes.message || `Item "${itemName}" was not found to remove in project ${targetProjectId}.`
-        };
-      }
+      resultPayload = {
+        success: true,
+        projectId: targetProjectId,
+        markdown,
+        message: `Generated clean purchasing checklist export for ${projLabel}.`
+      };
       break;
     }
 
@@ -1171,6 +996,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           message: syncResult.voiceSummary
         };
       } else {
+        for (const pid of syncResult.projectsSynced) {
+          const docText = loadProjectPurchasingDoc(storage, pid);
+          if (docText) {
+            await purchasingService.migrateFromGoogleDocContent(pid, docText);
+          }
+        }
+
         resultPayload = {
           success: true,
           isDryRun: false,
