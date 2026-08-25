@@ -804,15 +804,15 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       let itemLookup = null;
       if (userPrompt) {
         let extractedSubject = userPrompt
-          .replace(/^(did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already)\s+/i, '')
+          .replace(/^(did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
           .replace(/^(already\s+|ever\s+)?(buy|bought|purchase|purchased|get|got)\s+/i, '')
-          .replace(/^(the|a|an)\s+/i, '')
+          .replace(/^(the|those|these|that|a|an)\s+/i, '')
           .replace(/\s+(for|on|in)\s+lot\s*\d+.*$/i, '')
-          .replace(/\s+(already|yet|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
+          .replace(/\s+(already|yet|so far|now|recently|been purchased|been bought|purchased|needed)\s*[?.!]*$/i, '')
           .replace(/[?.!]+$/, '')
           .trim();
 
-        if (extractedSubject && extractedSubject.length > 2 && !/\b(what|show|list|all|items|everything)\b/i.test(extractedSubject)) {
+        if (extractedSubject && extractedSubject.length > 2 && !/^(what|which|show|list|all|items|everything|anything|purchasing list)$/i.test(extractedSubject) && !/\b(what have we|what did we|what is|what's)\b/i.test(userPrompt)) {
           const lookupMatch = purchasingService.findMatchingItems(allProjectItems, extractedSubject);
           if (lookupMatch && lookupMatch.type !== 'NONE') {
             let lookupAnswer = '';

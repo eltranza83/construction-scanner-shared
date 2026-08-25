@@ -558,42 +558,79 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
 
 export function isPurchaseStatusMutationCommand(query = '') {
   const q = String(query).trim().toLowerCase();
-  
+  if (!q) return false;
+
+  // 1. Explicit Addition commands (e.g. "add a pool heater", "create a new item") are NOT status mutations
   if (/\b(add|create|insert|new item)\b/i.test(q) && !/\b(as purchased|as needed|to purchased|to needed|mark|bought|got|check off|cross off)\b/i.test(q)) {
     return false;
   }
 
-  // 1. mark / set / change / update / cross / check ... as purchased / purchased / as needed / needed / off / done / finished
-  if (/\b(mark|set|change|update|cross|check)\b.*\b(purchased|needed|bought|off|done|completed|finished)\b/i.test(q)) return true;
+  // 2. Information-Seeking Inquiries (READ ONLY):
+  // Questions starting with interrogative pronouns/adverbs or auxiliary inversions (e.g. "what have we purchased", "did we buy the lights", "have we bought those lights yet", "is the security light purchased", "can you check if we bought")
+  const isInterrogativeStart = /^(what|which|who|where|how|did we|have we|has the|was the|is the|are the|do we|does the|can you (?:tell me|check|verify)|could you (?:tell me|check|verify)|check if|verify if)\b/i.test(q);
+  if (isInterrogativeStart) {
+    // Exception: Explicit imperative polite requests like "Can you mark the lights as purchased?" or "Could you set the vanity lights to purchased?"
+    const hasPoliteImperative = /\b(can you|could you|please)\s+(mark|set|update|check off|cross off)\b/i.test(q);
+    if (!hasPoliteImperative) {
+      return false;
+    }
+  }
 
-  // 2. we bought / i bought / already bought / have bought / just bought / we got / i got / we purchased / installed
-  if (/\b(we|i|already|just|have)\s+(bought|got|purchased|installed)\b/i.test(q)) return true;
+  // 3. Trailing question mark without an imperative verb is an inquiry (e.g. "any lights purchased yet?", "ceiling fans bought?")
+  if (/\?\s*$/.test(q) && !/\b(mark|set|update|check off|cross off)\b/i.test(q)) {
+    return false;
+  }
 
-  // 3. start of query: bought / purchased / got / installed / check off / cross off
-  if (/^(bought|purchased|got|installed|check off|cross off)\s+/i.test(q)) return true;
+  // 4. Positive Imperative Mutation Commands:
+  // (e.g. "mark security lights as purchased", "set vanity lights to purchased", "check off front porch light", "cross off faucets", "mark done")
+  if (/\b(mark|set|change|update|cross off|check off)\b.*\b(purchased|needed|bought|off|done|completed|finished)\b/i.test(q)) {
+    return true;
+  }
+  if (/^(check off|cross off)\s+/i.test(q)) {
+    return true;
+  }
+
+  // 5. Positive Rooted Declarative Statements:
+  // Strictly anchored to sentence start (e.g. "we bought the lights", "i bought security lights", "we already bought the vanity lights", "we installed the ceiling fans")
+  if (/^(we|i|we already|i already|already|just)\s+(bought|got|purchased|installed)\b/i.test(q)) {
+    return true;
+  }
+  if (/^(bought|purchased|got|installed)\s+/i.test(q)) {
+    return true;
+  }
 
   return false;
 }
 
 export function extractPurchasingSubjectFromQuery(query = '') {
   const q = String(query).trim();
-  
-  const checkOffMatch = q.match(/\b(?:check\s+off|cross\s+off)\s+(?:the\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
+  if (!q) return '';
+
+  let rawSubject = '';
+
+  const checkOffMatch = q.match(/\b(?:check\s+off|cross\s+off)\s+(?:the\s+|those\s+|these\s+|that\s+|a\s+|an\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
   if (checkOffMatch && checkOffMatch[1]) {
-    return checkOffMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
+    rawSubject = checkOffMatch[1];
+  } else {
+    const markMatch = q.match(/\b(?:mark|set|change|update)\s+(?:the\s+|those\s+|these\s+|that\s+|a\s+|an\s+)?(.+?)\s+(?:as\s+|to\s+)?(?:purchased|needed|bought|done|completed|finished)\b/i);
+    if (markMatch && markMatch[1]) {
+      rawSubject = markMatch[1];
+    } else {
+      const boughtMatch = q.match(/^(?:we|i|already|just|have)?\s*(?:bought|purchased|got|installed)\s+(?:the\s+|those\s+|these\s+|that\s+|a\s+|an\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
+      if (boughtMatch && boughtMatch[1]) {
+        rawSubject = boughtMatch[1];
+      }
+    }
   }
 
-  const markMatch = q.match(/\b(?:mark|set|change|update)\s+(?:the\s+)?(.+?)\s+(?:as\s+|to\s+)?(?:purchased|needed|bought|done|completed|finished)\b/i);
-  if (markMatch && markMatch[1]) {
-    return markMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
-  }
+  if (!rawSubject) return '';
 
-  const boughtMatch = q.match(/\b(?:we|i|already|just|have)?\s*(?:bought|purchased|got|installed)\s+(?:the\s+)?(.+?)(?:\s+(?:for|on|in)\s+lot\s*\d+|\s*$)/i);
-  if (boughtMatch && boughtMatch[1]) {
-    return boughtMatch[1].replace(/\b(for|on|in)\s+lot\s*\d+/i, '').trim();
-  }
-
-  return '';
+  // Clean lot suffixes, demonstratives, and temporal modifiers
+  return rawSubject
+    .replace(/\b(for|on|in)\s+lot\s*\d+/gi, '')
+    .replace(/^(the|those|these|that|a|an)\s+/gi, '')
+    .replace(/\s+(yet|already|so far|now|recently|done|finished)\s*$/gi, '')
+    .trim();
 }
 
 export function normalizePurchasingToolCalls(toolCalls = [], userQuery = '') {
@@ -601,6 +638,12 @@ export function normalizePurchasingToolCalls(toolCalls = [], userQuery = '') {
 
   if (isPurchaseStatusMutationCommand(userQuery)) {
     const extractedSubject = extractPurchasingSubjectFromQuery(userQuery);
+    
+    // Safety Gate: If extracted subject is empty or a broad quantifier, REFUSE mutation
+    if (!extractedSubject || extractedSubject.length < 2 || /^(what|which|all|everything|items|list|anything)$/i.test(extractedSubject)) {
+      return toolCalls;
+    }
+
     const isPurchased = !/\b(needed|as needed|unpurchased)\b/i.test(userQuery);
 
     return toolCalls.map(tc => {

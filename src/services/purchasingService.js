@@ -591,7 +591,7 @@ export class PurchasingService {
     const rawQuery = String(itemNameOrQuery).trim();
     const searchNorm = this._normalizeQuery(rawQuery);
 
-    const stopwords = new Set(['did', 'we', 'already', 'buy', 'bought', 'purchase', 'purchased', 'get', 'got', 'is', 'was', 'are', 'mark', 'as', 'needed', 'the', 'a', 'an', 'for', 'lot', 'check', 'please', 'with', 'and', 'from', 'all', 'any', 'that', 'this', 'have', 'tray', 'stand', 'cap', 'kit']);
+    const stopwords = new Set(['did', 'we', 'already', 'buy', 'bought', 'purchase', 'purchased', 'get', 'got', 'is', 'was', 'are', 'mark', 'as', 'needed', 'the', 'a', 'an', 'those', 'these', 'that', 'this', 'for', 'lot', 'check', 'please', 'with', 'and', 'from', 'all', 'any', 'have', 'yet', 'now', 'recently', 'so', 'far', 'tray', 'stand', 'cap', 'kit']);
 
     // 1. Exact ID match (absolute highest priority)
     const exactIdMatch = existingItems.find(it => it.id === rawQuery || it.id === searchNorm);

@@ -697,16 +697,81 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.equal(listResFinal.summary.purchasedCount, 1);
 
     // -------------------------------------------------------------
-    // Post-Test Cleanup: Remove test-created pool heater & verify return to 20
+    // Scenario 7: Broad Purchased Query ("what have we already purchased")
+    // Must be strictly READ-ONLY and list the 1 purchased item
     // -------------------------------------------------------------
-    const removeRes = await purchasingService.removeItem(lotId, 'pool heater');
-    assert.equal(removeRes.success, true, 'Cleanup removal must succeed');
+    const q7 = 'what have we already purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q7), false, '"what have we already purchased" must be READ-ONLY');
+
+    const listRes7 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q7 });
+    assert.equal(listRes7.success, true);
+    assert.equal(listRes7.itemLookup, null, 'Broad query must not generate specific itemLookup');
+    assert.equal(listRes7.summary.purchasedCount, 1, 'Reflects 1 purchased item');
+
+    // -------------------------------------------------------------
+    // Scenario 8: Demonstrative Ambiguous Query ("have we bought those lights yet")
+    // Must be READ-ONLY, strip "those" and "yet", and return 5 light candidates
+    // -------------------------------------------------------------
+    const q8 = 'have we bought those lights yet';
+    assert.equal(isPurchaseStatusMutationCommand(q8), false, '"have we bought those lights yet" must be READ-ONLY');
+
+    const listRes8 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q8 });
+    assert.ok(listRes8.itemLookup);
+    assert.equal(listRes8.itemLookup.matchType, 'AMBIGUOUS');
+    assert.equal(listRes8.itemLookup.matchCount, 5);
+    assert.match(listRes8.itemLookup.canonicalAnswer, /5 matching items/i);
+
+    // -------------------------------------------------------------
+    // Scenario 9: Demonstrative Exact Query ("did we buy those ceiling fans already")
+    // Must be READ-ONLY, strip "those" and "already", and match Ceiling fans
+    // -------------------------------------------------------------
+    const q9 = 'did we buy those ceiling fans already';
+    assert.equal(isPurchaseStatusMutationCommand(q9), false, '"did we buy those ceiling fans already" must be READ-ONLY');
+
+    const listRes9 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, { ...projectContext, userQuery: q9 });
+    assert.ok(listRes9.itemLookup);
+    assert.equal(listRes9.itemLookup.matchType, 'EXACT');
+    assert.match(listRes9.itemLookup.canonicalAnswer, /Ceiling fans are still marked as needed/i);
+
+    // -------------------------------------------------------------
+    // Scenario 10: Demonstrative Mutation ("check off that vanity light")
+    // Must be WRITE command, strip "that", and update Vanity lights
+    // -------------------------------------------------------------
+    const q10 = 'check off that vanity light';
+    assert.equal(isPurchaseStatusMutationCommand(q10), true, '"check off that vanity light" must be a mutation');
+    assert.equal(extractPurchasingSubjectFromQuery(q10), 'vanity light');
+
+    const rawCalls10 = [{ name: 'get_purchasing_list', args: { projectId: lotId } }];
+    const normCalls10 = normalizePurchasingToolCalls(rawCalls10, q10);
+    assert.equal(normCalls10[0].name, 'update_purchasing_item_status');
+
+    const res10 = await executeClientToolCall(normCalls10[0].name, normCalls10[0].args, { ...projectContext, userQuery: q10 });
+    assert.equal(res10.success, true);
+    assert.equal(res10.itemName, 'Vanity lights');
+
+    const itemsAfter10 = await purchasingService.getItems(lotId);
+    assert.equal(itemsAfter10.filter(it => it.status === 'purchased').length, 2, '2 items now purchased (Security lights + Vanity lights)');
+
+    // -------------------------------------------------------------
+    // Post-Test Clean Baseline Reset:
+    // 1. Remove pool heater
+    // 2. Reset Vanity lights to needed
+    // 3. Assert exact baseline: 20 total, 19 needed, 1 purchased (Security lights)
+    // -------------------------------------------------------------
+    await purchasingService.removeItem(lotId, 'pool heater');
+    await purchasingService.updateItemStatus(lotId, 'vanity lights', 'needed');
 
     const finalCleanItems = await purchasingService.getItems(lotId);
-    assert.equal(finalCleanItems.length, 20, 'Lot 55 must return to exactly 20 items');
+    assert.equal(finalCleanItems.length, 20, 'Lot 55 baseline must have exactly 20 items');
     assert.equal(finalCleanItems.some(it => it.itemName.toLowerCase().includes('pool heater')), false, 'Pool heater must be gone');
-    assert.equal(finalCleanItems.filter(it => it.status === 'purchased').length, 1, 'Legitimate purchased item (Security lights) preserved');
-    assert.equal(finalCleanItems.filter(it => it.status === 'needed').length, 19, '19 items remain needed');
+    assert.equal(finalCleanItems.filter(it => it.status === 'purchased').length, 1, 'Exactly 1 item purchased (Security lights)');
+    assert.equal(finalCleanItems.filter(it => it.status === 'needed').length, 19, 'Exactly 19 items needed');
+
+    const securityLight = finalCleanItems.find(it => it.itemName === 'Security lights');
+    assert.equal(securityLight?.status, 'purchased', 'Security lights is the only purchased item');
+
+    const vanityLight = finalCleanItems.find(it => it.itemName === 'Vanity lights');
+    assert.equal(vanityLight?.status, 'needed', 'Vanity lights reset to needed');
 
     const cleanListRes = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, projectContext);
     assert.equal(cleanListRes.summary.totalChecklistCount, 20);
