@@ -1070,7 +1070,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           category: updateRes.item.categoryTitle,
           sectionId: updateRes.item.categoryId,
           isPurchased,
-          status,
+          status: updateRes.action === 'NO_OP' ? (updateRes.status || (isPurchased ? 'ALREADY_PURCHASED' : 'ALREADY_NEEDED')) : status,
           message: updateRes.message
         };
       } else {

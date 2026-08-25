@@ -1703,7 +1703,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                                   <div style={{ color: 'var(--color-zinc-400)' }}>Args: {JSON.stringify(t.args || {})}</div>
                                   {t.result && (
                                     <div style={{ color: '#a7f3d0', marginTop: '2px', fontSize: '0.68rem' }}>
-                                      Result: {t.result.results ? `${t.result.results.length} records found` : t.result.count ? `${t.result.count} receipts` : t.result.status || t.result.location || JSON.stringify(t.result).slice(0, 60) + '...'}
+                                      Result: {t.result.writesPerformed !== undefined ? `${t.result.status || t.result.action || 'success'} (${t.result.writesPerformed} write${t.result.writesPerformed === 1 ? '' : 's'})` : t.result.results ? `${t.result.results.length} records found` : t.result.count ? `${t.result.count} receipts` : t.result.status || t.result.location || JSON.stringify(t.result).slice(0, 60) + '...'}
                                     </div>
                                   )}
                                 </div>
