@@ -93,6 +93,33 @@ export const AI_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: 'remove_purchasing_item',
+    description: 'Remove, delete, or take off an item/material from the Google Docs Purchasing Checklist for a project or the Master Purchasing Template.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        itemName: { type: 'STRING', description: 'Name of the item to delete/remove (e.g., "red light bulb", "shower pan liner")' },
+        category: { type: 'STRING', description: 'Optional trade/category name (e.g., "Electrical Hardware Fixtures", "Plumbing")' },
+        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default) or "master"' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g., Lot 3, Lot 37). Defaults to active project.' }
+      },
+      required: ['itemName']
+    }
+  },
+  {
+    name: 'remove_purchasing_section',
+    description: 'Remove or delete an entire section/category heading and its contents from the Google Docs Purchasing Checklist for a project or the Master Purchasing Template.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        sectionName: { type: 'STRING', description: 'Name of the section/trade category to remove (e.g., "General Hardware & Materials")' },
+        targetResource: { type: 'STRING', description: 'Target resource type: "project" (default) or "master"' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g., Lot 3, Lot 37). Defaults to active project.' }
+      },
+      required: ['sectionName']
+    }
+  },
+  {
     name: 'sync_purchasing_master_to_projects',
     description: 'Non-destructively synchronize standard items from the Master Purchasing Template into active project purchasing lists, adding missing items without resetting checked items or custom quantities.',
     parameters: {

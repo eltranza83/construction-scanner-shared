@@ -1,4 +1,4 @@
-﻿import { test, describe } from 'node:test';
+import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 
 import {
@@ -8,6 +8,8 @@ import {
   parseGoogleDocPurchasingStructure,
   calculateSectionInsertion,
   calculateMarkPurchased,
+  calculateRemoveItem,
+  calculateRemoveSection,
   queryPurchasingList
 } from '../src/services/googleDocsPurchasingService.js';
 
@@ -159,5 +161,53 @@ describe('Google Docs Master Purchasing List Service Suite', () => {
     const p3 = parseQuantity('Smart switches — Qty: 6');
     assert.equal(p3.quantity, 6);
     assert.equal(p3.itemName, 'Smart switches');
+  });
+
+  test('10. calculateRemoveItem cleanly removes an item line from Google Doc structure', () => {
+    const docWithRedBulb = `# Master Purchasing Checklist
+## 1. Electrical Hardware Fixtures
+- [ ] Security lights
+- [ ] red light bulb
+- [ ] Smart doorbell
+`;
+    const parsed = parseGoogleDocPurchasingStructure(docWithRedBulb);
+    const removeRes = calculateRemoveItem(parsed, 'red light bulb');
+    assert.ok(removeRes.found);
+    assert.equal(removeRes.item.itemName, 'red light bulb');
+
+    const before = docWithRedBulb.slice(0, removeRes.replaceRange.startIndex);
+    const after = docWithRedBulb.slice(removeRes.replaceRange.endIndex);
+    const updated = before + removeRes.replacementText + after;
+
+    assert.ok(!updated.includes('red light bulb'));
+    assert.ok(updated.includes('Security lights'));
+    assert.ok(updated.includes('Smart doorbell'));
+  });
+
+  test('11. calculateRemoveSection cleanly removes an entire heading and its contents', () => {
+    const docWithExtraSection = `# Master Purchasing Checklist
+## 1. Electrical Hardware Fixtures
+- [ ] Security lights
+
+## 2. General Hardware & Materials
+- [ ] Hammer
+- [ ] Nails
+
+## 3. Plumbing Hardware Fixtures
+- [ ] Toilets
+`;
+    const parsed = parseGoogleDocPurchasingStructure(docWithExtraSection);
+    const removeRes = calculateRemoveSection(parsed, 'general hardware and matt and materials');
+    assert.ok(removeRes.found);
+    assert.match(removeRes.section.title, /General Hardware & Materials/i);
+
+    const before = docWithExtraSection.slice(0, removeRes.replaceRange.startIndex);
+    const after = docWithExtraSection.slice(removeRes.replaceRange.endIndex);
+    const updated = before + removeRes.replacementText + after;
+
+    assert.ok(!updated.includes('General Hardware & Materials'));
+    assert.ok(!updated.includes('Hammer'));
+    assert.ok(updated.includes('Electrical Hardware Fixtures'));
+    assert.ok(updated.includes('Plumbing Hardware Fixtures'));
   });
 });

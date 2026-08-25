@@ -720,6 +720,145 @@ export function calculateMarkPurchased(docStructure, itemNameOrId, isPurchased =
   };
 }
 
+export function calculateRemoveItem(docStructure, itemNameOrId, categoryOverride = null) {
+  const searchNormalized = (itemNameOrId || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  if (!searchNormalized) {
+    return { found: false, message: 'No item name provided for removal.' };
+  }
+
+  let targetSections = docStructure.sections;
+  if (categoryOverride) {
+    const cat = classifyTradeCategory('', categoryOverride);
+    const matched = docStructure.sections.filter(s => (s.sectionId || s.categoryId) === cat.id);
+    if (matched.length > 0) targetSections = matched;
+  }
+
+  const raw = docStructure.fullText || '';
+
+  for (const section of targetSections) {
+    for (const item of section.items) {
+      if ((item.itemId && itemNameOrId && item.itemId === itemNameOrId) ||
+          item.normalizedName === searchNormalized || 
+          (item.normalizedName.length > 3 && searchNormalized.includes(item.normalizedName)) ||
+          (searchNormalized.length > 3 && item.normalizedName.includes(searchNormalized))) {
+        
+        let removeStart = item.startIndex;
+        let removeEnd = item.endIndex;
+
+        // Clean up trailing newline
+        if (raw[removeEnd] === '\n') {
+          removeEnd += 1;
+        } else if (raw[removeEnd] === '\r' && raw[removeEnd + 1] === '\n') {
+          removeEnd += 2;
+        } else if (removeStart > 0 && (raw[removeStart - 1] === '\n')) {
+          removeStart -= 1;
+          if (removeStart > 0 && raw[removeStart - 1] === '\r') {
+            removeStart -= 1;
+          }
+        }
+
+        return {
+          found: true,
+          action: 'REMOVE_ITEM',
+          item: item,
+          category: section,
+          replaceRange: {
+            startIndex: removeStart,
+            endIndex: removeEnd
+          },
+          replacementText: '',
+          message: `Removed "${item.itemName}" from ${section.canonicalTitle || section.title}.`
+        };
+      }
+    }
+  }
+
+  return {
+    found: false,
+    message: `Could not find "${itemNameOrId}" to remove in the purchasing checklist.`
+  };
+}
+
+export function calculateRemoveSection(docStructure, sectionNameOrId) {
+  const searchClean = (sectionNameOrId || '').toLowerCase().trim();
+  const searchNormalized = searchClean.replace(/[^a-z0-9]/g, '');
+  if (!searchNormalized) {
+    return { found: false, message: 'No section name provided for removal.' };
+  }
+
+  const raw = docStructure.fullText || '';
+  const searchTokens = searchClean.split(/[^a-z0-9]+/).filter(t => t.length > 2 && !['and', 'the', 'for', 'with', 'section', 'under'].includes(t));
+
+  let matchedIndex = -1;
+  let highestScore = 0;
+
+  docStructure.sections.forEach((s, idx) => {
+    const canonicalNorm = (s.canonicalTitle || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const titleNorm = (s.title || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+    const secId = (s.sectionId || s.categoryId || '').toLowerCase();
+
+    if (secId === searchNormalized || canonicalNorm === searchNormalized || titleNorm === searchNormalized) {
+      matchedIndex = idx;
+      highestScore = 100;
+      return;
+    }
+
+    if ((canonicalNorm && (searchNormalized.includes(canonicalNorm) || canonicalNorm.includes(searchNormalized))) ||
+        (titleNorm && (searchNormalized.includes(titleNorm) || titleNorm.includes(searchNormalized)))) {
+      if (highestScore < 50) {
+        matchedIndex = idx;
+        highestScore = 50;
+      }
+    }
+
+    // Token overlap match (e.g., "general hardware and matt and materials" -> matches "General Hardware & Materials")
+    const fullTitleTokens = `${s.canonicalTitle || ''} ${s.title || ''}`.toLowerCase().split(/[^a-z0-9]+/);
+    let matchedTokenCount = 0;
+    for (const st of searchTokens) {
+      if (fullTitleTokens.some(ft => ft.length > 2 && (ft.includes(st) || st.includes(ft)))) {
+        matchedTokenCount++;
+      }
+    }
+
+    if (matchedTokenCount >= 2 && matchedTokenCount > highestScore) {
+      matchedIndex = idx;
+      highestScore = matchedTokenCount;
+    }
+  });
+
+  if (matchedIndex === -1) {
+    return {
+      found: false,
+      message: `Could not find section "${sectionNameOrId}" in the purchasing checklist.`
+    };
+  }
+
+  const section = docStructure.sections[matchedIndex];
+  let removeStart = section.startIndex;
+  let removeEnd = docStructure.totalLength;
+
+  if (matchedIndex + 1 < docStructure.sections.length) {
+    removeEnd = docStructure.sections[matchedIndex + 1].startIndex;
+  }
+
+  if (removeEnd === docStructure.totalLength && removeStart > 0 && (raw[removeStart - 1] === '\n')) {
+    removeStart -= 1;
+    if (removeStart > 0 && raw[removeStart - 1] === '\r') removeStart -= 1;
+  }
+
+  return {
+    found: true,
+    action: 'REMOVE_SECTION',
+    section: section,
+    replaceRange: {
+      startIndex: removeStart,
+      endIndex: removeEnd
+    },
+    replacementText: '',
+    message: `Removed "${section.canonicalTitle || section.title}" section from the purchasing checklist.`
+  };
+}
+
 export function queryPurchasingList(docStructure, options = {}) {
   const {
     trade = null,

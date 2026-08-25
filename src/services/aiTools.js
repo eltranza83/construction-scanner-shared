@@ -26,6 +26,8 @@ import {
   parseGoogleDocPurchasingStructure,
   calculateSectionInsertion,
   calculateMarkPurchased,
+  calculateRemoveItem,
+  calculateRemoveSection,
   queryPurchasingList,
   resolvePurchasingTarget,
   classifyTradeCategory,
@@ -71,6 +73,16 @@ export const TOOL_REGISTRY = {
     type: 'WRITE',
     source: 'Google Docs (Master Purchasing Checklist)',
     description: 'Marks an item as purchased/completed in the Google Docs Master Purchasing List.'
+  },
+  remove_purchasing_item: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Removes or deletes an item/material from the Google Docs Purchasing Checklist.'
+  },
+  remove_purchasing_section: {
+    type: 'WRITE',
+    source: 'Google Docs (Master Purchasing Checklist)',
+    description: 'Removes or deletes an entire section/category heading and its contents from the Google Docs Purchasing Checklist.'
   },
   sync_purchasing_master_to_projects: {
     type: 'WRITE',
@@ -900,6 +912,207 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           documentName: docName,
           source: sourceLabel,
           message: markRes.message || `Item "${itemName}" was not found in the purchasing checklist for project ${targetProjectId}.`
+        };
+      }
+      break;
+    }
+
+    case 'remove_purchasing_item': {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const target = resolvePurchasingTarget(args, projectContext);
+      const targetProjectId = target.projectId;
+      const itemName = args.itemName || args.item;
+      const category = args.category || null;
+
+      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, driveTree);
+      const docName = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
+        ? 'Master Purchasing Template' 
+        : (discovery.fileName || `${targetProjectId} Purchasing Checklist.docx`);
+      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
+        ? 'Google Docs (Master Purchasing Checklist)' 
+        : `Google Docs (${targetProjectId} Purchasing Checklist)`;
+
+      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? loadMasterPurchasingDoc(storage)
+        : loadProjectPurchasingDoc(storage, targetProjectId);
+
+      if (discovery.found && discovery.documentId && fetchDocumentContent) {
+        const fetchRes = await fetchDocumentContent({
+          documentId: discovery.documentId,
+          fileName: discovery.fileName,
+          modifiedTime: discovery.modifiedTime,
+          projectContext
+        });
+        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
+          rawDoc = fetchRes.content;
+        }
+      }
+
+      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
+      const removeRes = calculateRemoveItem(parsed, itemName, category);
+
+      if (removeRes.found) {
+        const before = rawDoc.slice(0, removeRes.replaceRange.startIndex);
+        const after = rawDoc.slice(removeRes.replaceRange.endIndex);
+        const updatedDoc = before + removeRes.replacementText + after;
+
+        // Write to Google Drive if bound
+        if (discovery.found && discovery.documentId) {
+          const writeRes = await writeDocumentContent({
+            documentId: discovery.documentId,
+            fileName: discovery.fileName,
+            content: updatedDoc,
+            projectContext
+          });
+
+          if (!writeRes.success) {
+            resultPayload = {
+              success: false,
+              writeError: true,
+              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
+              documentId: discovery.documentId,
+              documentName: docName,
+              source: sourceLabel,
+              message: `Failed to remove item from Google Drive document "${docName}": ${writeRes.error}`,
+              error: writeRes.error
+            };
+            break;
+          }
+        }
+
+        // Update local cache
+        if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
+          saveMasterPurchasingDoc(storage, updatedDoc, true);
+        } else {
+          saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
+          if (projectContext) {
+            if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
+            projectContext[targetProjectId].purchasingDocContent = updatedDoc;
+            if (projectContext.projectId === targetProjectId || !projectContext.projectId) {
+              projectContext.purchasingDocContent = updatedDoc;
+            }
+          }
+        }
+
+        resultPayload = {
+          success: true,
+          state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
+          projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
+          itemId: removeRes.item.itemId,
+          itemName: removeRes.item.itemName,
+          category: removeRes.category?.canonicalTitle || removeRes.category?.title,
+          message: removeRes.message
+        };
+      } else {
+        resultPayload = {
+          success: false,
+          projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
+          message: removeRes.message || `Item "${itemName}" was not found to remove in project ${targetProjectId}.`
+        };
+      }
+      break;
+    }
+
+    case 'remove_purchasing_section': {
+      const storage = typeof localStorage !== 'undefined' ? localStorage : null;
+      const target = resolvePurchasingTarget(args, projectContext);
+      const targetProjectId = target.projectId;
+      const sectionName = args.sectionName || args.section || args.category;
+
+      const discovery = discoverAndBindProjectPurchasingDoc(storage, targetProjectId, driveTree);
+      const docName = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
+        ? 'Master Purchasing Template' 
+        : (discovery.fileName || `${targetProjectId} Purchasing Checklist.docx`);
+      const sourceLabel = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER 
+        ? 'Google Docs (Master Purchasing Checklist)' 
+        : `Google Docs (${targetProjectId} Purchasing Checklist)`;
+
+      let rawDoc = target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER
+        ? loadMasterPurchasingDoc(storage)
+        : loadProjectPurchasingDoc(storage, targetProjectId);
+
+      if (discovery.found && discovery.documentId && fetchDocumentContent) {
+        const fetchRes = await fetchDocumentContent({
+          documentId: discovery.documentId,
+          fileName: discovery.fileName,
+          modifiedTime: discovery.modifiedTime,
+          projectContext
+        });
+        if (fetchRes.success && fetchRes.content !== null && fetchRes.content !== undefined) {
+          rawDoc = fetchRes.content;
+        }
+      }
+
+      const parsed = parseGoogleDocPurchasingStructure(rawDoc);
+      const removeRes = calculateRemoveSection(parsed, sectionName);
+
+      if (removeRes.found) {
+        const before = rawDoc.slice(0, removeRes.replaceRange.startIndex);
+        const after = rawDoc.slice(removeRes.replaceRange.endIndex);
+        const updatedDoc = before + removeRes.replacementText + after;
+
+        // Write to Google Drive if bound
+        if (discovery.found && discovery.documentId) {
+          const writeRes = await writeDocumentContent({
+            documentId: discovery.documentId,
+            fileName: discovery.fileName,
+            content: updatedDoc,
+            projectContext
+          });
+
+          if (!writeRes.success) {
+            resultPayload = {
+              success: false,
+              writeError: true,
+              state: DOCUMENT_STATES.DOCUMENT_WRITE_ERROR,
+              documentId: discovery.documentId,
+              documentName: docName,
+              source: sourceLabel,
+              message: `Failed to remove section from Google Drive document "${docName}": ${writeRes.error}`,
+              error: writeRes.error
+            };
+            break;
+          }
+        }
+
+        // Update local cache
+        if (target.resourceType === RESOURCE_TYPES.PURCHASING_MASTER) {
+          saveMasterPurchasingDoc(storage, updatedDoc, true);
+        } else {
+          saveProjectPurchasingDoc(storage, targetProjectId, updatedDoc);
+          if (projectContext) {
+            if (!projectContext[targetProjectId]) projectContext[targetProjectId] = {};
+            projectContext[targetProjectId].purchasingDocContent = updatedDoc;
+            if (projectContext.projectId === targetProjectId || !projectContext.projectId) {
+              projectContext.purchasingDocContent = updatedDoc;
+            }
+          }
+        }
+
+        resultPayload = {
+          success: true,
+          state: DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS,
+          projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
+          sectionName: removeRes.section?.canonicalTitle || removeRes.section?.title,
+          message: removeRes.message
+        };
+      } else {
+        resultPayload = {
+          success: false,
+          projectId: targetProjectId,
+          documentId: discovery.documentId || null,
+          documentName: docName,
+          source: sourceLabel,
+          message: removeRes.message || `Section "${sectionName}" was not found in project ${targetProjectId}.`
         };
       }
       break;
