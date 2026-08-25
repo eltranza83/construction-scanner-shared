@@ -775,8 +775,6 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       // Check user's conversational intent for specific answer formats
       const userPrompt = String(projectContext?.userQuery || args.item || args.itemName || '').trim();
-      const isPurchasedInquiry = args.status === PURCHASING_STATUSES.PURCHASED ||
-        /\b(what have we (already )?(purchased|bought)|what did we (already )?(purchase|buy)|what items are purchased|what items have been purchased|what is purchased|what's purchased|already purchased|purchased items|list purchased|show purchased)\b/i.test(userPrompt);
 
       // Infer trade from query if not explicitly passed
       let effectiveTrade = trade;
@@ -789,6 +787,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           effectiveTrade = matchedTradeKey;
         }
       }
+
+      const isComparisonInquiry = (!effectiveTrade) && /\b(versus|vs\.?|compared to|comparison|breakdown|purchased and needed|purchased vs needed|status overview|purchasing status|what have we purchased.*(?:versus|vs\.?|compared to|and what).*need|what do we need.*(?:versus|vs\.?|compared to|and what).*purchased)\b/i.test(userPrompt);
+
+      const isPurchasedInquiry = !isComparisonInquiry && (
+        args.status === PURCHASING_STATUSES.PURCHASED ||
+        /\b(what have we (already )?(purchased|bought)|what did we (already )?(purchase|buy)|what items are purchased|what items have been purchased|what is purchased|what's purchased|already purchased|purchased items|list purchased|show purchased)\b/i.test(userPrompt)
+      );
 
       const collectionCountRegex = /\b(how many|how much|count of|quantity of|number of|total number of)\s+(?:total\s+)?(?:(?:[a-z\s]+)\s+)?(?:items|materials|fixtures|stuff|things|supplies|categories|sections)\b/i;
       const genericCountRegex = /\b(how many|how much)\s+(?:have we|did we|do we|are there)\s+(?:purchased|bought|got|to buy|needed|left|remaining)\b/i;
@@ -840,6 +845,30 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
             canonicalAnswer = `${prefix}:\n${itemLines}`;
           }
         }
+      } else if (isComparisonInquiry) {
+        const purchasedLines = [];
+        const neededLines = [];
+        for (const catKey of categoryOrder) {
+          const catTitle = STRUCTURED_TRADE_MAP[catKey]?.title || catKey;
+          const catPurchased = allProjectItems.filter(it => (it.categoryId || 'general') === catKey && it.status === PURCHASING_STATUSES.PURCHASED).length;
+          const catNeeded = allProjectItems.filter(it => (it.categoryId || 'general') === catKey && it.status === PURCHASING_STATUSES.NEEDED).length;
+          if (catPurchased > 0) {
+            purchasedLines.push(`• ${catTitle}: ${catPurchased}`);
+          }
+          if (catNeeded > 0) {
+            neededLines.push(`• ${catTitle}: ${catNeeded}`);
+          }
+        }
+
+        const purchasedBlock = purchasedLines.length > 0
+          ? `Purchased:\n${purchasedLines.join('\n')}`
+          : 'Purchased:\n• None';
+
+        const neededBlock = neededLines.length > 0
+          ? `Still needed:\n${neededLines.join('\n')}`
+          : 'Still needed:\n• None';
+
+        canonicalAnswer = `${projLabel} Purchasing Status:\n• Purchased: ${totalPurchased} item${totalPurchased === 1 ? '' : 's'}\n• Still needed: ${totalNeeded} item${totalNeeded === 1 ? '' : 's'}\n• Total: ${grandTotal} item${grandTotal === 1 ? '' : 's'}\n\n${purchasedBlock}\n\n${neededBlock}\n\nI can give you the detailed item list for any trade.`;
       } else if (isPurchasedInquiry) {
         if (totalPurchased === 0) {
           canonicalAnswer = `Nothing has been marked as purchased yet for ${projLabel}.`;
@@ -884,7 +913,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       // Check if user's question was an item status or quantity query (e.g. "Did we buy the lights?", "How many pool heaters do we have?")
       let itemLookup = null;
-      const isListInquiry = isCollectionCountInquiry || (
+      const isListInquiry = isComparisonInquiry || isCollectionCountInquiry || (
         (!/\b(how many|how much|count of|quantity of)\b/i.test(userPrompt)) && (
           /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(userPrompt) ||
           /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(userPrompt) ||

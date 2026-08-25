@@ -974,6 +974,14 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
       purchasingDiscrepancyDetected = true;
       suggestedCorrection = purchasingData.summary.canonicalAnswer;
     }
+  } else if (purchasingData?.summary?.canonicalAnswer && /\bPurchasing Status:\b/i.test(purchasingData.summary.canonicalAnswer)) {
+    const isOneSided = (synthesizedText.toLowerCase().includes('purchased') && !synthesizedText.toLowerCase().includes('needed')) ||
+                       (!synthesizedText.toLowerCase().includes('purchased') && synthesizedText.toLowerCase().includes('needed'));
+    if (isOneSided) {
+      unsupportedClaims.push('One-sided summary given instead of purchased vs needed comparison');
+      purchasingDiscrepancyDetected = true;
+      suggestedCorrection = purchasingData.summary.canonicalAnswer;
+    }
   } else if (purchasingData?.summary) {
     const summary = purchasingData.summary;
     const needed = summary.neededCount;

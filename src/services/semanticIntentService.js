@@ -445,6 +445,13 @@ export const RetrievalPlugin = {
         }
 
         // 3. Answer-Priority Hierarchy 3: Multi-Trade / Broad Project Queries
+        const isComparisonQuery = /\b(versus|vs\.?|compared to|comparison|breakdown|purchased and needed|purchased vs needed|status overview|purchasing status|what have we purchased.*(?:versus|vs\.?|compared to|and what).*need|what do we need.*(?:versus|vs\.?|compared to|and what).*purchased)\b/i.test(queryLower);
+
+        if (isComparisonQuery && res.summary?.canonicalAnswer) {
+          responses.push(res.summary.canonicalAnswer);
+          continue;
+        }
+
         const isPurchasedQuery = res.status === 'purchased' ||
           /\b(purchased|already bought|already purchased|have we bought|have we purchased|what have we bought|what have we purchased|what did we buy|what did we purchase)\b/i.test(queryLower);
         const wantsDetailedItems = /\b(all items|everything|detail|item by item|read all|show all items)\b/i.test(queryLower) || (sections.length === 1 && !isPurchasedQuery);

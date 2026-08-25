@@ -30,7 +30,8 @@ import {
   normalizePurchasingToolCalls,
   isPurchaseStatusMutationCommand,
   extractPurchasingSubjectFromQuery,
-  verifyResponseGrounding
+  verifyResponseGrounding,
+  formatToolResultsHumanReadable
 } from '../src/services/builderBrainService.js';
 import { extractTextFromDocxBytes } from '../src/services/googleDrive.js';
 import * as fflate from 'fflate';
@@ -1038,6 +1039,34 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     // Reset doorbell chime kit back to needed before post-test reset
     await purchasingService.updateItemStatus(lotId, 'Contractor doorbell chime kit', 'needed');
     await purchasingService.updateItemStatus(lotId, 'Security lights', 'purchased');
+
+    // -------------------------------------------------------------
+    // Scenario 22: Comparison Overview Inquiry (Purchased vs Needed)
+    // "What have we purchased versus what do we still need to purchase for Lot 55?"
+    // -------------------------------------------------------------
+    const q22 = 'What have we purchased versus what do we still need to purchase for Lot 55?';
+    assert.equal(isPurchaseStatusMutationCommand(q22), false, 'Comparison inquiry must be strictly READ-only');
+
+    const compContext = { ...projectContext, userQuery: q22 };
+    const compRes = await executeClientToolCall('get_purchasing_list', { projectId: lotId, unpurchasedOnly: false }, compContext);
+
+    assert.equal(compRes.success, true);
+    assert.match(compRes.summary.canonicalAnswer, /Lot 55 Purchasing Status:/i);
+    assert.match(compRes.summary.canonicalAnswer, /Purchased:\s+\d+\s+item/i);
+    assert.match(compRes.summary.canonicalAnswer, /Still needed:\s+\d+\s+item/i);
+    assert.match(compRes.summary.canonicalAnswer, /Total:\s+\d+\s+item/i);
+    assert.match(compRes.summary.canonicalAnswer, /Purchased:\n/i);
+    assert.match(compRes.summary.canonicalAnswer, /Still needed:\n/i);
+    assert.match(compRes.summary.canonicalAnswer, /I can give you the detailed item list for any trade/i);
+
+    const compSynthesis = formatToolResultsHumanReadable(
+      [{ name: 'get_purchasing_list', success: true, result: compRes, toolType: 'READ' }],
+      q22,
+      compContext
+    );
+    assert.match(compSynthesis, /Lot 55 Purchasing Status:/i);
+    assert.match(compSynthesis, /Purchased:/i);
+    assert.match(compSynthesis, /Still needed:/i);
 
     // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:
