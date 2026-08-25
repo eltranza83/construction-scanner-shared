@@ -764,14 +764,14 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     assert.match(listRes11.itemLookup.canonicalAnswer, /You have 1 Pool heater \(Needed\) on the Lot 55 purchasing checklist\./i);
 
     // -------------------------------------------------------------
-    // Scenario 12: Trade-Specific List ("Show me the General Hardware & Materials list")
+    // Scenario 12: Trade-Specific List ("Show me the Electrical Hardware Fixtures list")
     // Must return individual items belonging to that trade section
     // -------------------------------------------------------------
-    const q12 = 'Show me the General Hardware & Materials list';
+    const q12 = 'Show me the Electrical Hardware Fixtures list';
     assert.equal(isPurchaseStatusMutationCommand(q12), false);
 
-    const listRes12 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'general' }, { ...projectContext, userQuery: q12 });
-    assert.match(listRes12.summary.canonicalAnswer, /General Hardware & Materials for Lot 55/i);
+    const listRes12 = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'electrical', unpurchasedOnly: false }, { ...projectContext, userQuery: q12 });
+    assert.match(listRes12.summary.canonicalAnswer, /Electrical Hardware Fixtures for Lot 55/i);
     assert.match(listRes12.summary.canonicalAnswer, /•/i, 'Must contain bullet list of individual items');
 
     // -------------------------------------------------------------
@@ -867,6 +867,54 @@ describe('Project Purchasing Lifecycle & Identity Architecture Suite', () => {
     await purchasingService.updateItemStatus(lotId, 'Bathroom vanity faucets', 'needed');
     await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'needed');
     await purchasingService.updateItemStatus(lotId, 'Soap dispenser', 'needed');
+
+    // -------------------------------------------------------------
+    // Scenario 18: Generalized Trade-Scoped Status Inquiries
+    // Must NOT look up trade phrases as item names; must return filtered trade lists
+    // -------------------------------------------------------------
+    await purchasingService.updateItemStatus(lotId, 'Bathroom vanity faucets', 'purchased');
+    await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'purchased');
+
+    // 18a: "What Plumbing items have we purchased"
+    const q18a = 'What Plumbing items have we purchased';
+    assert.equal(isPurchaseStatusMutationCommand(q18a), false, 'Trade query must be READ-only');
+    const res18a = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'plumbing', unpurchasedOnly: false }, { ...projectContext, userQuery: q18a });
+    assert.equal(res18a.itemLookup, null, 'Must NOT create itemLookup for trade-scoped question');
+    assert.match(res18a.summary.canonicalAnswer, /Purchased Plumbing Hardware Fixtures for Lot 55 \(2 items\):/i);
+    assert.match(res18a.summary.canonicalAnswer, /• Bathroom vanity faucets/i);
+    assert.match(res18a.summary.canonicalAnswer, /• Kitchen faucets/i);
+    assert.doesNotMatch(res18a.summary.canonicalAnswer, /not currently listed/i);
+
+    // 18b: "Which plumbing items do we still need?"
+    const q18b = 'Which plumbing items do we still need?';
+    assert.equal(isPurchaseStatusMutationCommand(q18b), false);
+    const res18b = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'plumbing' }, { ...projectContext, userQuery: q18b });
+    assert.equal(res18b.itemLookup, null);
+    assert.match(res18b.summary.canonicalAnswer, /Plumbing Hardware Fixtures needed for Lot 55 \(6 items\):/i);
+    assert.match(res18b.summary.canonicalAnswer, /• Soap dispenser/i);
+    assert.match(res18b.summary.canonicalAnswer, /• Garbage disposal/i);
+
+    // 18c: "What electrical stuff have we purchased?" (Security lights + Vanity lights are purchased)
+    const q18c = 'What electrical stuff have we purchased?';
+    assert.equal(isPurchaseStatusMutationCommand(q18c), false);
+    const res18c = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'electrical', unpurchasedOnly: false }, { ...projectContext, userQuery: q18c });
+    assert.equal(res18c.itemLookup, null);
+    assert.match(res18c.summary.canonicalAnswer, /Purchased Electrical Hardware Fixtures for Lot 55 \(2 items\):/i);
+    assert.match(res18c.summary.canonicalAnswer, /• Security lights/i);
+    assert.match(res18c.summary.canonicalAnswer, /• Vanity lights/i);
+
+    // 18d: "What electrical items do we still need" (9 items needed in electrical)
+    const q18d = 'What electrical items do we still need';
+    assert.equal(isPurchaseStatusMutationCommand(q18d), false);
+    const res18d = await executeClientToolCall('get_purchasing_list', { projectId: lotId, trade: 'electrical' }, { ...projectContext, userQuery: q18d });
+    assert.equal(res18d.itemLookup, null);
+    assert.match(res18d.summary.canonicalAnswer, /Electrical Hardware Fixtures needed for Lot 55 \(9 items\):/i);
+    assert.match(res18d.summary.canonicalAnswer, /• Ceiling fans/i);
+    assert.match(res18d.summary.canonicalAnswer, /• Front porch hanging light/i);
+
+    // Reset faucets before baseline reset
+    await purchasingService.updateItemStatus(lotId, 'Bathroom vanity faucets', 'needed');
+    await purchasingService.updateItemStatus(lotId, 'Kitchen faucets', 'needed');
 
     // -------------------------------------------------------------
     // Post-Test Clean Baseline Reset:

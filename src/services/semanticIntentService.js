@@ -366,7 +366,13 @@ export const RetrievalPlugin = {
         }
 
         // Dynamic fallback item lookup when tool was executed without query-specific itemLookup
-        const isItemStatusQuery = !/\b(what (have we|did we|are the|items|is on)|all items|everything|list|checklist)\b/i.test(queryLower) &&
+        const isListInquiry = (!/\b(how many|how much|count of|quantity of)\b/i.test(queryLower)) && (
+          /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(queryLower) ||
+          /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(queryLower) ||
+          /\b(show|list|all items|everything)\b/i.test(queryLower)
+        );
+
+        const isItemStatusQuery = !isListInquiry &&
                                   /\b(how many|how much|did we (already )?(buy|purchase|get)|have we (already )?(bought|purchased|got)|is (the )?.+ (bought|purchased|needed)|was (the )?.+ (bought|purchased)|did we get|do we have any|do we have|is there a|is there)\b/i.test(queryLower);
 
         if (isItemStatusQuery) {

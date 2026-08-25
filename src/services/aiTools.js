@@ -783,12 +783,37 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       if (trade) {
         const matchedTradeKey = Object.keys(STRUCTURED_TRADE_MAP).find(k => k === trade.toLowerCase() || STRUCTURED_TRADE_MAP[k]?.title.toLowerCase().includes(trade.toLowerCase()));
         const matchedTradeTitle = (matchedTradeKey && STRUCTURED_TRADE_MAP[matchedTradeKey]?.title) || trade;
-        const tradeItems = items; // Already filtered to this trade
-        if (tradeItems.length === 0) {
-          canonicalAnswer = `No purchasing items found under ${matchedTradeTitle} for ${projLabel}.`;
+        const tradeAllItems = allProjectItems.filter(it => (it.categoryId || 'general') === (matchedTradeKey || 'general'));
+        const tradePurchasedItems = tradeAllItems.filter(it => it.status === PURCHASING_STATUSES.PURCHASED);
+        const tradeNeededItems = tradeAllItems.filter(it => it.status === PURCHASING_STATUSES.NEEDED);
+
+        const isTradePurchasedOnly = args.status === PURCHASING_STATUSES.PURCHASED ||
+          /\b(purchased|already bought|already purchased|have we (already )?(bought|purchased)|did we (already )?(buy|purchase)|what have we (already )?(bought|purchased))\b/i.test(userPrompt);
+
+        const isTradeNeededOnly = args.status === PURCHASING_STATUSES.NEEDED ||
+          /\b(needed|still need|need to (buy|purchase)|left to (buy|purchase)|unpurchased|to buy|to purchase)\b/i.test(userPrompt);
+
+        if (isTradePurchasedOnly) {
+          if (tradePurchasedItems.length === 0) {
+            canonicalAnswer = `No ${matchedTradeTitle.toLowerCase()} have been marked as purchased yet for ${projLabel}.`;
+          } else {
+            const itemLines = tradePurchasedItems.map(it => `• ${it.itemName}${it.quantity && it.quantity > 1 ? ` — Qty: ${it.quantity}` : ''} (Purchased)`).join('\n');
+            canonicalAnswer = `Purchased ${matchedTradeTitle} for ${projLabel} (${tradePurchasedItems.length} item${tradePurchasedItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+          }
+        } else if (isTradeNeededOnly) {
+          if (tradeNeededItems.length === 0) {
+            canonicalAnswer = `All ${matchedTradeTitle.toLowerCase()} have been purchased for ${projLabel}.`;
+          } else {
+            const itemLines = tradeNeededItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (Needed)`).join('\n');
+            canonicalAnswer = `${matchedTradeTitle} needed for ${projLabel} (${tradeNeededItems.length} item${tradeNeededItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+          }
         } else {
-          const itemLines = tradeItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (${it.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
-          canonicalAnswer = `${matchedTradeTitle} for ${projLabel} (${tradeItems.length} item${tradeItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+          if (tradeAllItems.length === 0) {
+            canonicalAnswer = `No purchasing items found under ${matchedTradeTitle} for ${projLabel}.`;
+          } else {
+            const itemLines = tradeAllItems.map(it => `• ${it.itemName} — Qty: ${it.quantity || 1} (${it.status === PURCHASING_STATUSES.PURCHASED ? 'Purchased' : 'Needed'})`).join('\n');
+            canonicalAnswer = `${matchedTradeTitle} for ${projLabel} (${tradeAllItems.length} item${tradeAllItems.length === 1 ? '' : 's'}):\n${itemLines}`;
+          }
         }
       } else if (isPurchasedInquiry) {
         if (totalPurchased === 0) {
@@ -834,7 +859,13 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
 
       // Check if user's question was an item status or quantity query (e.g. "Did we buy the lights?", "How many pool heaters do we have?")
       let itemLookup = null;
-      if (userPrompt) {
+      const isListInquiry = (!/\b(how many|how much|count of|quantity of)\b/i.test(userPrompt)) && (
+        /\b(what|which)\s+(?:[a-z\s]+\s+)?(?:items|materials|fixtures|stuff|things|supplies|list|checklist)\b/i.test(userPrompt) ||
+        /\b(what|which)\s+(?:have we|did we|do we|is on|are on|are the)\b/i.test(userPrompt) ||
+        /\b(show|list|all items|everything)\b/i.test(userPrompt)
+      );
+
+      if (userPrompt && !isListInquiry) {
         const isQuantityInquiry = /\b(how many|how much|count|quantity)\b/i.test(userPrompt);
         let extractedSubject = userPrompt
           .replace(/^(how many|how much|do we have any|do we have|is there a|is there an|is there|are there any|are there|what is the quantity of|what's the count of|what count of|did we|have we|was the|is the|did you|did they|have they|has the|can we check if we|check if we|check if|verify if|did we already|have we already|did we buy|have we bought)\s+/i, '')
