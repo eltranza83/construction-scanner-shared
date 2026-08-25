@@ -317,4 +317,66 @@ describe('Real-World Google Drive End-to-End Deep Verification Suite', () => {
     }
   });
 
+  it('Check 7: Calling get_drive_files with empty args {} returns all project folders and files', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = createMockDriveEnvironment();
+
+    try {
+      const driveTree = await fetchProjectDriveTree('mock_access_token', 'fld_lot3_root');
+
+      const toolRes = await executeClientToolCall('get_drive_files', {}, {
+        driveTree,
+        activeProject: { name: 'Lot 3' }
+      });
+
+      assert.strictEqual(toolRes.found, true);
+      assert.ok(toolRes.subfolders.length > 0, 'Must return all project subfolder names');
+      assert.ok(toolRes.subfolders.includes('Google Doc Purchasing List'));
+      assert.ok(toolRes.subfolders.includes('App Folders'));
+      assert.ok(toolRes.folders.length > 0, 'Must return structured folder summaries');
+
+      // Synthesize response for "what what folders do we have"
+      const answer = synthesizeGroundedEvidence([
+        {
+          success: true,
+          tool: { name: 'get_drive_files', args: {} },
+          result: toolRes
+        }
+      ], "what what folders do we have", {
+        activeProjectName: 'Lot 3',
+        driveTree
+      });
+
+      assert.ok(answer);
+      assert.match(answer, /Google Drive Folders|Google Doc Purchasing List/);
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
+  it('Check 8: STT query "what are we having that purchasing list folder" matches folder and returns files', async () => {
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = createMockDriveEnvironment();
+
+    try {
+      const driveTree = await fetchProjectDriveTree('mock_access_token', 'fld_lot3_root');
+
+      // Even if AI passes raw STT phrase as folderName
+      const toolRes = await executeClientToolCall('get_drive_files', {
+        folderName: 'purchasing list folder'
+      }, {
+        driveTree,
+        activeProject: { name: 'Lot 3' }
+      });
+
+      assert.strictEqual(toolRes.found, true);
+      assert.strictEqual(toolRes.folderName, 'Google Doc Purchasing List');
+      assert.strictEqual(toolRes.count, 2);
+      assert.ok(toolRes.files.some(f => f.name.includes('Master Purchasing Document')));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
 });
+

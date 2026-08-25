@@ -194,11 +194,11 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'get_drive_files',
-    description: 'Search Google Drive project folders and files by folder name, keyword, or document type.',
+    description: 'Search Google Drive project folders and files by folder name, keyword, or document type. If querying what folders exist or broad project drive contents, call without arguments to retrieve the complete folder hierarchy and file manifest.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        folderName: { type: 'STRING', description: 'Target folder name (e.g. Planos, Invoices, Permits)' },
+        folderName: { type: 'STRING', description: 'Target folder name or path (e.g. Planos, Invoices, Permits, Google Doc Purchasing List)' },
         keyword: { type: 'STRING', description: 'Search term for file title' }
       }
     }

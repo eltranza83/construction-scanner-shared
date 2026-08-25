@@ -358,7 +358,8 @@ export function buildGroundingSystemInstruction(context) {
         const fileList = Array.isArray(sub.files) && sub.files.length > 0
           ? sub.files.map(f => `  - "${f.name}" (${f.mimeType || 'file'}${f.id ? `, ID: ${f.id}` : ''})`).join('\n')
           : '  - (Empty folder or no files uploaded yet)';
-        lines.push(`* Folder "${sub.folderName}" (Folder ID: ${sub.folderId || sub.id || 'N/A'}):\n${fileList}`);
+        const subfolderMeta = sub.subfolderNames?.length ? ` [Contains Subfolders: ${sub.subfolderNames.join(', ')}]` : '';
+        lines.push(`* Folder "${sub.folderPath || sub.folderName}" (Folder ID: ${sub.folderId || sub.id || 'N/A'})${subfolderMeta}:\n${fileList}`);
       }
     }
     if (lines.length > 0) {

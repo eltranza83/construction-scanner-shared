@@ -376,13 +376,22 @@ export const RetrievalPlugin = {
       } else if (toolName === 'get_drive_files') {
         const files = res.files || [];
         const subfolders = res.subfolders || [];
+        const folders = res.folders || [];
+        const isFolderInquiry = /\b(folders|directories|folder list|what folders)\b/i.test(query);
+
         if (res.isFolderEmpty && res.folderName) {
           responses.push(`The "${res.folderName}" directory exists in Google Drive for ${activeProject}, but it does not currently contain any files.`);
+        } else if (isFolderInquiry && folders.length > 0) {
+          const folderLines = folders.map(f => `• ${f.name}${f.subfolders?.length ? ` (subfolders: ${f.subfolders.join(', ')})` : ''}`).join('\n');
+          responses.push(`In Google Drive for ${activeProject}, we have the following folders:\n${folderLines}`);
         } else if (res.message && files.length === 0 && subfolders.length > 0) {
           responses.push(res.message);
         } else if (files.length > 0) {
           const list = files.map(f => `• ${f.name} (${f.folderPath || f.folderName || 'Google Drive'})`).join('\n');
           responses.push(list);
+        } else if (folders.length > 0) {
+          const folderLines = folders.map(f => `• ${f.name}${f.subfolders?.length ? ` (subfolders: ${f.subfolders.join(', ')})` : ''}`).join('\n');
+          responses.push(`In Google Drive for ${activeProject}, we have the following folders:\n${folderLines}`);
         } else {
           responses.push(res.message || `No files found in Google Drive for ${activeProject}.`);
         }

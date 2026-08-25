@@ -1345,7 +1345,8 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
     }
 
     case 'get_drive_files': {
-      const folderQuery = (args.folderName || '').trim().toLowerCase();
+      const rawFolder = (args.folderName || '').trim();
+      const cleanFolder = rawFolder.replace(/\b(folder|folders|directory|the|in|inside)\b/gi, '').trim().toLowerCase();
       const keyword = (args.keyword || '').trim().toLowerCase();
 
       const results = [];
@@ -1358,17 +1359,17 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const directFiles = Array.isArray(driveTree?.directFiles) ? driveTree.directFiles : (Array.isArray(driveTree) ? driveTree : []);
 
       // 1. If a specific subfolder is requested, search across all nested subfolders
-      if (folderQuery) {
-        // First try exact ID or exact name/path match
+      if (cleanFolder || rawFolder) {
+        const targetQ = cleanFolder || rawFolder.toLowerCase();
         matchedFolder = subfolders.find(s => {
           const sName = (s.name || s.folderName || '').toLowerCase();
           const sPath = (s.folderPath || '').toLowerCase();
           const sId = String(s.folderId || s.id || '').toLowerCase();
-          return sName === folderQuery || sPath === folderQuery || sId === folderQuery;
+          return sName === targetQ || sPath === targetQ || sId === targetQ;
         }) || subfolders.find(s => {
           const sName = (s.name || s.folderName || '').toLowerCase();
           const sPath = (s.folderPath || '').toLowerCase();
-          return sName.includes(folderQuery) || folderQuery.includes(sName) || sPath.includes(folderQuery);
+          return sName.includes(targetQ) || targetQ.includes(sName) || sPath.includes(targetQ);
         });
 
         if (matchedFolder) {
@@ -1390,7 +1391,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           }
         }
       } else {
-        // 2. Search all files across all nested folders
+        // 2. Search all files across all nested folders (broad query)
         if (allFiles.length > 0) {
           for (const f of allFiles) {
             const fileName = (f.name || '').toLowerCase();
@@ -1442,21 +1443,32 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       const folderDisplayName = matchedFolder ? (matchedFolder.name || matchedFolder.folderName) : null;
       const folderDisplayPath = matchedFolder ? (matchedFolder.folderPath || folderDisplayName) : null;
 
+      const allSubfolderNames = subfolders.map(s => s.name || s.folderName);
+      const folderSummaries = subfolders.map(s => ({
+        name: s.name || s.folderName,
+        path: s.folderPath || s.name || s.folderName,
+        fileCount: s.fileCount || (s.files || []).length,
+        subfolders: s.subfolderNames || []
+      }));
+
       let customMessage = undefined;
       if (isFolderEmpty) {
         customMessage = `The "${folderDisplayName}" directory exists in Google Drive for this project, but it does not currently contain any files.`;
       } else if (matchedFolder && matchedFolderFileCount === 0 && matchedFolderSubfolders.length > 0) {
         customMessage = `Inside "${folderDisplayName}", we have the following subfolders: ${matchedFolderSubfolders.join(', ')}.`;
-      } else if (results.length === 0) {
-        customMessage = 'I cannot locate any matching files in Google Drive for this project.';
+      } else if (!matchedFolder && results.length === 0 && subfolders.length > 0) {
+        customMessage = `In Google Drive for this project, we have ${subfolders.length} folder(s): ${allSubfolderNames.join(', ')}.`;
+      } else if (results.length === 0 && subfolders.length === 0) {
+        customMessage = 'I cannot locate any matching files or folders in Google Drive for this project.';
       }
 
       resultPayload = {
-        found: results.length > 0 || isFolderEmpty || (matchedFolder && matchedFolderSubfolders.length > 0),
+        found: results.length > 0 || isFolderEmpty || (matchedFolder && matchedFolderSubfolders.length > 0) || subfolders.length > 0,
         isFolderEmpty,
         folderName: folderDisplayName,
         folderPath: folderDisplayPath,
-        subfolders: matchedFolderSubfolders,
+        subfolders: matchedFolder ? matchedFolderSubfolders : allSubfolderNames,
+        folders: folderSummaries,
         count: results.length,
         message: customMessage,
         files: results.slice(0, 50)
