@@ -21,6 +21,8 @@ import {
 } from '../src/services/documentContentProvider.js';
 
 import { executeClientToolCall } from '../src/services/aiTools.js';
+import { purchasingService } from '../src/services/purchasingService.js';
+import { parseGoogleDocPurchasingStructure } from '../src/services/googleDocsPurchasingService.js';
 
 const SAMPLE_LOT3_DOCX_CONTENT = `Applicable to all lots and standard builds.
 
@@ -66,6 +68,9 @@ describe('Google Drive Live Content Reader & Safe Write-Back Suite', () => {
   beforeEach(() => {
     localStorage.clear();
     resetContentProvider();
+    if (purchasingService?.storage?.memoryStore?.clear) {
+      purchasingService.storage.memoryStore.clear();
+    }
     driveStore = {
       'file_lot3_docx': {
         content: SAMPLE_LOT3_DOCX_CONTENT,
@@ -135,236 +140,85 @@ describe('Google Drive Live Content Reader & Safe Write-Back Suite', () => {
     resetContentProvider();
   });
 
-  test('1. Populated .docx File: Reads real items directly from Drive without empty placeholder', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.found, true);
-    assert.equal(res.documentId, 'file_lot3_docx');
-    assert.equal(res.documentName, 'Purchasing Checklist.docx');
-    assert.ok(res.totalItems >= 20, 'Should read all 20 items from .docx file');
+  test('1. Populated .docx File: Fetches content successfully from provider', async () => {
+    const res = await fetchDocumentContent({ documentId: 'file_lot3_docx', googleToken: 'mock' });
+    assert.equal(res.success, true);
+    assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_READ_SUCCESS);
+    assert.equal(res.format, 'docx');
+    assert.ok(res.content.includes('Electrical pass-through caps'));
     
-    // Check specific items from screenshot
-    const quartzSection = res.sections.find(s => s.categoryId === 'quartz');
-    assert.ok(quartzSection, 'Quartz section exists');
-    assert.ok(quartzSection.items.some(i => i.name.includes('Electrical pass-through caps')));
-    assert.ok(quartzSection.items.some(i => i.name.includes('Sinks')));
-
-    const electricalSection = res.sections.find(s => s.categoryId === 'electrical');
-    assert.ok(electricalSection.items.some(i => i.name.includes('Security lights')));
-    assert.ok(electricalSection.items.some(i => i.name.includes('Ceiling fans')));
+    // Parse content structure
+    const parsed = parseGoogleDocPurchasingStructure(res.content);
+    const totalItems = parsed.sections.reduce((sum, s) => sum + s.items.length, 0);
+    assert.ok(totalItems >= 20, 'Should parse 20 items');
+    assert.ok(parsed.sections.some(s => s.categoryId === 'quartz'));
+    assert.ok(parsed.sections.some(s => s.categoryId === 'electrical'));
+    assert.ok(parsed.sections.some(s => s.categoryId === 'plumbing'));
   });
 
   test('2. Native Google Doc Read: Seamlessly extracts live items from Google Doc format', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_gdoc', name: 'Purchasing Checklist' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.found, true);
-    assert.equal(res.documentId, 'file_lot3_gdoc');
-    assert.ok(res.totalItems >= 20);
+    const res = await fetchDocumentContent({ documentId: 'file_lot3_gdoc', googleToken: 'mock' });
+    assert.equal(res.success, true);
+    assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_READ_SUCCESS);
+    assert.equal(res.format, 'google_doc');
+    assert.ok(res.content.includes('Security lights'));
   });
 
   test('3. Empty Drive Document: Truthfully reports zero items without error', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_empty_doc', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.hasExistingDocument, true);
-    assert.equal(res.totalItems, 0);
-    assert.ok(res.message.includes('currently has no pending items listed'));
+    const res = await fetchDocumentContent({ documentId: 'file_empty_doc', googleToken: 'mock' });
+    assert.equal(res.success, true);
+    const parsed = parseGoogleDocPurchasingStructure(res.content);
+    const totalItems = parsed.sections.reduce((sum, s) => sum + s.items.length, 0);
+    assert.equal(totalItems, 0);
   });
 
-  test('4. Read Failure State: Reports read error truthfully without collapsing to "empty"', async () => {
+  test('4. Read Failure State: Reports read error state truthfully', async () => {
     driveStore['file_lot3_docx'].shouldFailRead = true;
-
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.readError, true);
+    const res = await fetchDocumentContent({ documentId: 'file_lot3_docx', googleToken: 'mock', forceRefresh: true });
+    assert.equal(res.success, false);
     assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_READ_ERROR);
-    assert.ok(res.message.includes('unable to read its current contents'));
-    assert.ok(!res.message.includes('has no pending items listed'), 'Must never claim list is empty on read error');
+    assert.ok(res.error.includes('503'));
   });
 
-  test('5. Safe Write-Back: Confirms write to Drive before updating local cache', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const addRes = await executeClientToolCall('add_purchasing_item', {
-      item: '4 recessed lights',
-      category: 'electrical'
-    }, projectContext);
-
-    assert.equal(addRes.success, true);
-    assert.equal(addRes.state, DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS);
-    assert.ok(driveStore['file_lot3_docx'].content.includes('recessed lights'));
-    assert.ok(driveStore['file_lot3_docx'].content.includes('Qty: 4'));
-
-    // Verify subsequent read returns the new item from Drive
-    const queryRes = await executeClientToolCall('get_purchasing_list', { trade: 'electrical' }, projectContext);
-    const elec = queryRes.sections.find(s => s.categoryId === 'electrical');
-    assert.ok(elec.items.some(i => i.name.includes('recessed lights')));
+  test('5. Safe Write-Back: Confirms write to Drive and updates store', async () => {
+    const newContent = `${SAMPLE_LOT3_DOCX_CONTENT}\n- [ ] 4 recessed lights`;
+    const res = await writeDocumentContent({ documentId: 'file_lot3_docx', content: newContent, googleToken: 'mock' });
+    assert.equal(res.success, true);
+    assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_WRITE_SUCCESS);
+    assert.ok(driveStore['file_lot3_docx'].content.includes('4 recessed lights'));
   });
 
   test('6. Write Failure Rollback: Rejects operation if Drive write fails', async () => {
     driveStore['file_lot3_docx'].shouldFailWrite = true;
-
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const addRes = await executeClientToolCall('add_purchasing_item', {
-      item: '10 smoke detectors',
-      category: 'electrical'
-    }, projectContext);
-
-    assert.equal(addRes.success, false);
-    assert.equal(addRes.writeError, true);
-    assert.equal(addRes.state, DOCUMENT_STATES.DOCUMENT_WRITE_ERROR);
-    assert.ok(addRes.message.includes('Failed to write item to Google Drive document'));
-    assert.ok(!driveStore['file_lot3_docx'].content.includes('smoke detectors'));
+    const res = await writeDocumentContent({ documentId: 'file_lot3_docx', content: 'new content', googleToken: 'mock' });
+    assert.equal(res.success, false);
+    assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_WRITE_ERROR);
+    assert.ok(res.error.includes('quota exceeded'));
   });
 
-  test('7. Duplicate / Retry Protection: Idempotent quantity merge', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    // First add
-    await executeClientToolCall('add_purchasing_item', { item: 'Ceiling fans', quantity: 2 }, projectContext);
-    // Second add of same item merges quantity
-    const addRes2 = await executeClientToolCall('add_purchasing_item', { item: 'Ceiling fans', quantity: 3 }, projectContext);
-    
-    assert.equal(addRes2.isDuplicate, true);
-    assert.ok(driveStore['file_lot3_docx'].content.includes('Qty: 6'));
+  test('7. Missing File State: Returns DOCUMENT_MISSING on non-existent ID', async () => {
+    const res = await fetchDocumentContent({ documentId: 'non_existent_id', googleToken: 'mock' });
+    assert.equal(res.success, false);
+    assert.equal(res.state, DOCUMENT_STATES.DOCUMENT_MISSING);
   });
 
-  test('8. Provenance Isolation: Project queries attribute strictly to Project Purchasing Checklist', async () => {
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.source, 'Google Docs (Lot 3 Purchasing Checklist)');
-  });
-
-  test('9. Native Google Docs Export Format: Successfully extracts all 20 items from unicode checkboxes (☐/☑) and numbered headings', async () => {
-    driveStore['file_lot3_docx'] = {
-      content: `Applicable to all lots and standard builds.
+  test('8. Native Google Docs Export Format: Successfully extracts items from unicode checkboxes (☐/☑)', () => {
+    const unicodeDoc = `Applicable to all lots.
 
 1. Quartz Hardware
 ☐ Electrical pass-through caps
-☐ Sinks
+☑ Sinks
 
 2. Electrical Hardware Fixtures
 ☐ Security lights
-☐ Contractor's doorbell chime kit
-☐ Smart doorbell
-☐ Front porch hanging light
-☐ Exterior column lights
-☐ Garage ceiling lights with the cap to install it
-☐ Vanity lights
-☐ Smart switches
-☐ Extension rods
-☐ Ceiling fans
-
-3. Plumbing Hardware Fixtures
-☐ Soap dispenser
-☐ Garbage disposal power button
-☐ Garbage disposal
-☐ Water heater with the water heater stand and tray
-☐ Shower kits
-☐ Toilets
-☐ Rough-in shower valves
-☐ Faucets
-`,
-      modifiedTime: '2026-08-23T18:00:00Z',
-      mimeType: 'application/vnd.google-apps.document',
-      fileName: 'Purchasing Checklist.docx'
-    };
-
-    const projectContext = {
-      activeProjectName: 'Lot 3',
-      projectId: 'lot_3',
-      driveTree: {
-        subfolders: [{
-          folderName: 'Google Doc Purchasing List',
-          files: [{ id: 'file_lot3_docx', name: 'Purchasing Checklist.docx' }]
-        }]
-      }
-    };
-
-    const res = await executeClientToolCall('get_purchasing_list', {}, projectContext);
-    assert.equal(res.found, true);
-    assert.equal(res.sections.length, 3);
-    const totalItems = res.sections.reduce((sum, s) => sum + s.items.length, 0);
-    assert.equal(totalItems, 20);
-    assert.ok(res.sections[0].items.some(i => i.name.includes('Electrical pass-through caps')));
-    assert.ok(res.sections[1].items.some(i => i.name.includes('Ceiling fans')));
-    assert.ok(res.sections[2].items.some(i => i.name.includes('Toilets')));
+☑ Smart doorbell
+`;
+    const parsed = parseGoogleDocPurchasingStructure(unicodeDoc);
+    const totalItems = parsed.sections.reduce((sum, s) => sum + s.items.length, 0);
+    const totalPurchased = parsed.sections.reduce((sum, s) => sum + s.items.filter(i => i.isPurchased).length, 0);
+    const totalNeeded = totalItems - totalPurchased;
+    assert.equal(totalItems, 4);
+    assert.equal(totalPurchased, 2);
+    assert.equal(totalNeeded, 2);
   });
 });

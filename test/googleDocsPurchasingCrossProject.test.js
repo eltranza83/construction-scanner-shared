@@ -1,4 +1,4 @@
-﻿import { test, describe, beforeEach } from 'node:test';
+import { test, describe, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 
 if (typeof globalThis.localStorage === 'undefined') {
@@ -29,6 +29,7 @@ import {
   askGeminiBrain,
   resetActiveSessionCognitiveState
 } from '../src/services/builderBrainService.js';
+import { purchasingService } from '../src/services/purchasingService.js';
 
 const LOT_3_INITIAL_DOC = `# Master Fixtures & Hardware Purchasing Checklist - Lot 3
 DocumentId: doc_lot_3_secure_uuid
@@ -77,6 +78,9 @@ DocumentId: doc_lot_55_secure_uuid
 describe('Cross-Project Isolation & Stable ID Hierarchy Suite', () => {
   beforeEach(() => {
     localStorage.clear();
+    if (purchasingService?.storage?.memoryStore?.clear) {
+      purchasingService.storage.memoryStore.clear();
+    }
     saveProjectPurchasingDoc(localStorage, 'lot_3', LOT_3_INITIAL_DOC);
     saveProjectPurchasingDoc(localStorage, 'lot_37', LOT_37_INITIAL_DOC);
     saveProjectPurchasingDoc(localStorage, 'lot_55', LOT_55_INITIAL_DOC);

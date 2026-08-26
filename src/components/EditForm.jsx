@@ -28,12 +28,15 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
     description: stagedItem.metadata.description || '',
     lotNumber: stagedItem.metadata.lotNumber || '',
     vendor: stagedItem.metadata.vendor || '',
-    costCategory: stagedItem.metadata.costCategory || 'material',
+    costCategory: stagedItem.metadata.costCategory ?? '',
     amount: stagedItem.metadata.amount || '',
     date: stagedItem.metadata.date || '',
     checkNumber: stagedItem.metadata.checkNumber || '',
     tradeCategory: stagedItem.metadata.tradeCategory || 'Mechanicals_&_Utilities',
     tradePhase: stagedItem.metadata.tradePhase || 'Plumbing Rough-In',
+    provenance: stagedItem.metadata.provenance || 'ocr_scan',
+    receiptStatus: stagedItem.metadata.receiptStatus || (stagedItem.metadata.documentType === 'manual_expense' ? 'no_receipt' : 'attached'),
+    documentType: stagedItem.metadata.documentType || 'invoice'
   });
 
   const handleCategoryChange = (e) => {
@@ -482,6 +485,29 @@ export default function EditForm({ stagedItem, onSave, onCancel, history = [], s
 
       <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
         
+        {/* Manual Expense / No Receipt Banner */}
+        {(formData.receiptStatus === 'no_receipt' || formData.provenance === 'manual_user_entry' || formData.documentType === 'manual_expense') && (
+          <div style={{
+            backgroundColor: 'rgba(197, 160, 89, 0.08)',
+            border: '1px solid rgba(197, 160, 89, 0.35)',
+            borderLeft: '4px solid #C5A059',
+            borderRadius: '8px',
+            padding: '10px 12px',
+            color: 'var(--color-zinc-100)',
+            fontSize: '0.8rem',
+            lineHeight: '1.4',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '4px'
+          }}>
+            <span style={{ fontSize: '1rem', color: '#C5A059' }}>📝</span>
+            <div>
+              <strong style={{ color: '#C5A059' }}>Self-Attested Manual Expense:</strong> No vendor receipt attached (Standard Voucher PDF will be generated on sync).
+            </div>
+          </div>
+        )}
+
         {/* Real-Time Duplicate Warning */}
         {duplicateWarning && (
           <div style={{

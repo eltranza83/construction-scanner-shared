@@ -37,10 +37,18 @@ export function isFormulaError(value) {
          str.startsWith('#REF!') || str.startsWith('#VALUE!') || str.startsWith('#DIV/0!') || str.startsWith('#N/A');
 }
 
+export function getTodayCalendarDate(dateObj = new Date()) {
+  const y = dateObj.getFullYear();
+  const m = String(dateObj.getMonth() + 1).padStart(2, '0');
+  const d = String(dateObj.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
 export function normalizeSpreadsheetDate(value) {
   if (!value && value !== 0) return 'N/A';
   const str = String(value).trim();
   if (!str || str === 'N/A') return 'N/A';
+  if (str.toLowerCase() === 'today') return getTodayCalendarDate();
 
   // Excel / Google Sheets serial date number (e.g. 46235 or 46235.0, covering dates ~1982 to ~2119)
   const num = parseFloat(str);

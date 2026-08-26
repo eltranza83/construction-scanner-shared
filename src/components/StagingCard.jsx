@@ -110,7 +110,7 @@ export default function StagingCard({
       </div>
 
       {/* Category & Phase AI Classification Badges */}
-      {!metadata.splits && (
+      {(!metadata.splits || metadata.splits.length === 0) && (
         <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '-2px', marginBottom: '2px', alignItems: 'center' }}>
           <span style={{
             fontSize: '0.63rem',

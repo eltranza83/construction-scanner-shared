@@ -601,12 +601,20 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       }
 
       let fileAttachment = null;
-      const targetFile = findReferencedDriveFile(query, currentLiveTree, messages);
-      if (targetFile && targetFile.id && googleToken) {
-        try {
-          fileAttachment = await fetchDriveFileBase64(googleToken, targetFile.id);
-        } catch (fileErr) {
-          console.warn('Drive file fetch attachment warning:', fileErr);
+      let targetFile = null;
+      const isManualNoReceiptIntent = /\b(no\s+(physical\s+)?(scan|receipt|paper|invoice)|stage\s+(a\s+)?(\$?\d+|payment|expense)|log\s+(a\s+)?(\$?\d+|expense))\b/i.test(query);
+      if (!isManualNoReceiptIntent) {
+        targetFile = findReferencedDriveFile(query, currentLiveTree, messages);
+        if (targetFile && targetFile.id && googleToken) {
+          try {
+            const fetchWithTimeout = Promise.race([
+              fetchDriveFileBase64(googleToken, targetFile.id),
+              new Promise((_, reject) => setTimeout(() => reject(new Error('Drive attachment timeout (3s limit)')), 3000))
+            ]);
+            fileAttachment = await fetchWithTimeout;
+          } catch (fileErr) {
+            console.warn('Drive file fetch attachment skipped/timed out:', fileErr?.message || fileErr);
+          }
         }
       }
 

@@ -27,6 +27,24 @@ export function useStagedDocuments({ activeProject, setError, setSuccess }) {
     setPrevStagedCount(stagedItems?.length || 0);
   }, [stagedItems.length, prevStagedCount]);
 
+  // Live synchronization listener: Immediately reflects new staged drafts across tabs and from AI tool calls
+  useEffect(() => {
+    const handleStagedUpdate = () => {
+      const freshState = loadStoredAppState();
+      const freshDrafts = Array.isArray(freshState.stagedItems) ? freshState.stagedItems : [];
+      setStagedItems(freshDrafts);
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('staged-items-updated', handleStagedUpdate);
+      window.addEventListener('storage', handleStagedUpdate);
+      return () => {
+        window.removeEventListener('staged-items-updated', handleStagedUpdate);
+        window.removeEventListener('storage', handleStagedUpdate);
+      };
+    }
+  }, []);
+
   const saveStagedItems = (updatedDrafts) => {
     setStagedItems(updatedDrafts);
     persistStagedItems(updatedDrafts);

@@ -1,4 +1,4 @@
-import { getProjectPacketInfo } from './projectInfoFormatter';
+import { getProjectPacketInfo } from './projectInfoFormatter.js';
 
 const ADEPEC_GOLD = [197, 160, 89];
 const ADEPEC_DARK = [10, 10, 10];
@@ -615,6 +615,49 @@ export async function generateDocumentPDF(metadata, imageUrls) {
       pdf.setTextColor(220, 38, 38);
       pdf.text('Failed to render document image scan.', margin, currentY + 10);
     }
+  } else {
+    // Render Self-Attested Manual Expense Record voucher section
+    const voucherY = currentY + 5;
+    const voucherHeight = 55;
+
+    // Background card
+    pdf.setFillColor(250, 250, 250);
+    pdf.setDrawColor(228, 228, 231);
+    pdf.setLineWidth(0.4);
+    pdf.roundedRect(margin, voucherY, contentWidth, voucherHeight, 2, 2, 'FD');
+
+    // Accent line on left edge
+    pdf.setFillColor(197, 160, 89); // Adepec Gold
+    pdf.rect(margin, voucherY, 3, voucherHeight, 'F');
+
+    // Title & Subtitle based on transaction type
+    const isCheck = metadata.type === 'check' || metadata.documentType === 'check' || (metadata.checkNumber && !['Card', 'Debit', 'Cash'].some(m => String(metadata.checkNumber).includes(m)));
+    const voucherTitle = isCheck ? 'SELF-ATTESTED CONTRACTOR PAYMENT VOUCHER' : 'SELF-ATTESTED MANUAL EXPENSE RECORD';
+    const voucherSubtitle = isCheck
+      ? (metadata.checkNumber ? `CHECK PAYMENT #${metadata.checkNumber} • NO PHYSICAL SCAN ATTACHED` : 'CONTRACTOR PAYMENT • NO PHYSICAL SCAN ATTACHED')
+      : 'NO VENDOR RECEIPT ATTACHED';
+
+    pdf.setTextColor(10, 10, 10);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(10);
+    pdf.text(voucherTitle, margin + 8, voucherY + 10);
+
+    pdf.setTextColor(197, 160, 89);
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(8.5);
+    pdf.text(voucherSubtitle, margin + 8, voucherY + 17);
+
+    // Statement / Description
+    pdf.setFont('helvetica', 'normal');
+    pdf.setFontSize(8.5);
+    const purposeText = metadata.description || (isCheck ? `Contractor payment to ${metadata.payee || metadata.vendor || 'Contractor'}` : `Business expense at ${metadata.vendor || 'merchant'}`);
+    pdf.text(`Business Purpose: ${purposeText}`, margin + 8, voucherY + 25);
+    pdf.text(`Recorded By: Authorized Project Administrator`, margin + 8, voucherY + 32);
+    pdf.text(`Attestation: Verified legitimate project transaction recorded without physical paper attachment.`, margin + 8, voucherY + 39);
+    // Timestamp & Provenance
+    pdf.setTextColor(113, 113, 122);
+    pdf.setFont('helvetica', 'italic');
+    pdf.text(`Logged via J.A.R.V.I.S. (SiteTactix) • Date: ${metadata.date || new Date().toISOString().split('T')[0]} • Status: Self-Attested Entry`, margin + 8, voucherY + 48);
   }
 
   // 4. Attach Second Image (e.g. Receipt) on Page 2 if exists

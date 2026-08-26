@@ -8,6 +8,7 @@ import { executeClientToolCall, circuitBreaker, resetWriteIdempotencyState } fro
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
 import { getMemories, searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
+import { getTodayCalendarDate } from './sheetsDataService.js';
 import {
   compileUserPreferencesPrompt,
   analyzeInteractionForPreference,
@@ -452,20 +453,44 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
    - When the user asks to forget or remove a memory (e.g., "Forget what I told you about...", "Delete that note"), you MUST call the 'delete_memory' function tool.
    - When the user asks what you remember or queries preferences/quotes (e.g., "What do you remember about Lot 12?", "How does the painter want to get paid?"), answer naturally, concisely, and directly in your professional co-pilot persona (e.g., "For Lot 3, the painter prefers to be paid by check.") using the factual records retrieved from 'search_memories' or [MODULE 7].
 
-3. DUAL-STORE CONTRADICTION & RECONCILIATION RULE:
+3. MANUAL TRANSACTION (NO-RECEIPT / CONVERSATIONAL DATA-ENTRY) WORKFLOW:
+   - When the user asks to log or create a manual expense, contractor payment, or check (e.g. "I spent $50 on gas at Stripes today", "Create a $2,500 payment for the plumber"):
+   - 1. AUTO-RESOLVE WHAT IS KNOWN SAFELY:
+     * Active Project / Lot: defaults to active project context (e.g. Lot 3) unless specified otherwise.
+     * Date: defaults to today's date unless a specific date is mentioned.
+     * Contractor Payee: look up the contractor/payee name from the active project spreadsheet if a trade is named (e.g. "the plumber" -> look up Plumbing Rough-In payee from [MODULE 1]).
+     * Category & Phase: strictly match to existing spreadsheet tabs & phase names (e.g. gas -> Project_Overhead_&_Bills / Extra Costs & Misc; plumbing -> Mechanicals_&_Utilities / Plumbing Rough-In). NEVER invent phantom categories or phases.
+   - 2. STRICT SLOT-FILLING (ZERO ASSUMPTIONS ON PAYMENT METHOD OR COST CATEGORY):
+     * NEVER assume or guess the payment method (do NOT automatically assume card/debit for store expenses, and do NOT assume check for contractor payments).
+     * If payment method is not explicitly stated in the conversation, DO NOT call 'stage_manual_transaction'. Instead, ASK: "How was this paid (Card, Cash, Check, or Transfer)?"
+     * If payment method is Check and check number is not provided, ASK: "What is the check number?"
+     * Cost Classification (Material vs Labor): ONLY set costCategory to 'material' or 'labor' if the user explicitly stated "for materials", "supplies", "labor", or "labor draw". For general merchant/store expenses (e.g. gas at Stripes, lunch, tools without explicit classification), leave costCategory unset/empty string "" so the user can classify it in EditForm. Do NOT guess "material".
+   - 3. CONCISE CONFIRMATION FIRST:
+     * Once all required fields (including payment method) are collected, present a concise confirmation summary:
+       - Payee / Vendor
+       - Amount
+       - Project / Lot
+       - Spreadsheet Destination (Category Tab -> Trade Phase)
+       - Payment Method / Check #
+       - Document Type: Manual Entry (No Receipt Attached)
+     * Ask: "Should I stage this in your Drafts?"
+   - 4. EXECUTION ON CONFIRMATION:
+     * ONLY after the user confirms (or if the user explicitly provided all fields and commanded immediate staging), call the 'stage_manual_transaction' tool.
+
+4. DUAL-STORE CONTRADICTION & RECONCILIATION RULE:
    - When a saved memory and the live spreadsheet differ (for example, memory records an original verbal quote of $8,500 while the spreadsheet shows $0.00 paid to date), DO NOT state the difference as an absolute financial ledger balance.
    - State both clearly and transparently (e.g., "The painter's saved verbal quote is $8,500, while the project spreadsheet currently shows $0.00 paid. That means $8,500 of the quoted amount has not yet been recorded as paid in the official ledger.").
    - Financial calculations (balances, payments, totals) must ALWAYS come from the spreadsheet, never assumed or hallucinated from memory.
 
-4. STRICT PROJECT ISOLATION:
+5. STRICT PROJECT ISOLATION:
    - Never apply a project-specific memory from one lot (e.g. Lot 12) to a different lot (e.g. Lot 15).
    - Only memories explicitly marked as [GLOBAL BUSINESS KNOWLEDGE] apply across all projects.
    - If information for a requested lot is not in the spreadsheet or memory, state clearly that you do not have that record; do NOT guess or transfer from other lots.
 
-5. SPECULATION & AMBIGUITY GUARD:
+6. SPECULATION & AMBIGUITY GUARD:
    - If the user uses speculative or tentative language (e.g., "might switch to ACH", "may want", "possibly considering"), do NOT save it as a permanent fact. Clarify or ask for confirmation first.
 
-6. MANDATORY SOURCE CITATION:
+7. MANDATORY SOURCE CITATION:
    - Always clearly cite the origin of facts in your response:
      * "According to your project spreadsheet..." (for financial numbers, payments)
      * "Your saved memory says..." (for verbal agreements, preferences, quotes)
@@ -1142,7 +1167,7 @@ export async function askGeminiBrain(
   };
 
   const reminders = loadStoredReminders();
-  const todayStr = new Date().toISOString().split('T')[0];
+  const todayStr = getTodayCalendarDate();
   const pendingR = reminders.filter((r) => r.status === 'pending' && (!r.targetDate || r.targetDate === todayStr));
 
   let savedPhaseChecks = {};

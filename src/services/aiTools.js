@@ -50,6 +50,7 @@ import {
 import { purchasingService, PURCHASING_STATUSES, TRADE_SECTION_MAP as STRUCTURED_TRADE_MAP } from './purchasingService.js';
 import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
 import { fetchGoogleDocText } from './googleDrive.js';
+import { normalizeSpreadsheetDate, getTodayCalendarDate } from './sheetsDataService.js';
 
 export { AI_TOOL_DECLARATIONS, executeWeatherTool };
 
@@ -222,6 +223,18 @@ export const TOOL_REGISTRY = {
     source: 'J.A.R.V.I.S. Memory (Persistent Vault)',
     confirmationPolicy: 'explicit',
     description: 'Purges all learned communication preferences for the user.'
+  },
+  stage_manual_transaction: {
+    type: 'WRITE',
+    source: 'Application Drafts Queue (stagedItems)',
+    confirmationPolicy: 'explicit',
+    description: 'Stages a user-reported business expense, contractor labor draw, or check payment with no receipt into the Drafts queue for human review and spreadsheet sync.'
+  },
+  stage_manual_expense: {
+    type: 'WRITE',
+    source: 'Application Drafts Queue (stagedItems)',
+    confirmationPolicy: 'explicit',
+    description: 'Stages a user-reported business expense with no receipt into the Drafts queue for human review and spreadsheet sync.'
   }
 };
 
@@ -234,10 +247,11 @@ const IDEMPOTENCY_WINDOW_MS = 60000; // 60 seconds duplicate protection
 export const TOOL_TIMEOUT_MS = 6000; // 6000ms max execution time per tool
 
 export function generateIdempotencyKey(toolName, args = {}, projectId = '') {
-  const normalizedText = String(args.text || args.updatedText || args.searchQuery || args.memoryId || args.item || args.itemName || '').trim().toLowerCase();
-  const normalizedCategory = String(args.category || '').trim().toLowerCase();
-  const normalizedDate = String(args.effectiveDate || '').trim();
-  return `${toolName}:${projectId || 'global'}:${normalizedText}:${normalizedCategory}:${normalizedDate}`;
+  const normalizedText = String(args.text || args.updatedText || args.searchQuery || args.memoryId || args.item || args.itemName || args.vendorOrPayee || args.vendor || args.payee || '').trim().toLowerCase();
+  const normalizedCategory = String(args.category || args.tradeCategory || '').trim().toLowerCase();
+  const normalizedDate = String(args.effectiveDate || args.date || '').trim();
+  const normalizedAmount = String(args.amount || '').trim();
+  return `${toolName}:${projectId || 'global'}:${normalizedText}:${normalizedCategory}:${normalizedDate}:${normalizedAmount}`;
 }
 
 export function checkIdempotency(toolName, args = {}, projectId = '') {
@@ -633,6 +647,135 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           receipts: receipts.slice(0, 20)
         };
       }
+      break;
+    }
+
+    case 'stage_manual_transaction':
+    case 'stage_manual_expense': {
+      const transactionType = String(args.transactionType || (args.checkNumber || args.paymentMethod?.toLowerCase()?.includes('check') ? 'check' : 'expense')).toLowerCase();
+      const vendorOrPayee = String(args.vendorOrPayee || args.vendor || args.payee || '').trim() || 'Unknown Payee';
+      const amount = typeof args.amount === 'number' ? args.amount : (parseFloat(args.amount) || 0);
+      const date = args.date && String(args.date).trim().toLowerCase() !== 'today' ? normalizeSpreadsheetDate(args.date) : getTodayCalendarDate();
+      const lotNumber = String(args.lotNumber || projectContext?.projectName || projectContext?.lotName || projectContext?.projectId || '').trim() || 'Lot 3';
+      
+      // Strict Payment Method Enforcement: Reject missing, empty, or generic fallback payment methods
+      const rawPaymentMethod = String(args.paymentMethod || '').trim();
+      const genericPlaceholders = ['card / cash', 'card/cash', 'card or cash', 'unknown', 'n/a', 'unspecified', 'none', ''];
+      if (!rawPaymentMethod || genericPlaceholders.includes(rawPaymentMethod.toLowerCase())) {
+        resultPayload = {
+          success: false,
+          status: 'missing_payment_method',
+          vendorOrPayee,
+          amount,
+          lotNumber,
+          date,
+          message: 'Payment method is required before staging a manual transaction. Please ask the user how this transaction was paid (e.g. Debit Card, Credit Card, Cash, Check #1045, Transfer).'
+        };
+        break;
+      }
+
+      // Category & Phase resolution
+      const tradeCategory = String(args.tradeCategory || (transactionType === 'expense' ? 'Project_Overhead_&_Bills' : 'Mechanicals_&_Utilities')).trim();
+      const tradePhase = String(args.tradePhase || (transactionType === 'expense' ? 'Extra Costs & Misc' : 'Plumbing Rough-In')).trim();
+
+      // Cost Classification: ONLY set if explicitly provided by user. Do NOT default or guess from vendor/item description.
+      const rawCostCategory = String(args.costCategory || '').trim().toLowerCase();
+      let costCategory = '';
+      if (rawCostCategory === 'material' || rawCostCategory === 'labor') {
+        costCategory = rawCostCategory;
+      } else if (transactionType === 'contractor_payment' || transactionType === 'check') {
+        costCategory = 'labor';
+      }
+
+      const checkNumber = String(args.checkNumber || (rawPaymentMethod.toLowerCase().includes('check') ? rawPaymentMethod.replace(/[^0-9]/g, '') : '')).trim();
+      const paymentMethod = rawPaymentMethod;
+      const description = String(args.description || (transactionType === 'check' || transactionType === 'contractor_payment' ? `Payment to ${vendorOrPayee} for ${tradePhase}` : `Manual expense at ${vendorOrPayee}`)).trim();
+      const docType = (transactionType === 'check' || checkNumber) ? 'check' : 'manual_expense';
+      const notes = String(args.notes || (docType === 'check' ? 'Self-Attested Contractor Check / Payment — No Physical Scan Attached' : 'Self-Attested Manual Expense Record — No Vendor Receipt Attached')).trim();
+
+      // Check existing staged items in appStorage
+      const { loadStoredAppState, persistStagedItems } = await import('./appStorage.js');
+      const currentApp = loadStoredAppState();
+      const existingStaged = Array.isArray(currentApp.stagedItems) ? currentApp.stagedItems : [];
+
+      // Duplicate check within existing staged drafts
+      const duplicate = existingStaged.find(item => {
+        const m = item.metadata || {};
+        const vMatch = String(m.vendor || m.payee || '').trim().toLowerCase() === vendorOrPayee.toLowerCase();
+        const amtMatch = Math.abs(parseFloat(m.amount || 0) - amount) < 0.001;
+        const dMatch = String(m.date || '').trim() === date;
+        const lMatch = String(m.lotNumber || '').trim().toLowerCase() === lotNumber.toLowerCase();
+        return vMatch && amtMatch && dMatch && lMatch;
+      });
+
+      if (duplicate) {
+        resultPayload = {
+          success: false,
+          status: 'duplicate_detected',
+          existingDraftId: duplicate.id,
+          vendorOrPayee,
+          amount,
+          lotNumber,
+          date,
+          message: `A draft for $${amount.toFixed(2)} for ${vendorOrPayee} on ${date} for ${lotNumber} is already in your Drafts queue (Draft ID: ${duplicate.id}).`
+        };
+        break;
+      }
+
+      const newDraftId = `draft_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+      const newDraft = {
+        id: newDraftId,
+        metadata: {
+          type: docType,
+          vendor: vendorOrPayee,
+          payee: vendorOrPayee,
+          amount,
+          date,
+          lotNumber,
+          costCategory, // empty string if unassigned, requiring user resolution in EditForm
+          tradeCategory,
+          tradePhase,
+          description,
+          checkNumber: checkNumber || paymentMethod,
+          documentType: docType,
+          receiptStatus: 'no_receipt',
+          provenance: 'manual_user_entry',
+          notes,
+          splits: null
+        },
+        mainImageBase64: null,
+        secondaryImageBase64: null,
+        createdAt: Date.now(),
+        timerDuration: 60 * 60 * 1000
+      };
+
+      const updatedDrafts = [newDraft, ...existingStaged];
+      persistStagedItems(updatedDrafts);
+
+      if (typeof window !== 'undefined' && typeof window.dispatchEvent === 'function') {
+        window.dispatchEvent(new CustomEvent('staged-items-updated', { detail: { count: updatedDrafts.length, newDraft } }));
+      }
+
+      resultPayload = {
+        success: true,
+        status: 'staged',
+        draftId: newDraftId,
+        draftCount: updatedDrafts.length,
+        draft: newDraft,
+        transactionType,
+        vendorOrPayee,
+        amount,
+        lotNumber,
+        tradeCategory,
+        tradePhase,
+        date,
+        costCategory: costCategory || 'Unassigned (Review in EditForm)',
+        paymentMethod,
+        checkNumber,
+        receiptStatus: 'no_receipt',
+        provenance: 'manual_user_entry',
+        message: `Successfully staged $${amount.toFixed(2)} ${transactionType === 'check' || transactionType === 'contractor_payment' ? 'contractor payment' : 'manual expense'} for ${vendorOrPayee} under ${lotNumber} (${tradeCategory} → ${tradePhase}) into your Drafts queue.`
+      };
       break;
     }
 

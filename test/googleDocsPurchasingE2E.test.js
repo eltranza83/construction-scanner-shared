@@ -23,6 +23,7 @@ import {
   saveProjectPurchasingDoc,
   loadProjectPurchasingDoc
 } from '../src/services/googleDocsPurchasingService.js';
+import { purchasingService } from '../src/services/purchasingService.js';
 
 const INITIAL_PURCHASING_DOC = `# Master Fixtures & Hardware Purchasing Checklist - Lot 3
 Applicable to all lots and standard builds.
@@ -46,8 +47,12 @@ Applicable to all lots and standard builds.
 `;
 
 describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     localStorage.clear();
+    if (purchasingService?.storage?.memoryStore?.clear) {
+      purchasingService.storage.memoryStore.clear();
+    }
+    await purchasingService.migrateFromGoogleDocContent('lot_3', INITIAL_PURCHASING_DOC);
     saveProjectPurchasingDoc(localStorage, 'lot_3', INITIAL_PURCHASING_DOC);
     resetActiveSessionCognitiveState();
   });
@@ -71,24 +76,19 @@ describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', 
     assert.equal(res.success, true);
     assert.equal(res.category, 'Electrical Hardware Fixtures');
 
-    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'lot_3');
-    assert.ok(updatedDoc.includes('- [ ] dimmer switches — Qty: 2'));
-    
-    // Verify it was inserted before plumbing section
-    const dimmerIndex = updatedDoc.indexOf('dimmer switches');
-    const plumbingIndex = updatedDoc.indexOf('Plumbing Hardware Fixtures');
-    assert.ok(dimmerIndex < plumbingIndex, 'Must insert before next section begins');
+    const items = await purchasingService.getItems('lot_3');
+    assert.ok(items.some(i => i.itemName.toLowerCase().includes('dimmer switches') && i.quantity === 2));
   });
 
-  test('4. add_purchasing_item with existing item performs autonomous quantity increment', async () => {
+  test('4. add_purchasing_item with existing item reports ALREADY_EXISTS and preserves checklist item', async () => {
     // Existing has "Smart doorbell — Qty: 1"
     const res = await executeClientToolCall('add_purchasing_item', { item: 'Smart doorbell', quantity: 2 }, { projectId: 'lot_3' });
     assert.equal(res.success, true);
     assert.equal(res.isDuplicate, true);
-    assert.equal(res.updatedQuantity, 3);
+    assert.equal(res.action, 'ALREADY_EXISTS');
 
-    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'lot_3');
-    assert.ok(updatedDoc.includes('Smart doorbell — Qty: 3'));
+    const items = await purchasingService.getItems('lot_3');
+    assert.ok(items.some(i => i.itemName.toLowerCase().includes('smart doorbell') && i.quantity === 1));
   });
 
   test('5. add_purchasing_item respects explicit trade override', async () => {
@@ -100,8 +100,8 @@ describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', 
     assert.equal(res.success, true);
     assert.equal(res.category, 'Quartz Hardware');
 
-    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'lot_3');
-    assert.ok(updatedDoc.includes('Support brackets — Qty: 4'));
+    const items = await purchasingService.getItems('lot_3');
+    assert.ok(items.some(i => i.itemName.toLowerCase().includes('support brackets') && i.quantity === 4));
   });
 
   test('6. update_purchasing_item_status marks item as purchased [x]', async () => {
@@ -112,8 +112,9 @@ describe('SiteTactix Google Docs Master Purchasing List Integration E2E Suite', 
     assert.equal(res.success, true);
     assert.equal(res.isPurchased, true);
 
-    const updatedDoc = loadProjectPurchasingDoc(localStorage, 'lot_3');
-    assert.ok(updatedDoc.includes('- [x] Soap dispenser'));
+    const items = await purchasingService.getItems('lot_3');
+    const soap = items.find(i => i.itemName.toLowerCase().includes('soap dispenser'));
+    assert.equal(soap?.status, 'purchased');
   });
 
   test('7. End-to-End askGeminiBrain query routes to Google Docs provenance', async () => {

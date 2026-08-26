@@ -41,6 +41,70 @@ export const AI_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: 'stage_manual_transaction',
+    description: 'Stage a user-reported business expense, contractor labor draw, or check payment with no receipt directly into the application Drafts queue (stagedItems) for human review, PDF voucher generation, and spreadsheet synchronization. ONLY call this tool after confirming the complete transaction details with the user or when explicitly commanded to stage it.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        transactionType: {
+          type: 'STRING',
+          enum: ['expense', 'contractor_payment', 'check'],
+          description: 'Type of transaction: "expense" for vendor/store purchases, "contractor_payment" or "check" for subcontractor labor draws.'
+        },
+        vendorOrPayee: {
+          type: 'STRING',
+          description: 'Name of the merchant, vendor, contractor, or subcontractor (e.g. Stripes, Rios Plumbing, Home Depot, Kike Vallejo).'
+        },
+        amount: {
+          type: 'NUMBER',
+          description: 'Total dollar amount of the transaction.'
+        },
+        date: {
+          type: 'STRING',
+          description: 'Transaction date in YYYY-MM-DD format (defaults to current date if today).'
+        },
+        lotNumber: {
+          type: 'STRING',
+          description: 'Project or lot name (e.g. Lot 3).'
+        },
+        tradeCategory: {
+          type: 'STRING',
+          description: 'Spreadsheet category tab name (e.g. Mechanicals_&_Utilities, Project_Overhead_&_Bills, Site_Prep_&_Structure, Framing_&_Lumber).'
+        },
+        tradePhase: {
+          type: 'STRING',
+          description: 'Specific phase within the category sheet (e.g. Plumbing Rough-In, Extra Costs & Misc, Foundation Concrete, Trash & Dumpster).'
+        },
+        costCategory: {
+          type: 'STRING',
+          description: 'Optional cost classification: "material" or "labor". ONLY set if explicitly specified by the user (e.g. "for materials", "labor draw"). Do NOT guess or infer from the vendor or item description. Leave unset/empty string "" for general expenses.'
+        },
+        paymentMethod: {
+          type: 'STRING',
+          description: 'Required method of payment (e.g. "Debit Card", "Credit Card", "Cash", "Check #1045", "Zelle", "Transfer"). You MUST ask the user if this is not provided in the conversation.'
+        },
+        checkNumber: {
+          type: 'STRING',
+          description: 'Specific check number if paid by check (e.g. "1045").'
+        },
+        description: {
+          type: 'STRING',
+          description: 'Brief description of the work performed, purchase, or business purpose.'
+        },
+        receiptStatus: {
+          type: 'STRING',
+          enum: ['no_receipt', 'attached'],
+          description: 'Receipt status ("no_receipt" for self-attested manual entries).'
+        },
+        notes: {
+          type: 'STRING',
+          description: 'Optional additional notes for the voucher record.'
+        }
+      },
+      required: ['transactionType', 'vendorOrPayee', 'amount', 'paymentMethod']
+    }
+  },
+  {
     name: 'get_project_schedule',
     description: 'Retrieve upcoming field reminders, trade calls, site watchouts, and in-app milestone tasks.',
     parameters: {
