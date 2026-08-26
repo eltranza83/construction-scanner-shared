@@ -6,8 +6,10 @@ import {
   findSummarySectionForSheet,
   finalizeBlock,
   getValByLabel,
+  isFormulaError,
   isSummarySectionHeader,
   normalizeKey,
+  normalizeSpreadsheetDate,
   parseCategorySheet,
   parseCurrency,
   parseSummaryDashboard
@@ -119,4 +121,115 @@ test('finalizeBlock uses fallback summary phase metadata by position when phase 
   assert.equal(contractor.totalMaterial, '$55.00');
   assert.equal(contractor.totalLabor, '$1,200.00');
   assert.equal(contractor.totalPaid, '$1,255.00');
+});
+
+test('normalizeSpreadsheetDate handles Excel serial numbers and calendar strings', () => {
+  assert.equal(normalizeSpreadsheetDate('46235.0'), '2026-08-01');
+  assert.equal(normalizeSpreadsheetDate(46235), '2026-08-01');
+  assert.equal(normalizeSpreadsheetDate('46225'), '2026-07-22');
+  assert.equal(normalizeSpreadsheetDate('45225.0'), '2023-10-26');
+  assert.equal(normalizeSpreadsheetDate('44197'), '2021-01-01');
+  assert.equal(normalizeSpreadsheetDate('2026-08-15'), '2026-08-15');
+  assert.equal(normalizeSpreadsheetDate('08/15/2026'), '08/15/2026');
+  assert.equal(normalizeSpreadsheetDate(''), 'N/A');
+  assert.equal(normalizeSpreadsheetDate(null), 'N/A');
+});
+
+test('isFormulaError identifies all spreadsheet error strings', () => {
+  assert.equal(isFormulaError('#REF!'), true);
+  assert.equal(isFormulaError('#VALUE!'), true);
+  assert.equal(isFormulaError('#DIV/0!'), true);
+  assert.equal(isFormulaError('#N/A'), true);
+  assert.equal(isFormulaError('#NAME?'), true);
+  assert.equal(isFormulaError('$1,200.00'), false);
+  assert.equal(isFormulaError('0'), false);
+});
+
+test('formula errors preserve exact sheet, cellRef, and field context', () => {
+  const summary = parseSummaryDashboard([
+    ['Project Name:', 'Lot 3'],
+    ['Gross Projected Project Cost', '#REF!'],
+    ['Total Spent to Date (Draws)', '#VALUE!']
+  ]);
+
+  assert.equal(summary.hasFormulaError, true);
+  assert.equal(summary.formulaErrors.length, 2);
+  assert.equal(summary.formulaErrors[0].field, 'Gross Projected Project Cost');
+  assert.equal(summary.formulaErrors[0].error, '#REF!');
+  assert.equal(summary.formulaErrors[1].field, 'Total Spent to Date (Draws)');
+  assert.equal(summary.formulaErrors[1].error, '#VALUE!');
+
+  const categoryRows = [
+    ['Description', 'Contractor / Vendor', 'Material Cost', 'Labor Cost', 'Payment Date', 'Check or Trans', 'Contractor Payee', 'Total Paid', 'Original Quote', 'Remaining Balance', 'Notes / Status'],
+    ['→ Electrical & Lighting', '', '$0.00', '$0.00', '', '', 'Electrical Payee', '$0.00', '$15,000.00', '#REF!', 'In Progress']
+  ];
+
+  const parsed = parseCategorySheet('Mechanicals_&_Utilities', categoryRows);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].hasFormulaError, true);
+  assert.equal(parsed[0].formulaErrors.length, 1);
+  assert.equal(parsed[0].formulaErrors[0].cellRef, 'J2');
+  assert.equal(parsed[0].formulaErrors[0].field, 'Remaining Balance');
+  assert.equal(parsed[0].formulaErrors[0].error, '#REF!');
+});
+
+test('template-generated blank/formula rows do NOT create phantom payment transactions', () => {
+  const rows = [
+    ['Task Description', 'Contractor / Vendor', 'Material Cost', 'Labor Cost', 'Payment Date', 'Check or Trans #', 'Contractor Payee', 'Total Paid', 'Original Quote', 'Remaining Balance', 'Notes / Status'],
+    ['→ Plumbing Rough-In', 'Plumbing Payee', '', '', '', '', '', '', '$10,000.00', '$10,000.00', 'Not Started']
+  ];
+
+  // Add 50 blank template formula rows
+  for (let i = 0; i < 50; i++) {
+    rows.push(['', '', '$0.00', '$0.00', '', '', '', '', '', '', '']);
+  }
+
+  // Add 1 real payment transaction
+  rows.push(['PVC Pipes & Fittings', 'Ferguson Supply', '$1,250.00', '$0.00', '46235.0', '1042', '', '', '', '', '']);
+
+  const parsed = parseCategorySheet('Mechanicals_&_Utilities', rows);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].payments.length, 1, 'Only the 1 real payment transaction must be logged, ignoring 50 template rows');
+  assert.equal(parsed[0].payments[0].vendor, 'Ferguson Supply');
+  assert.equal(parsed[0].payments[0].materialCost, '$1,250.00');
+  assert.equal(parsed[0].payments[0].date, '2026-08-01');
+  assert.equal(parsed[0].payments[0].checkNumber, '1042');
+});
+
+test('unbounded row range reads transactions beyond row 80 and enables AI retrieval', async () => {
+  const { executeClientToolCall } = await import('../src/services/aiTools.js');
+
+  const rows = [
+    ['Task Description', 'Contractor / Vendor', 'Material Cost', 'Labor Cost', 'Payment Date', 'Check or Trans #', 'Contractor Payee', 'Total Paid', 'Original Quote', 'Remaining Balance', 'Notes / Status'],
+    ['→ Electrical & Lighting', 'Electrical Payee', '', '', '', '', '', '', '$25,000.00', '$16,550.00', 'In Progress']
+  ];
+
+  // Pad out to row 120 with template blanks
+  for (let r = 2; r <= 120; r++) {
+    rows.push(['', '', '$0.00', '$0.00', '', '', '', '', '', '', '']);
+  }
+
+  // Row 121: Transaction at row 121 (well beyond row 80)
+  rows.push(['Industrial Circuit Breakers Pack', 'Apex Industrial Supply', '$8,450.00', '$0.00', '46235.0', '5042', '', '', '', '', '']);
+
+  const parsed = parseCategorySheet('Mechanicals_&_Utilities', rows);
+  assert.equal(parsed.length, 1);
+  assert.equal(parsed[0].payments.length, 1);
+  assert.equal(parsed[0].payments[0].vendor, 'Apex Industrial Supply');
+  assert.equal(parsed[0].payments[0].materialCost, '$8,450.00');
+  assert.equal(parsed[0].payments[0].date, '2026-08-01');
+
+  // Verify search_receipts finds the row 121 transaction
+  const mockDashboardData = {
+    projectInfo: { name: 'Lot 3' },
+    subcontractors: parsed
+  };
+
+  const receiptResult = await executeClientToolCall('search_receipts', { query: 'Apex Industrial' }, { dashboardData: mockDashboardData });
+  assert.equal(receiptResult.found, true);
+  assert.equal(receiptResult.count, 1);
+  assert.equal(receiptResult.receipts[0].payee, 'Apex Industrial Supply');
+  assert.equal(receiptResult.receipts[0].amount, 8450);
+  assert.equal(receiptResult.receipts[0].date, '2026-08-01');
+  assert.equal(receiptResult.receipts[0].checkNumber, '5042');
 });

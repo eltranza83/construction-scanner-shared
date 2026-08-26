@@ -935,6 +935,21 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
     }
   }
 
+  // 4. Contractor / Vendor Entity Claims
+  const vendorRegex = /\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*\s+(?:Electric|Plumbing|Framing|Roofing|Masonry|Concrete|HVAC|Supply|Pros|Masters|Services|LLC|Inc|Corp|Contractors?))\b/g;
+  const vendorMatches = [...synthesizedText.matchAll(vendorRegex)];
+
+  for (const vm of vendorMatches) {
+    checkedCount++;
+    const vendorName = vm[1].trim();
+    if (groundTruth.includes(vendorName.toLowerCase())) {
+      supportedClaims.push(vendorName);
+    } else {
+      unsupportedClaims.push(vendorName);
+      unsupportedEntities.push(vendorName);
+    }
+  }
+
   // 5. Purchasing Evidence Grounding & Answer-Priority Hierarchy
   // Hierarchy: Item-Specific Lookup (itemLookup) > Specific Trade Filter (trade) > Project-Wide Summary
   let purchasingDiscrepancyDetected = false;

@@ -35,6 +35,25 @@ export function auditSpreadsheetHealth(parsedData) {
     if (grossBudget === 0 && totalSpent === 0 && categories && categories.length > 0) {
       warnings.push("Gross Budget and Total Spent are both $0.00. Please check if top summary labels ('GROSS BUDGET', 'TOTAL SPENT') in your Google Sheet were edited or renamed.");
     }
+
+    if (projectInfo.hasFormulaError && Array.isArray(projectInfo.formulaErrors)) {
+      projectInfo.formulaErrors.forEach(errObj => {
+        const desc = typeof errObj === 'string' ? errObj : `${errObj.location || errObj.field}: ${errObj.error}`;
+        warnings.push(`Formula error detected in Summary Dashboard: ${desc}`);
+      });
+    }
+  }
+
+  // Check 4: Verify formula errors in category detail phases
+  if (Array.isArray(subcontractors)) {
+    subcontractors.forEach(sub => {
+      if (sub.hasFormulaError && Array.isArray(sub.formulaErrors)) {
+        sub.formulaErrors.forEach(errObj => {
+          const desc = typeof errObj === 'string' ? errObj : `${errObj.location || `${errObj.sheet}!${errObj.cellRef}`}: ${errObj.error}`;
+          warnings.push(`Formula error detected: ${desc}`);
+        });
+      }
+    });
   }
 
   return {

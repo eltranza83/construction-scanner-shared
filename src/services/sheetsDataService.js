@@ -30,7 +30,37 @@ export function getValByLabel(rows, labelText, offsetCol = 1) {
   return '';
 }
 
+export function isFormulaError(value) {
+  if (value === null || value === undefined) return false;
+  const str = String(value).trim();
+  return /^#(?:REF|VALUE|N\/A|DIV\/0|ERROR|NAME\?|NUM|NULL)!?$/i.test(str) ||
+         str.startsWith('#REF!') || str.startsWith('#VALUE!') || str.startsWith('#DIV/0!') || str.startsWith('#N/A');
+}
+
+export function normalizeSpreadsheetDate(value) {
+  if (!value && value !== 0) return 'N/A';
+  const str = String(value).trim();
+  if (!str || str === 'N/A') return 'N/A';
+
+  // Excel / Google Sheets serial date number (e.g. 46235 or 46235.0, covering dates ~1982 to ~2119)
+  const num = parseFloat(str);
+  if (!isNaN(num) && num > 20000 && num < 80000 && /^\d+(?:\.\d+)?$/.test(str)) {
+    const date = new Date(Math.round((num - 25569) * 86400 * 1000));
+    if (!isNaN(date.getTime())) {
+      const y = date.getUTCFullYear();
+      const m = String(date.getUTCMonth() + 1).padStart(2, '0');
+      const d = String(date.getUTCDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    }
+  }
+
+  return str;
+}
+
 export function parseCurrency(value) {
+  if (isFormulaError(value)) {
+    return NaN;
+  }
   return parseFloat(String(value || '').replace(/[^0-9.-]/g, '')) || 0;
 }
 
@@ -73,6 +103,28 @@ export function findSummarySectionForSheet(sheetName, summarySections) {
   return bestScore > 0 ? bestSection : null;
 }
 
+export function isValidTransactionRow(colB, colC, colD, colE, colF) {
+  const mat = parseCurrency(colC);
+  const lab = parseCurrency(colD);
+  if (!isNaN(mat) && mat > 0) return true;
+  if (!isNaN(lab) && lab > 0) return true;
+  if (isFormulaError(colC) || isFormulaError(colD)) return true;
+
+  const vendor = String(colB || '').trim();
+  const date = String(colE || '').trim();
+  const check = String(colF || '').trim();
+
+  const isPlaceholderVendor = !vendor || vendor.toLowerCase().endsWith('payee') || vendor.toLowerCase().includes('placeholder');
+  const hasValidDate = date && date !== 'N/A' && date !== '0' && date !== '0.0';
+  const hasValidCheck = check && check !== 'N/A' && check !== '0' && check !== '0.0';
+
+  if (!isPlaceholderVendor && (hasValidDate || hasValidCheck)) {
+    return true;
+  }
+
+  return false;
+}
+
 export function isSummarySectionHeader(row) {
   const label = String(row?.[0] || '').trim();
   if (!label) return false;
@@ -108,9 +160,37 @@ export function parseSummaryDashboard(rows) {
       budgetGross: '$0.00',
       deposits: '$0.00',
       totalSpent: '$0.00',
-      capitalBalance: '$0.00'
+      capitalBalance: '$0.00',
+      hasFormulaError: false,
+      formulaErrors: []
     };
   }
+
+  const budgetBuild = getValByLabel(rows, 'Budget for Build (Hard Costs)') || '$0.00';
+  const budgetLand = getValByLabel(rows, 'Acquisition Lot Cost (Land)') || '$0.00';
+  const budgetGross = getValByLabel(rows, 'Gross Projected Project Cost') || '$0.00';
+  const deposits = getValByLabel(rows, 'Real Budget Deposits (Capital)') || '$0.00';
+  const totalSpent = getValByLabel(rows, 'Total Spent to Date (Draws)') || '$0.00';
+  const capitalBalance = getValByLabel(rows, 'Net Working Capital Balance') || '$0.00';
+
+  const formulaErrors = [];
+  [
+    { label: 'Budget for Build (Hard Costs)', val: budgetBuild },
+    { label: 'Acquisition Lot Cost (Land)', val: budgetLand },
+    { label: 'Gross Projected Project Cost', val: budgetGross },
+    { label: 'Real Budget Deposits (Capital)', val: deposits },
+    { label: 'Total Spent to Date (Draws)', val: totalSpent },
+    { label: 'Net Working Capital Balance', val: capitalBalance }
+  ].forEach(item => {
+    if (isFormulaError(item.val)) {
+      formulaErrors.push({
+        sheet: 'Summary_Dashboard',
+        field: item.label,
+        error: item.val,
+        location: `Summary_Dashboard (${item.label})`
+      });
+    }
+  });
 
   return {
     name: getValByLabel(rows, 'Project Name:') || 'Unnamed Project',
@@ -118,13 +198,15 @@ export function parseSummaryDashboard(rows) {
     address: getValByLabel(rows, 'Street Address:') || 'N/A',
     cityStateZip: getValByLabel(rows, 'City, State, Zip:') || 'N/A',
     
-    budgetBuild: getValByLabel(rows, 'Budget for Build (Hard Costs)') || '$0.00',
-    budgetLand: getValByLabel(rows, 'Acquisition Lot Cost (Land)') || '$0.00',
-    budgetGross: getValByLabel(rows, 'Gross Projected Project Cost') || '$0.00',
+    budgetBuild,
+    budgetLand,
+    budgetGross,
     
-    deposits: getValByLabel(rows, 'Real Budget Deposits (Capital)') || '$0.00',
-    totalSpent: getValByLabel(rows, 'Total Spent to Date (Draws)') || '$0.00',
-    capitalBalance: getValByLabel(rows, 'Net Working Capital Balance') || '$0.00'
+    deposits,
+    totalSpent,
+    capitalBalance,
+    hasFormulaError: formulaErrors.length > 0,
+    formulaErrors
   };
 }
 
@@ -157,8 +239,11 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
   let remainingBalance = '$0.00';
   let status = 'Not Started';
   const payments = [];
+  const formulaErrors = [];
+  const sheetName = block.categorySheetName || block.category || 'Category';
 
   block.rows.forEach((row, idx) => {
+    const rowNumber = block.startRowIndex ? (block.startRowIndex + idx) : (idx + 1);
     const colB = String(row[1] || '').trim(); // Vendor
     const colC = String(row[2] || '').trim(); // Material Cost
     const colD = String(row[3] || '').trim(); // Labor Cost
@@ -170,8 +255,32 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     const colJ = String(row[9] || '').trim(); // Balance
     const colK = String(row[10] || '').trim(); // Status
 
+    // Track cell formula errors with exact location and field
+    const checkCells = [
+      { col: 'C', field: 'Material Cost', val: colC },
+      { col: 'D', field: 'Labor Cost', val: colD },
+      { col: 'G', field: 'Contractor Payee', val: colG },
+      { col: 'H', field: 'Total Paid', val: colH },
+      { col: 'I', field: 'Original Quote', val: colI },
+      { col: 'J', field: 'Remaining Balance', val: colJ }
+    ];
+
+    checkCells.forEach(c => {
+      if (isFormulaError(c.val)) {
+        formulaErrors.push({
+          sheet: sheetName,
+          phase: block.phase,
+          row: rowNumber,
+          cellRef: `${c.col}${rowNumber}`,
+          field: c.field,
+          error: c.val,
+          location: `${sheetName}!${c.col}${rowNumber} (${c.field} in ${block.phase})`
+        });
+      }
+    });
+
     // 1. Payee: Prefer a name that is not a default placeholder (like ending with 'Payee')
-    if (colG && colG !== '') {
+    if (colG && colG !== '' && !isFormulaError(colG)) {
       const isPlaceholder = colG.toLowerCase().endsWith('payee') || colG.toLowerCase().includes('placeholder');
       if (!payee || !isPlaceholder) {
         payee = colG;
@@ -179,39 +288,38 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     }
 
     // 2. Quote: Extract the last non-empty, non-zero quote value
-    if (colI && colI !== '' && colI !== '$0.00') {
+    if (colI && colI !== '' && colI !== '$0.00' && !isFormulaError(colI)) {
       originalQuote = colI;
     } else if (colI && originalQuote === '$0.00') {
       originalQuote = colI;
     }
 
     // 3. Paid: Extract the last non-empty, non-zero paid value
-    if (colH && colH !== '' && colH !== '$0.00') {
+    if (colH && colH !== '' && colH !== '$0.00' && !isFormulaError(colH)) {
       totalPaid = colH;
     } else if (colH && totalPaid === '$0.00') {
       totalPaid = colH;
     }
 
     // 4. Balance: Extract the last non-empty, non-zero balance value
-    if (colJ && colJ !== '' && colJ !== '$0.00') {
+    if (colJ && colJ !== '' && colJ !== '$0.00' && !isFormulaError(colJ)) {
       remainingBalance = colJ;
     } else if (colJ && remainingBalance === '$0.00') {
       remainingBalance = colJ;
     }
 
     // 5. Status fallback (from category tab Column K)
-    if (colK && colK !== '') {
+    if (colK && colK !== '' && !isFormulaError(colK)) {
       status = colK;
     }
 
-    // 6. Payments: Rows below the phase header row containing transaction detail in Columns B-F
-    const hasPaymentData = colB !== '' || colC !== '' || colD !== '' || colE !== '' || colF !== '';
-    if (idx > 0 && hasPaymentData) {
+    // 6. Payments: Rows below the phase header row containing valid transaction detail
+    if (idx > 0 && isValidTransactionRow(colB, colC, colD, colE, colF)) {
       payments.push({
         vendor: colB || payee || 'Unknown Vendor',
-        materialCost: colC || '$0.00',
-        laborCost: colD || '$0.00',
-        date: colE || 'N/A',
+        materialCost: isFormulaError(colC) ? colC : (colC || '$0.00'),
+        laborCost: isFormulaError(colD) ? colD : (colD || '$0.00'),
+        date: normalizeSpreadsheetDate(colE),
         checkNumber: colF || 'N/A'
       });
     }
@@ -223,6 +331,15 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     if (typeof meta === 'object') {
       status = meta.status || status;
       totalPaid = meta.combinedSpent || '$0.00';
+      if (isFormulaError(meta.combinedSpent)) {
+        formulaErrors.push({
+          sheet: 'Summary_Dashboard',
+          phase: block.phase,
+          field: 'Combined Spent',
+          error: meta.combinedSpent,
+          location: `Summary_Dashboard (Combined Spent for ${block.phase})`
+        });
+      }
     } else {
       status = meta;
     }
@@ -237,7 +354,7 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     payee = String(block.rows[0][6] || '').trim();
   }
 
-  if (!payee) {
+  if (!payee || isFormulaError(payee)) {
     payee = `${block.phase} Contractor`;
   }
 
@@ -253,7 +370,9 @@ export function finalizeBlock(block, phaseStatuses = {}, fallbackSummaryMeta = n
     payments: payments,
     totalMaterial: metaMaterialTotal,
     totalLabor: metaLaborTotal,
-    totalSpent: metaCombinedSpent
+    totalSpent: metaCombinedSpent,
+    hasFormulaError: formulaErrors.length > 0,
+    formulaErrors
   };
 }
 
@@ -285,7 +404,9 @@ export function parseCategorySheet(sheetName, rows, phaseStatuses = {}, summaryS
       const phaseName = colA.replace(/^[→\-—\s]+/, '').trim();
       currentBlock = {
         category: categoryName,
+        categorySheetName: sheetName,
         phase: phaseName,
+        startRowIndex: r + 1,
         rows: [row]
       };
     } else if (currentBlock) {
@@ -306,16 +427,16 @@ export function parseCategorySheet(sheetName, rows, phaseStatuses = {}, summaryS
  */
 export async function fetchProjectDashboardData(accessToken, spreadsheetId) {
   const ranges = [
-    'Summary_Dashboard!A1:E120',
-    'Site_Prep_&_Structure!A1:K80',
-    'Framing_&_Lumber!A1:K80',
-    'Mechanicals_&_Utilities!A1:K80',
-    'Interior_Finishes!A1:K80',
-    'Paint_Tile!A1:K80',
-    'House_Exterior_&_Yard!A1:K80',
-    'Project_Overhead_&_Bills!A1:K80',
-    'Paperwork_&_Permits!A1:K80',
-    'Interior_Hardware!A1:K80'
+    'Summary_Dashboard!A1:E',
+    'Site_Prep_&_Structure!A1:K',
+    'Framing_&_Lumber!A1:K',
+    'Mechanicals_&_Utilities!A1:K',
+    'Interior_Finishes!A1:K',
+    'Paint_Tile!A1:K',
+    'House_Exterior_&_Yard!A1:K',
+    'Project_Overhead_&_Bills!A1:K',
+    'Paperwork_&_Permits!A1:K',
+    'Interior_Hardware!A1:K'
   ];
 
   const queryParams = ranges.map(r => `ranges=${encodeURIComponent(r)}`).join('&');
