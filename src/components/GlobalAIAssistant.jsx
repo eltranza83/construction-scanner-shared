@@ -586,18 +586,16 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     setIsLoading(true);
 
     try {
-      let currentLiveTree = driveTree;
+      let currentLiveTree = driveTree || (typeof loadDriveTree === 'function' ? loadDriveTree(projectId) : null);
       if (googleToken && activeProject?.folderId) {
-        try {
-          const freshTree = await fetchProjectDriveTree(googleToken, activeProject.folderId);
+        fetchProjectDriveTree(googleToken, activeProject.folderId).then((freshTree) => {
           if (freshTree) {
-            currentLiveTree = freshTree;
             setDriveTree(freshTree);
             saveProjectDriveTree(projectId, freshTree);
           }
-        } catch (treeErr) {
-          console.warn('Live drive tree refresh warning:', treeErr);
-        }
+        }).catch((treeErr) => {
+          console.warn('Background drive tree refresh warning:', treeErr);
+        });
       }
 
       let fileAttachment = null;
