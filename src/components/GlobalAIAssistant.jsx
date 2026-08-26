@@ -918,12 +918,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
 
     const recSessionId = voiceSmRef.current.currentSessionId;
+    const isPttMode = voiceSmRef.current.mode === VOICE_MODES.PUSH_TO_TALK;
     const rec = new SpeechRecognition();
-    rec.continuous = true;
+    rec.continuous = !isPttMode;
     rec.interimResults = true;
     rec.lang = aiLanguage === 'es' ? 'es-US' : aiLanguage === 'en' ? 'en-US' : (typeof navigator !== 'undefined' && navigator.language?.startsWith('es')) ? 'es-US' : 'en-US';
 
     let silenceDebounceTimer = null;
+    let accumulatedFinalText = '';
     let latestTranscript = '';
     let isCommitted = false;
 
@@ -938,6 +940,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         clearTimeout(silenceDebounceTimer);
         silenceDebounceTimer = null;
       }
+      accumulatedFinalText = '';
       latestTranscript = '';
 
       // Acoustic Feedback Check
@@ -974,24 +977,32 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     rec.onresult = (e) => {
       if (isCommitted || voiceSmRef.current.currentSessionId !== recSessionId) return; // Stale or committed guard
       
-      let fullTranscript = '';
-      for (let i = 0; i < e.results.length; ++i) {
-        fullTranscript += e.results[i][0]?.transcript || '';
+      let interimText = '';
+      for (let i = e.resultIndex; i < e.results.length; ++i) {
+        const res = e.results[i];
+        const piece = res[0]?.transcript || '';
+        if (res.isFinal) {
+          accumulatedFinalText = (accumulatedFinalText ? (accumulatedFinalText.trim() + ' ' + piece.trim()) : piece.trim()).trim();
+        } else {
+          interimText += piece;
+        }
       }
 
-      const trimmed = fullTranscript.trim();
-      if (!trimmed) return;
+      const combined = (accumulatedFinalText ? (accumulatedFinalText + (interimText ? ' ' + interimText.trim() : '')) : interimText.trim()).trim();
+      if (!combined) return;
 
-      latestTranscript = trimmed;
+      latestTranscript = combined;
+      setInput(combined);
 
       if (silenceDebounceTimer) {
         clearTimeout(silenceDebounceTimer);
       }
 
-      // Natural 1.3-second conversational pause buffer
+      // Conversational pause buffer (shorter for PTT, natural for continuous)
+      const debounceDelayMs = isPttMode ? 1000 : 1300;
       silenceDebounceTimer = setTimeout(() => {
         commitUtterance(latestTranscript);
-      }, 1300);
+      }, debounceDelayMs);
     };
 
     rec.onerror = (e) => {

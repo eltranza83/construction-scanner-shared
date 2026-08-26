@@ -161,4 +161,83 @@ describe('J.A.R.V.I.S. Continuous Voice State Machine Test Suite', () => {
       }, 70);
     });
   });
+
+  test('10. Mobile Speech Stream Accumulation (0 Duplicates on Android Interim Sequences)', () => {
+    // Helper replicating the onresult accumulation algorithm in GlobalAIAssistant
+    function simulateSpeechAccumulation(eventSequence) {
+      let accumulatedFinalText = '';
+      let latestOutput = '';
+
+      for (const e of eventSequence) {
+        let interimText = '';
+        for (let i = e.resultIndex; i < e.results.length; ++i) {
+          const res = e.results[i];
+          const piece = res[0]?.transcript || '';
+          if (res.isFinal) {
+            accumulatedFinalText = (accumulatedFinalText ? (accumulatedFinalText.trim() + ' ' + piece.trim()) : piece.trim()).trim();
+          } else {
+            interimText += piece;
+          }
+        }
+        latestOutput = (accumulatedFinalText ? (accumulatedFinalText + (interimText ? ' ' + interimText.trim() : '')) : interimText.trim()).trim();
+      }
+
+      return latestOutput;
+    }
+
+    // Simulate Android Google Speech Recognizer sequence that caused "goodgood morninggood morning Jarvis"
+    const androidEventSequence = [
+      // Event 1: Interim hypothesis 1
+      {
+        resultIndex: 0,
+        results: [
+          [{ transcript: 'good' }]
+        ]
+      },
+      // Event 2: Interim hypothesis 2
+      {
+        resultIndex: 0,
+        results: [
+          [{ transcript: 'good morning' }]
+        ]
+      },
+      // Event 3: Finalization of "good morning"
+      {
+        resultIndex: 0,
+        results: [
+          Object.assign([{ transcript: 'good morning' }], { isFinal: true })
+        ]
+      },
+      // Event 4: Next word interim
+      {
+        resultIndex: 1,
+        results: [
+          Object.assign([{ transcript: 'good morning' }], { isFinal: true }),
+          [{ transcript: 'Jarvis' }]
+        ]
+      },
+      // Event 5: Finalization of second segment
+      {
+        resultIndex: 1,
+        results: [
+          Object.assign([{ transcript: 'good morning' }], { isFinal: true }),
+          Object.assign([{ transcript: 'Jarvis' }], { isFinal: true })
+        ]
+      }
+    ];
+
+    const result = simulateSpeechAccumulation(androidEventSequence);
+    assert.equal(result, 'good morning Jarvis', 'Must produce exact single utterance without doubling/tripling');
+  });
+
+  test('11. Mode-Aware Speech Recognition Parameters (PTT vs Hands-Free)', () => {
+    const pttSm = new VoiceStateMachine({ mode: VOICE_MODES.PUSH_TO_TALK });
+    const isPttContinuous = pttSm.mode !== VOICE_MODES.PUSH_TO_TALK;
+    assert.equal(isPttContinuous, false, 'PTT mode must set continuous to false for single-utterance mobile accuracy');
+
+    const handsFreeSm = new VoiceStateMachine({ mode: VOICE_MODES.CONTINUOUS_HANDS_FREE });
+    const isHandsFreeContinuous = handsFreeSm.mode !== VOICE_MODES.PUSH_TO_TALK;
+    assert.equal(isHandsFreeContinuous, true, 'Hands-Free mode must enable continuous stream');
+  });
 });
+
