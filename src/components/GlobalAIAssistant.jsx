@@ -12,7 +12,8 @@ import {
   Loader2,
   FileText,
   ExternalLink,
-  Square
+  Square,
+  MoreVertical
 } from 'lucide-react';
 import {
   loadProjectSpecs,
@@ -230,6 +231,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   });
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const [activePreviewFile, setActivePreviewFile] = useState(null);
@@ -440,8 +442,13 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     }
   }, [messages, isLoading]);
 
-  const speakText = (text, userQuery = '') => {
-    if (!speechEnabled || !('speechSynthesis' in window) || !text) return;
+  const speakText = (text, userQuery = '', onFinished = null) => {
+    if (!speechEnabled || !('speechSynthesis' in window) || !text) {
+      if (typeof onFinished === 'function') {
+        setTimeout(onFinished, 400);
+      }
+      return;
+    }
     try {
       window.speechSynthesis.cancel();
       let clean = String(text);
@@ -544,21 +551,35 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         }
       }
 
+      let finishedTriggered = false;
+      const triggerFinished = () => {
+        if (finishedTriggered) return;
+        finishedTriggered = true;
+        if (typeof onFinished === 'function') {
+          onFinished();
+        }
+      };
+
       const activeSession = voiceSmRef.current?.currentSessionId;
       utterance.onstart = () => {
         voiceSmRef.current?.startSpeaking(clean, 'tts_started');
       };
       utterance.onend = () => {
         voiceSmRef.current?.finishSpeaking('tts_ended', activeSession);
+        triggerFinished();
       };
       utterance.onerror = (err) => {
         voiceSmRef.current?.handleError('tts-error', err?.error || 'speech synthesis error', activeSession);
+        triggerFinished();
       };
 
       window.speechSynthesis.speak(utterance);
     } catch (e) {
       console.warn('Speech synthesis error:', e);
       voiceSmRef.current?.finishSpeaking('tts_catch_error');
+      if (typeof onFinished === 'function') {
+        onFinished();
+      }
     }
   };
 
@@ -583,6 +604,40 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     };
     setMessages((prev) => [...prev, userMsg]);
+
+    // Handle Graceful Exit Intent & Auto-Close
+    if (isExitIntent(query)) {
+      voiceSmRef.current?.standDown('exit_intent_detected');
+      let replyText = 'Understood. Standing down.';
+      const qLow = query.toLowerCase();
+      if (qLow.includes('night')) {
+        replyText = 'Good night Sir. Standing down.';
+      } else if (qLow.includes('later') || qLow.includes('catch you') || qLow.includes('see you')) {
+        replyText = 'Talk to you later Sir. Standing down.';
+      } else if (qLow.includes('goodbye') || qLow.includes('bye')) {
+        replyText = 'Goodbye Sir. Standing down.';
+      } else if (qLow.includes('that') && (qLow.includes('it') || qLow.includes('all'))) {
+        replyText = "Understood. That's all for now. Standing down.";
+      }
+      const exitMsg = {
+        sender: 'ai',
+        text: replyText,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+      setMessages((prev) => [...prev, exitMsg]);
+      setIsLoading(false);
+
+      let closeFired = false;
+      const safeClose = () => {
+        if (closeFired) return;
+        closeFired = true;
+        setIsOpen(false);
+      };
+      speakText(replyText, query, safeClose);
+      setTimeout(safeClose, 2500);
+      return;
+    }
+
     setIsLoading(true);
 
     try {
@@ -950,13 +1005,33 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       // Exit Intent Check
       if (isExitIntent(trimmed)) {
         voiceSmRef.current.standDown('exit_intent_detected');
+        let replyText = 'Understood. Standing down.';
+        const qLow = trimmed.toLowerCase();
+        if (qLow.includes('night')) {
+          replyText = 'Good night Sir. Standing down.';
+        } else if (qLow.includes('later') || qLow.includes('catch you') || qLow.includes('see you')) {
+          replyText = 'Talk to you later Sir. Standing down.';
+        } else if (qLow.includes('goodbye') || qLow.includes('bye')) {
+          replyText = 'Goodbye Sir. Standing down.';
+        } else if (qLow.includes('that') && (qLow.includes('it') || qLow.includes('all'))) {
+          replyText = "Understood. That's all for now. Standing down.";
+        }
         const exitMsg = {
           sender: 'ai',
-          text: 'Understood. Standing down. Tap the microphone when you need me.',
+          text: replyText,
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, exitMsg]);
-        speakText(exitMsg.text, trimmed);
+        try { rec.stop(); } catch (_) {}
+
+        let closeFired = false;
+        const safeClose = () => {
+          if (closeFired) return;
+          closeFired = true;
+          setIsOpen(false);
+        };
+        speakText(replyText, trimmed, safeClose);
+        setTimeout(safeClose, 2500);
         return;
       }
 
@@ -1144,16 +1219,21 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
             {/* Modal Header */}
             <div
               style={{
-                padding: '14px 18px',
+                paddingTop: 'max(12px, env(safe-area-inset-top, 12px))',
+                paddingBottom: '12px',
+                paddingLeft: '14px',
+                paddingRight: '14px',
                 borderBottom: '1px solid var(--color-zinc-800)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'space-between',
                 backgroundColor: 'var(--color-zinc-950)',
-                flexShrink: 0
+                flexShrink: 0,
+                position: 'relative'
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Left: Identity + Status */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: '1 1 auto' }}>
                 <div
                   style={{
                     width: '36px',
@@ -1169,18 +1249,18 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                 >
                   <Bot size={20} />
                 </div>
-                <div>
-                  <h3 style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--color-zinc-100)', margin: 0 }}>
-                    J.A.R.V.I.S. Field AI — {projectName}
+                <div style={{ minWidth: 0, flex: '1 1 auto' }}>
+                  <h3 style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-100)', margin: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    J.A.R.V.I.S. — {projectName}
                   </h3>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '2px' }}>
-                    <span style={{ fontSize: '0.74rem', color: 'var(--color-amber-500)', margin: 0 }}>
-                      Co-Pilot
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '2px', flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: '0.70rem', fontWeight: 700, color: 'var(--color-amber-500)', margin: 0 }}>
+                      Field Co-Pilot
                     </span>
                     <span
                       style={{
-                        fontSize: '0.68rem',
-                        fontWeight: 800,
+                        fontSize: '0.65rem',
+                        fontWeight: 700,
                         padding: '1px 6px',
                         borderRadius: '4px',
                         backgroundColor: (voiceState === VOICE_STATES.LISTENING || voiceState === VOICE_STATES.AUTO_LISTENING)
@@ -1209,105 +1289,216 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                       }}
                     >
                       {voiceState === VOICE_STATES.SPEAKING
-                        ? '🔊 Speaking (Tap mic to stop)'
+                        ? '🔊 Speaking'
                         : voiceState === VOICE_STATES.AUTO_LISTENING
                         ? `🟢 Auto-Listening (${silenceRemaining}s)`
                         : voiceState === VOICE_STATES.LISTENING
                         ? `🟢 Listening... (${silenceRemaining}s)`
                         : voiceState === VOICE_STATES.THINKING
                         ? '🧠 Thinking...'
-                        : '⚪ Idle'}
+                        : '⚪ Online'}
                     </span>
                   </div>
-
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexShrink: 0 }}>
+              {/* Right: Clean Controls (More Menu ⋮ and Dedicated Close ✕) */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0, marginLeft: '8px' }}>
+                {/* 3-Dot Overflow Menu Button */}
+                <div style={{ position: 'relative' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowMenu(!showMenu)}
+                    style={{
+                      background: showMenu ? 'var(--color-zinc-800)' : 'rgba(39, 39, 42, 0.6)',
+                      border: '1px solid ' + (showMenu ? 'var(--color-zinc-600)' : 'var(--color-zinc-800)'),
+                      color: showMenu ? 'var(--color-amber-400)' : 'var(--color-zinc-300)',
+                      borderRadius: '8px',
+                      padding: '7px 9px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minWidth: '38px',
+                      minHeight: '38px'
+                    }}
+                    title="Tools & Settings Menu"
+                  >
+                    <MoreVertical size={18} />
+                  </button>
+
+                  {/* Overflow Dropdown Popup */}
+                  {showMenu && (
+                    <div
+                      style={{
+                        position: 'absolute',
+                        top: '46px',
+                        right: '0',
+                        width: '215px',
+                        backgroundColor: 'var(--color-zinc-950)',
+                        border: '1px solid var(--color-zinc-700)',
+                        borderRadius: '10px',
+                        boxShadow: '0 12px 28px rgba(0,0,0,0.7)',
+                        padding: '6px',
+                        zIndex: 10000,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '2px'
+                      }}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => { setShowActivityLog(true); setShowMenu(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <span>📋 Activity Log</span>
+                        {activityLogs.length > 0 && (
+                          <span style={{ fontSize: '0.70rem', padding: '1px 6px', borderRadius: '10px', backgroundColor: 'rgba(245, 158, 11, 0.2)', color: 'var(--color-amber-400)' }}>
+                            {activityLogs.length}
+                          </span>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => { setShowTestSuite(true); setShowMenu(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <span>🧪 Diagnostics Suite</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const next = !devMode;
+                          setDevMode(next);
+                          localStorage.setItem('jobscan_dev_mode', String(next));
+                          setShowMenu(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: devMode ? '#c084fc' : 'var(--color-zinc-200)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <span>🔬 Developer Mode</span>
+                        <span style={{ fontSize: '0.70rem', fontWeight: 800, color: devMode ? '#a855f7' : 'var(--color-zinc-500)' }}>
+                          {devMode ? 'ON' : 'OFF'}
+                        </span>
+                      </button>
+
+                      <div style={{ height: '1px', backgroundColor: 'var(--color-zinc-800)', margin: '4px 0' }} />
+
+                      <button
+                        type="button"
+                        onClick={() => { setShowSettings(!showSettings); setShowMenu(false); }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <span>⚙️ Voice & Settings</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSpeechEnabled(!speechEnabled);
+                          if (speechEnabled) window.speechSynthesis.cancel();
+                          setShowMenu(false);
+                        }}
+                        style={{
+                          width: '100%',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '9px 12px',
+                          borderRadius: '6px',
+                          backgroundColor: 'transparent',
+                          border: 'none',
+                          color: 'var(--color-zinc-200)',
+                          fontSize: '0.82rem',
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                          textAlign: 'left'
+                        }}
+                      >
+                        <span>{speechEnabled ? '🔊 Voice Output' : '🔇 Mute Voice'}</span>
+                        <span style={{ fontSize: '0.70rem', fontWeight: 700, color: speechEnabled ? '#86efac' : 'var(--color-zinc-500)' }}>
+                          {speechEnabled ? 'ACTIVE' : 'MUTED'}
+                        </span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Dedicated Prominent Close Button */}
                 <button
                   type="button"
-                  onClick={() => setShowActivityLog(true)}
-                  style={{
-                    backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                    border: '1px solid rgba(245, 158, 11, 0.4)',
-                    color: 'var(--color-amber-400)',
-                    borderRadius: '6px',
-                    padding: '3px 7px',
-                    fontSize: '0.70rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title="View AI Activity Log (queries, tools called, execution latency)"
-                >
-                  📋 Activity Log {activityLogs.length > 0 && `(${activityLogs.length})`}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowTestSuite(true)}
-                  style={{
-                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
-                    border: '1px solid #3b82f6',
-                    color: '#93c5fd',
-                    borderRadius: '6px',
-                    padding: '3px 7px',
-                    fontSize: '0.70rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title="Run One-Click AI Tools Diagnostic Test Suite"
-                >
-                  🧪 Diagnostics
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const next = !devMode;
-                    setDevMode(next);
-                    localStorage.setItem('jobscan_dev_mode', String(next));
-                  }}
-                  style={{
-                    backgroundColor: devMode ? 'rgba(168, 85, 247, 0.2)' : 'rgba(39, 39, 42, 0.6)',
-                    border: '1px solid ' + (devMode ? '#a855f7' : 'var(--color-zinc-700)'),
-                    color: devMode ? '#c084fc' : 'var(--color-zinc-400)',
-                    borderRadius: '6px',
-                    padding: '3px 7px',
-                    fontSize: '0.70rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '4px'
-                  }}
-                  title="Developer Diagnostics Mode (inspect model, intent, tools, latency)"
-                >
-                  🔬 {devMode ? 'DEV ON' : 'DEV'}
-                </button>
-                <button
-                  onClick={() => setShowSettings(!showSettings)}
-                  style={{ background: 'none', border: 'none', color: showSettings ? 'var(--color-amber-500)' : 'var(--color-zinc-400)', cursor: 'pointer' }}
-                  title="Voice & Settings"
-                >
-                  <Settings size={18} />
-                </button>
-                <button
-                  onClick={() => {
-                    setSpeechEnabled(!speechEnabled);
-                    if (speechEnabled) window.speechSynthesis.cancel();
-                  }}
-                  style={{ background: 'none', border: 'none', color: speechEnabled ? 'var(--color-amber-500)' : 'var(--color-zinc-500)', cursor: 'pointer' }}
-                  title={speechEnabled ? 'Mute Voice' : 'Enable Voice'}
-                >
-                  {speechEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
-                </button>
-                <button
                   onClick={() => setIsOpen(false)}
-                  style={{ background: 'none', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
+                  style={{
+                    background: 'rgba(39, 39, 42, 0.7)',
+                    border: '1px solid var(--color-zinc-700)',
+                    color: 'var(--color-zinc-200)',
+                    borderRadius: '8px',
+                    padding: '7px 9px',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    minWidth: '38px',
+                    minHeight: '38px'
+                  }}
+                  title="Close J.A.R.V.I.S. Assistant (Return to App)"
                 >
                   <X size={20} />
                 </button>

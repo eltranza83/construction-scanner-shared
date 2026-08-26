@@ -98,12 +98,29 @@ describe('J.A.R.V.I.S. Continuous Voice State Machine Test Suite', () => {
     assert.equal(sm.isAcousticFeedback('Show me the electrical permit'), false);
   });
 
-  test('6. Graceful Stand-down on Exit Phrases & Exit Intent Detection', () => {
-    assert.equal(isExitIntent('Thank you Jarvis'), true);
-    assert.equal(isExitIntent("That's all for now"), true);
+  test('6. Graceful Stand-down on Exit Phrases & Robust Intent Safeguards', () => {
+    // Valid standalone exit intents (various natural formulations)
+    assert.equal(isExitIntent('Jarvis, good night'), true);
+    assert.equal(isExitIntent('goodnight jarvis'), true);
+    assert.equal(isExitIntent("Okay Jarvis that's it for now"), true);
+    assert.equal(isExitIntent("that's all for now"), true);
+    assert.equal(isExitIntent("that'll be all thank you"), true);
+    assert.equal(isExitIntent('talk to you later Jarvis'), true);
+    assert.equal(isExitIntent('see you later'), true);
+    assert.equal(isExitIntent('catch you later buddy'), true);
     assert.equal(isExitIntent('Goodbye'), true);
     assert.equal(isExitIntent('Stand down'), true);
-    assert.equal(isExitIntent('What is the total cost?'), false);
+    assert.equal(isExitIntent('go to sleep'), true);
+    assert.equal(isExitIntent('close conversation'), true);
+    assert.equal(isExitIntent('back to app'), true);
+
+    // Safeguard cases (Legitimate conversational phrases that MUST NOT close assistant)
+    assert.equal(isExitIntent('We need good night lighting on the front porch'), false);
+    assert.equal(isExitIntent('Did the plumber work last night?'), false);
+    assert.equal(isExitIntent('Talk to the contractor later today about invoices'), false);
+    assert.equal(isExitIntent('Close the quote for Lot 3 drywall'), false);
+    assert.equal(isExitIntent('What is the total cost spent so far?'), false);
+    assert.equal(isExitIntent('Stage a $50 expense for gas'), false);
 
     const sm = new VoiceStateMachine({ mode: VOICE_MODES.CONTINUOUS_HANDS_FREE });
     sm.startListening('user_tap');

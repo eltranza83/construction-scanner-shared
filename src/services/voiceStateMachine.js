@@ -29,11 +29,31 @@ export const EXIT_PHRASES = [
   'thanks',
   "that's all",
   'thats all',
+  "that's it",
+  'thats it',
+  "that's it for now",
+  'thats it for now',
+  "that's all for now",
+  'thats all for now',
+  'that will be all',
+  "that'll be all",
+  'goodnight',
+  'good night',
   'goodbye',
   'bye',
+  'talk to you later',
+  'talk later',
+  'catch you later',
+  'see you later',
+  'have a good night',
+  'have a good one',
+  'have a good day',
   'go to sleep',
   'stand down',
   'stop listening',
+  'close conversation',
+  'close app',
+  'back to app',
   'exit'
 ];
 
@@ -52,14 +72,56 @@ export function generateSessionId() {
 }
 
 /**
- * Check if text contains a graceful exit intent
+ * Check if text contains a graceful standalone exit intent
+ * Safeguards against false positives inside longer queries (e.g. "good night lighting").
  */
 export function isExitIntent(text = '') {
-  const clean = String(text).toLowerCase().trim();
-  return EXIT_PHRASES.some(phrase => {
-    const regex = new RegExp(`(^|\\b)${phrase}(\\b|$)`, 'i');
-    return regex.test(clean);
-  });
+  if (!text || typeof text !== 'string') return false;
+  let clean = text.toLowerCase().trim();
+  
+  // Strip quotes and apostrophes first so "that's" becomes "thats", "that'll" becomes "thatll"
+  clean = clean.replace(/['’"`]/g, '');
+
+  // Normalize other punctuation to spaces
+  clean = clean.replace(/[.,/#!$%^&*;:{}=\-_~()?]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!clean) return false;
+
+  // Maximum word limit for a standalone exit utterance (e.g. max 8 words)
+  const words = clean.split(' ').filter(Boolean);
+  if (words.length > 8) return false;
+
+  // Strip leading conversational fillers / wake words (up to 3 passes)
+  for (let i = 0; i < 3; i++) {
+    clean = clean.replace(/^(hey|hi|hello|ok|okay|alright|well|so|cool|great|perfect|thanks|thank you)\s+/, '');
+    clean = clean.replace(/^(jarvis)\s+/, '');
+  }
+
+  // Strip trailing polite closers / wake words (up to 3 passes)
+  for (let i = 0; i < 3; i++) {
+    clean = clean.replace(/\s+(jarvis|sir|buddy|man|bro|thanks|thank you)$/, '');
+  }
+  clean = clean.trim();
+
+  // Core exit patterns
+  const exitPatterns = [
+    /^good\s*night(\s+for\s+now)?$/,
+    /^goodnight(\s+for\s+now)?$/,
+    /^have a (good|great) (night|day|one)$/,
+    /^that(s| is)? (all|it)(\s+for\s+now)?$/,
+    /^that(ll| will) be all(\s+for\s+now)?$/,
+    /^that(s| is) going to be all$/,
+    /^talk( to you)? later$/,
+    /^(catch|see) (you|ya) later$/,
+    /^goodbye$/,
+    /^bye(\s*bye)?$/,
+    /^stand down$/,
+    /^go to sleep$/,
+    /^stop listening$/,
+    /^(close|exit)(\s+(the\s+)?(conversation|assistant|app|chat))?$/,
+    /^back to (\s*the\s*)?app$/
+  ];
+
+  return exitPatterns.some(pattern => pattern.test(clean));
 }
 
 /**
