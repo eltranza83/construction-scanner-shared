@@ -1752,6 +1752,7 @@ ${getSemanticPromptGuidelines()}
 6. Provide ONE single, unified, coherent, and professional answer.`;
 
         let synthesisText = null;
+        let synthTelemetry = null;
         try {
           const synthController = new AbortController();
           const synthTimeoutId = setTimeout(() => synthController.abort(), 15000);
@@ -1763,7 +1764,7 @@ ${getSemanticPromptGuidelines()}
               contents,
               systemInstruction: synthesisPrompt,
               query,
-              forceDeepReasoning: true,
+              forceDeepReasoning: Boolean(forceDeepReasoning),
               forceNoTools: true,
               apiKey: effectiveKey
             }),
@@ -1773,6 +1774,7 @@ ${getSemanticPromptGuidelines()}
 
           if (synthRes.ok) {
             const synthData = await synthRes.json();
+            synthTelemetry = synthData?.telemetry || null;
             if (synthData?.text) {
               synthesisText = synthData.text.trim();
             }
@@ -1792,7 +1794,7 @@ ${getSemanticPromptGuidelines()}
             telemetry: {
               schemaVersion: '1.0',
               correlationId,
-              modelUsed: data.telemetry?.modelUsed || determineTaskModel(query, true),
+              modelUsed: synthTelemetry?.modelUsed || determineTaskModel(query, forceDeepReasoning),
               source: 'Gemini Cloud AI (Two-Pass Orchestration)',
               intent: 'Multi-Intent Tool Synthesis',
               durationMs: Date.now() - clientStartTime,

@@ -10,20 +10,47 @@ describe('Centralized AI Configuration & Intent Routing', () => {
     assert.equal(AI_CONFIG.reasoningModel, 'gemini-3.5-flash');
   });
 
-  test('determineTaskModel routes standard queries to Flash', () => {
-    const flashQuery1 = 'How much have we paid the electrician?';
-    const flashQuery2 = 'What do we still owe all subcontractors?';
-    const flashQuery3 = 'Find all receipts from ABC Electric and summarize them.';
+  test('determineTaskModel routes standard lookups & materials to Flash-Lite (Fast Path)', () => {
+    const fastQueries = [
+      'How much have we paid the electrician?',
+      'What do we still owe all subcontractors?',
+      'Find all receipts from ABC Electric and summarize them.',
+      'we need a good night lighting on the porch',
+      "what's the weather like today",
+      'is vanity light marked as purchased',
+      'who is the plumber for Lot 3',
+      'show me the framing permit in Google Drive',
+      'add 6 GFCI outlets to the purchasing checklist'
+    ];
 
-    assert.equal(determineTaskModel(flashQuery1), 'gemini-3.5-flash-lite');
-    assert.equal(determineTaskModel(flashQuery2), 'gemini-3.5-flash-lite');
-    assert.equal(determineTaskModel(flashQuery3), 'gemini-3.5-flash-lite');
+    for (const q of fastQueries) {
+      assert.equal(determineTaskModel(q), 'gemini-3.5-flash-lite', `Expected Fast Path for: "${q}"`);
+    }
   });
 
-  test('determineTaskModel respects forceDeepReasoning toggle', () => {
+  test('determineTaskModel routes complex audits, forecasting, and comparisons to Flash (Deep Path)', () => {
+    const deepQueries = [
+      'audit this project and tell me where we are going over budget',
+      'compare our actual spending against original contractor quotes',
+      'analyze the profitability and recommend a cost reduction strategy',
+      'forecast completion cost and identify unusual financial risks',
+      'compare these two proposals from the roofing subcontractors',
+      'which is better financially between the two plumbing options'
+    ];
+
+    for (const q of deepQueries) {
+      assert.equal(determineTaskModel(q), 'gemini-3.5-flash', `Expected Deep Path for: "${q}"`);
+    }
+  });
+
+  test('determineTaskModel respects explicit forceDeepReasoning toggle', () => {
     const simpleQuery = 'What is the date today?';
     assert.equal(determineTaskModel(simpleQuery, false), 'gemini-3.5-flash-lite');
     assert.equal(determineTaskModel(simpleQuery, true), 'gemini-3.5-flash');
+
+    const purchasingQuery = 'we need a good night lighting on the porch';
+    assert.equal(determineTaskModel(purchasingQuery, false), 'gemini-3.5-flash-lite');
+    assert.equal(determineTaskModel(purchasingQuery, true), 'gemini-3.5-flash');
   });
 });
 
