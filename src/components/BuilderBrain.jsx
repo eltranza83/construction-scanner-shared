@@ -19,7 +19,10 @@ import {
   ChevronDown,
   ChevronUp,
   Settings,
-  MessageSquare
+  MessageSquare,
+  RefreshCw,
+  AlertCircle,
+  CheckCircle2
 } from 'lucide-react';
 import MemoryVault from './MemoryVault.jsx';
 import { getMemories } from '../services/memoryService.js';
@@ -47,6 +50,7 @@ import {
   createFolder,
   trashDriveFileOrFolder,
   syncFinishSpecsToDrive,
+  getFinishSheetSyncStatus,
   uploadBuyerHandoverPdfToDrive
 } from '../services/googleDrive';
 import { generateBuyerHandoverPdf } from '../services/buyerHandoverPdfGenerator';
@@ -400,6 +404,9 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   });
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [finishDriveLink, setFinishDriveLink] = useState(null);
+  const [sheetSyncStatus, setSheetSyncStatus] = useState('idle'); // 'idle' | 'checking' | 'synced' | 'out_of_sync' | 'syncing' | 'error'
+  const [syncErrorMessage, setSyncErrorMessage] = useState(null);
+  const [syncSuccessToast, setSyncSuccessToast] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -414,33 +421,26 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   useEffect(() => {
     let isMounted = true;
     if (googleToken && activeProject?.folderId) {
-      const folderName = 'Finish Specs & Buyer Handover';
-      const safeParent = String(activeProject.folderId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-      const q = `'${safeParent}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
-      fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1`, {
-        headers: { Authorization: `Bearer ${googleToken}` }
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          const finishFolderId = data.files?.[0]?.id;
-          if (finishFolderId && isMounted) {
-            const safeSub = String(finishFolderId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-            const sheetQ = `'${safeSub}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
-            return fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(sheetQ)}&fields=files(id,name,webViewLink)&pageSize=1`, {
-              headers: { Authorization: `Bearer ${googleToken}` }
-            })
-              .then((r) => r.json())
-              .then((sData) => {
-                if (isMounted && sData.files?.[0]?.webViewLink) {
-                  setFinishDriveLink(sData.files[0].webViewLink);
-                }
-              });
+      setSheetSyncStatus('checking');
+      getFinishSheetSyncStatus(googleToken, activeProject.folderId, specs)
+        .then((res) => {
+          if (isMounted) {
+            if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
+            setSheetSyncStatus(res?.status || 'idle');
+            if (res?.error) setSyncErrorMessage(res.error);
           }
         })
-        .catch(() => {});
+        .catch((err) => {
+          if (isMounted) {
+            setSheetSyncStatus('error');
+            setSyncErrorMessage(err?.message || 'Failed to verify Google Sheet status');
+          }
+        });
+    } else {
+      setSheetSyncStatus('idle');
     }
     return () => { isMounted = false; };
-  }, [googleToken, activeProject?.folderId]);
+  }, [googleToken, activeProject?.folderId, specs.length]);
 
   useEffect(() => {
     if (googleToken && activeProject?.folderId) {
@@ -723,9 +723,20 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       });
 
       if (googleToken && activeProject?.folderId) {
+        setSheetSyncStatus('syncing');
         syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updatedList.length > 0 ? updatedList : [savedDoc]).then((res) => {
-          if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
-        }).catch(() => {});
+          if (res?.ok && res?.webViewLink) {
+            setFinishDriveLink(res.webViewLink);
+            setSheetSyncStatus('synced');
+          } else if (res?.error) {
+            setSheetSyncStatus('error');
+            setSyncErrorMessage(res.error);
+            setTimeout(() => setSyncErrorMessage(null), 6000);
+          }
+        }).catch((err) => {
+          setSheetSyncStatus('error');
+          setSyncErrorMessage(err?.message || 'Auto-sync failed');
+        });
       }
 
       setShowAddSpecModal(false);
@@ -733,6 +744,40 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     } catch (err) {
       console.error('Failed to save finish spec:', err);
       alert(`Failed to save finish spec: ${err?.message || 'Please check connection/Firebase.'}`);
+    }
+  };
+
+  const handleManualSyncToSheet = async () => {
+    if (!googleToken) {
+      setSyncErrorMessage('Please connect Google Drive in Settings first.');
+      setTimeout(() => setSyncErrorMessage(null), 4000);
+      return;
+    }
+    if (!activeProject?.folderId) {
+      setSyncErrorMessage('No Google Drive folder linked to this project.');
+      setTimeout(() => setSyncErrorMessage(null), 4000);
+      return;
+    }
+    setSheetSyncStatus('syncing');
+    setSyncErrorMessage(null);
+    setSyncSuccessToast(null);
+
+    try {
+      const res = await syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, specs);
+      if (res?.ok && res?.webViewLink) {
+        setFinishDriveLink(res.webViewLink);
+        setSheetSyncStatus('synced');
+        setSyncSuccessToast(`✓ Google Sheet synchronized with ${specs.length} approved finishes!`);
+        setTimeout(() => setSyncSuccessToast(null), 4000);
+      } else {
+        setSheetSyncStatus('error');
+        setSyncErrorMessage(res?.error || 'Failed to update Google Sheet.');
+        setTimeout(() => setSyncErrorMessage(null), 6000);
+      }
+    } catch (err) {
+      setSheetSyncStatus('error');
+      setSyncErrorMessage(err?.message || 'Sync failed: Please check Google Drive permissions.');
+      setTimeout(() => setSyncErrorMessage(null), 6000);
     }
   };
 
@@ -745,7 +790,13 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       const updated = specs.filter((s) => s.id !== specId);
       setSpecs(updated);
       if (googleToken && activeProject?.folderId) {
-        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated);
+        setSheetSyncStatus('syncing');
+        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated).then((res) => {
+          if (res?.ok && res?.webViewLink) {
+            setFinishDriveLink(res.webViewLink);
+            setSheetSyncStatus('synced');
+          }
+        }).catch(() => {});
       }
     } catch (err) {
       console.error('Failed to delete spec:', err);
@@ -1205,6 +1256,28 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                 <button
+                  onClick={handleManualSyncToSheet}
+                  disabled={sheetSyncStatus === 'syncing'}
+                  style={{
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    color: 'var(--color-amber-400)',
+                    border: '1px solid var(--color-amber-500)',
+                    borderRadius: '8px',
+                    padding: '8px 12px',
+                    fontSize: '0.8rem',
+                    fontWeight: 700,
+                    cursor: sheetSyncStatus === 'syncing' ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px'
+                  }}
+                  title="Synchronize approved Firestore finishes to Google Sheet"
+                >
+                  {sheetSyncStatus === 'syncing' ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />}
+                  <span>{sheetSyncStatus === 'syncing' ? 'Syncing...' : 'Sync to Sheet'}</span>
+                </button>
+
+                <button
                   onClick={handlePrintBuyerPdf}
                   disabled={isGeneratingPdf || specs.length === 0}
                   style={{
@@ -1249,6 +1322,20 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               </div>
             </div>
 
+            {/* Sync Notifications */}
+            {syncSuccessToast && (
+              <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'rgba(16, 185, 129, 0.15)', border: '1px solid rgba(16, 185, 129, 0.3)', color: '#10b981', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <CheckCircle2 size={14} />
+                <span>{syncSuccessToast}</span>
+              </div>
+            )}
+            {syncErrorMessage && (
+              <div style={{ padding: '8px 12px', borderRadius: '6px', backgroundColor: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#f87171', fontSize: '0.8rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <AlertCircle size={14} />
+                <span>{syncErrorMessage}</span>
+              </div>
+            )}
+
             {/* Google Drive Subfolder Status Info */}
             <div
               style={{
@@ -1260,25 +1347,52 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 justifyContent: 'space-between',
                 fontSize: '0.75rem',
                 color: 'var(--color-zinc-400)',
-                border: '1px solid var(--color-zinc-800)'
+                border: '1px solid var(--color-zinc-800)',
+                flexWrap: 'wrap',
+                gap: '8px'
               }}
             >
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                 <FileText size={14} style={{ color: 'var(--color-amber-400)' }} />
                 <span>Google Drive Subfolder: <strong>Finish Specs & Buyer Handover</strong></span>
               </div>
-              {finishDriveLink ? (
-                <a
-                  href={finishDriveLink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ color: 'var(--color-amber-400)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}
-                >
-                  Open Sheet <ExternalLink size={12} />
-                </a>
-              ) : (
-                <span style={{ color: 'var(--color-zinc-500)' }}>Auto-syncs on update</span>
-              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                {sheetSyncStatus === 'synced' && (
+                  <span style={{ color: '#10b981', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <CheckCircle2 size={13} /> Google Sheet: Synced ✓
+                  </span>
+                )}
+                {sheetSyncStatus === 'out_of_sync' && (
+                  <span style={{ color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <AlertCircle size={13} /> Google Sheet: Out of Sync ⚠️
+                  </span>
+                )}
+                {sheetSyncStatus === 'syncing' && (
+                  <span style={{ color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <Loader2 size={13} className="animate-spin" /> Google Sheet: Syncing...
+                  </span>
+                )}
+                {sheetSyncStatus === 'error' && (
+                  <span style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 600 }}>
+                    <AlertCircle size={13} /> Google Sheet: Sync Failed ⚠️
+                  </span>
+                )}
+                {sheetSyncStatus === 'idle' && (
+                  <span style={{ color: 'var(--color-zinc-500)' }}>Auto-syncs on update</span>
+                )}
+
+                {finishDriveLink && (
+                  <a
+                    href={finishDriveLink}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    style={{ color: 'var(--color-amber-400)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontWeight: 700 }}
+                  >
+                    Open Sheet <ExternalLink size={12} />
+                  </a>
+                )}
+              </div>
             </div>
           </div>
 

@@ -1102,13 +1102,77 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
     }
 
     return {
+      ok: true,
       folderId: finishFolderId,
       fileId: targetSheetId,
       webViewLink: targetWebViewLink || `https://docs.google.com/spreadsheets/d/${targetSheetId}/edit`
     };
   } catch (err) {
     console.warn('Error syncing finish specs to native Google Sheet:', err);
-    return null;
+    return {
+      ok: false,
+      error: err?.message || 'Google Sheets sync failed. Please check Drive permissions.'
+    };
+  }
+}
+
+/**
+ * Checks the Google Sheet synchronization status for the project finishes.
+ */
+export async function getFinishSheetSyncStatus(accessToken, projectFolderId, firestoreSpecs = []) {
+  if (!accessToken || !projectFolderId) {
+    return { status: 'idle', webViewLink: null };
+  }
+
+  try {
+    const folderName = 'Finish Specs & Buyer Handover';
+    const safeParent = escapeDriveQueryString(projectFolderId);
+
+    const folderQuery = `'${safeParent}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const searchUrl = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(folderQuery)}&fields=files(id,name)&pageSize=1`;
+    const folderRes = await fetch(searchUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+    const folderData = await folderRes.json();
+
+    const finishFolderId = folderData.files?.[0]?.id;
+    if (!finishFolderId) {
+      return { status: firestoreSpecs.length > 0 ? 'out_of_sync' : 'synced', webViewLink: null };
+    }
+
+    const safeSubParent = escapeDriveQueryString(finishFolderId);
+    const sheetQuery = `'${safeSubParent}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+    const sheetSearchRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(sheetQuery)}&fields=files(id,name,webViewLink)&pageSize=1`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const sheetData = await sheetSearchRes.json();
+    const sheetFile = sheetData.files?.[0];
+
+    if (!sheetFile) {
+      return { status: firestoreSpecs.length > 0 ? 'out_of_sync' : 'synced', webViewLink: null };
+    }
+
+    const webViewLink = sheetFile.webViewLink || `https://docs.google.com/spreadsheets/d/${sheetFile.id}/edit`;
+
+    // Fetch spreadsheet row values to verify actual data parity
+    try {
+      const readUrl = `${GOOGLE_SHEETS_API_BASE}/${sheetFile.id}/values/A1:D500?fields=values`;
+      const readRes = await fetch(readUrl, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (readRes.ok) {
+        const valData = await readRes.json();
+        const rows = valData.values || [];
+        const dataRows = rows.slice(1); // Exclude header row
+
+        // If sheet is completely empty or row count doesn't match Firestore specs count
+        if (rows.length === 0 || dataRows.length !== firestoreSpecs.length) {
+          return { status: 'out_of_sync', webViewLink, rowCount: dataRows.length };
+        }
+        return { status: 'synced', webViewLink, rowCount: dataRows.length };
+      }
+    } catch (_) {}
+
+    return { status: 'synced', webViewLink };
+  } catch (err) {
+    console.warn('Error checking finish sheet sync status:', err);
+    return { status: 'error', error: err?.message || 'Sync check failed', webViewLink: null };
   }
 }
 
