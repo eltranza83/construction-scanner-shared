@@ -1,5 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { isConfidentVendor } from '../src/services/googleDrive.js';
 
 /**
  * Mock Google Drive Virtual File System
@@ -255,6 +256,178 @@ describe('Canonical Google Drive App Folders Architecture Suite', () => {
 
     assert.equal(purchasingFolder.parentId, appFolder.id);
     assert.equal(purchasingDoc.parentId, purchasingFolderId);
+  });
+
+  it('8. Dynamic Vendor Routing: Brand-new vendor (e.g. Walmart) creates Vendors / Stores and Walmart folder automatically with 0 manual steps', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+
+    // 1. Initial State: Only Lot 3 exists. Neither Vendors / Stores nor Walmart folder exists.
+    assert.equal(drive.findFolder('App Folders', lot3.id), null);
+
+    // 2. User scans/uploads a Walmart receipt into Invoice Uploads
+    const uploadsId = drive.ensureAppSubfolder(lot3.id, 'Invoice Uploads');
+    const receiptFile = drive.createFile('Lot 3 - Tools - Material.pdf', uploadsId, 'application/pdf', 'RECEIPT_BYTES');
+
+    // 3. Pipeline processes receipt with metadata { vendor: 'Walmart' }
+    const vendorName = 'Walmart';
+    const destinationFolderId = drive.ensureVendorFolder(lot3.id, vendorName);
+    drive.moveFile(receiptFile.id, uploadsId, destinationFolderId);
+
+    // 4. Verification: App Folders, Vendors / Stores, and Walmart were all dynamically generated
+    const appFolder = drive.findFolder('App Folders', lot3.id);
+    assert.ok(appFolder, 'App Folders created automatically');
+
+    const vendorsStoresFolder = drive.findFolder('Vendors / Stores', appFolder.id);
+    assert.ok(vendorsStoresFolder, 'Vendors / Stores created automatically');
+
+    const walmartFolder = drive.findFolder('Walmart', vendorsStoresFolder.id);
+    assert.ok(walmartFolder, 'Walmart folder created automatically');
+
+    const movedReceipt = drive.files.get(receiptFile.id);
+    assert.equal(movedReceipt.parentId, walmartFolder.id, 'Receipt is located inside Walmart folder');
+
+    // 5. Subsequent receipt from Walmart reuses existing folder (no duplicates)
+    const secondReceipt = drive.createFile('Lot 3 - Paint Roller - Material.pdf', uploadsId, 'application/pdf', 'RECEIPT_2_BYTES');
+    const secondDestinationId = drive.ensureVendorFolder(lot3.id, 'Walmart');
+    assert.equal(secondDestinationId, walmartFolder.id, 'Existing Walmart folder is reused');
+    drive.moveFile(secondReceipt.id, uploadsId, secondDestinationId);
+
+    const movedSecond = drive.files.get(secondReceipt.id);
+    assert.equal(movedSecond.parentId, walmartFolder.id, 'Second receipt moved into same Walmart folder');
+
+    // Confirm only 1 Walmart folder exists inside Vendors / Stores
+    const vendorChildren = Array.from(drive.folders.values()).filter(f => f.parentId === vendorsStoresFolder.id && f.name === 'Walmart');
+    assert.equal(vendorChildren.length, 1, 'Zero duplicate Walmart folders created');
+  });
+
+  it('9. Unknown Vendors Exception Queue: Missing or low-confidence vendor routes to App Folders / Unknown Vendors', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+
+    const uploadsId = drive.ensureAppSubfolder(lot3.id, 'Invoice Uploads');
+    const unknownVendorsFolderId = drive.ensureAppSubfolder(lot3.id, 'Unknown Vendors');
+
+    // 1. Receipt with no vendor metadata
+    const namelessReceipt = drive.createFile('Lot 3 - Fasteners.pdf', uploadsId, 'application/pdf', 'RAW_BYTES');
+    drive.moveFile(namelessReceipt.id, uploadsId, unknownVendorsFolderId);
+
+    // 2. Receipt with unconfident "Unknown" vendor
+    const unconfidentReceipt = drive.createFile('Lot 3 - Tools.pdf', uploadsId, 'application/pdf', 'RAW_BYTES_2');
+    drive.moveFile(unconfidentReceipt.id, uploadsId, unknownVendorsFolderId);
+
+    const appFolder = drive.findFolder('App Folders', lot3.id);
+    const unknownFolder = drive.findFolder('Unknown Vendors', appFolder.id);
+
+    assert.ok(unknownFolder, 'Unknown Vendors folder exists in App Folders');
+    assert.equal(drive.files.get(namelessReceipt.id).parentId, unknownFolder.id);
+    assert.equal(drive.files.get(unconfidentReceipt.id).parentId, unknownFolder.id);
+
+    // 3. Confirm NO "Unknown" folder was created inside Vendors / Stores
+    const vendorsStores = drive.findFolder('Vendors / Stores', appFolder.id);
+    if (vendorsStores) {
+      const unknownInVendors = drive.findFolder('Unknown', vendorsStores.id);
+      assert.equal(unknownInVendors, null, 'No Unknown vendor subfolder in Vendors / Stores');
+    }
+  });
+
+  it('10. Metadata Preservation & Exception Queue Inspection: Metadata and raw vendor snippets remain fully preserved in file descriptions', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+
+    const uploadsId = drive.ensureAppSubfolder(lot3.id, 'Invoice Uploads');
+    const unknownVendorsId = drive.ensureAppSubfolder(lot3.id, 'Unknown Vendors');
+
+    const rawMetadata = JSON.stringify({
+      amount: 842.50,
+      date: '2026-08-14',
+      description: 'Floor tiles and thinset mortar',
+      tradeCategory: 'Finishes',
+      tradePhase: 'Tile',
+      vendor: 'Unknown',
+      rawOcrSnippet: 'R...guez Tile Supply Inc'
+    });
+
+    const receipt = drive.createFile('Lot 3 - Tile - Material.pdf', uploadsId, 'application/pdf', rawMetadata);
+    drive.moveFile(receipt.id, uploadsId, unknownVendorsId);
+
+    const exceptionFile = drive.files.get(receipt.id);
+    assert.equal(exceptionFile.parentId, unknownVendorsId);
+
+    // Parse description metadata
+    const parsed = JSON.parse(exceptionFile.content);
+    assert.equal(parsed.amount, 842.50);
+    assert.equal(parsed.date, '2026-08-14');
+    assert.equal(parsed.rawOcrSnippet, 'R...guez Tile Supply Inc');
+  });
+
+  it('11. Vendor Name Classification Matrix: Validates conservative isConfidentVendor logic against noisy thermal headers', () => {
+    // Valid unusual vendors (must pass)
+    assert.equal(isConfidentVendor('Home Depot'), true);
+    assert.equal(isConfidentVendor('84 Lumber'), true);
+    assert.equal(isConfidentVendor("Lowe's Home Centers"), true);
+    assert.equal(isConfidentVendor('ABC Concrete Supply LLC'), true);
+    assert.equal(isConfidentVendor('José Martinez Framing'), true);
+    assert.equal(isConfidentVendor('Ferguson Enterprises #128'), true);
+
+    // Noisy / Thermal / Ambiguous / Generic strings (must be rejected to prevent corrupted vendor folders)
+    assert.equal(isConfidentVendor(''), false);
+    assert.equal(isConfidentVendor('   '), false);
+    assert.equal(isConfidentVendor('Unknown'), false);
+    assert.equal(isConfidentVendor('Unidentified'), false);
+    assert.equal(isConfidentVendor('N/A'), false);
+    assert.equal(isConfidentVendor('none'), false);
+    assert.equal(isConfidentVendor('CASH'), false);
+    assert.equal(isConfidentVendor('VISA'), false);
+    assert.equal(isConfidentVendor('MASTERCARD'), false);
+    assert.equal(isConfidentVendor('RECEIPT'), false);
+    assert.equal(isConfidentVendor('INVOICE'), false);
+    assert.equal(isConfidentVendor('TOTAL'), false);
+    assert.equal(isConfidentVendor('CUSTOMER COPY'), false);
+    assert.equal(isConfidentVendor('12345678'), false);
+    assert.equal(isConfidentVendor('$45.99'), false);
+    assert.equal(isConfidentVendor('---'), false);
+    assert.equal(isConfidentVendor('?'), false);
+  });
+
+  it('12. J.A.R.V.I.S. Exception Review Query: Discovers and reports receipts waiting in Unknown Vendors', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+
+    // 1. Setup App Folders with 2 unidentified receipts
+    const unknownVendorsId = drive.ensureAppSubfolder(lot3.id, 'Unknown Vendors');
+    drive.createFile('Lot 3 - Tiles.pdf', unknownVendorsId, 'application/pdf', JSON.stringify({
+      amount: 842.50,
+      date: '2026-08-14',
+      description: 'Floor tiles and thinset mortar',
+      rawVendorText: 'R...guez Tile'
+    }));
+    drive.createFile('Lot 3 - Tools.pdf', unknownVendorsId, 'application/pdf', JSON.stringify({
+      amount: 120.00,
+      date: '2026-08-18',
+      description: 'Masonry trowels',
+      rawVendorText: 'Hardware Store'
+    }));
+
+    // 2. J.A.R.V.I.S. Drive tool crawls project tree
+    const appFolder = drive.findFolder('App Folders', lot3.id);
+    const unknownFolder = drive.findFolder('Unknown Vendors', appFolder.id);
+    assert.ok(unknownFolder);
+
+    const pendingExceptions = Array.from(drive.files.values()).filter(f => f.parentId === unknownFolder.id);
+    assert.equal(pendingExceptions.length, 2);
+
+    const item1Meta = JSON.parse(pendingExceptions[0].content);
+    const item2Meta = JSON.parse(pendingExceptions[1].content);
+
+    // 3. Verify J.A.R.V.I.S. has full visibility into count, amounts, dates, and raw vendor snippets
+    assert.equal(item1Meta.amount, 842.50);
+    assert.equal(item1Meta.date, '2026-08-14');
+    assert.equal(item1Meta.rawVendorText, 'R...guez Tile');
+
+    assert.equal(item2Meta.amount, 120.00);
+    assert.equal(item2Meta.date, '2026-08-18');
+    assert.equal(item2Meta.rawVendorText, 'Hardware Store');
   });
 });
 

@@ -532,6 +532,35 @@ const inFlightFolderPromises = new Map();
 
 export const APP_FOLDERS_CONTAINER_NAME = 'App Folders';
 export const VENDORS_STORES_FOLDER_NAME = 'Vendors / Stores';
+export const UNKNOWN_VENDORS_FOLDER_NAME = 'Unknown Vendors';
+
+/**
+ * Checks if a vendor name string is confident vs generic placeholder/unidentified.
+ * Conservative safeguard: rejects generic terms, thermal receipt header noise (CASH, VISA, TOTAL),
+ * and strings without at least 2 alphabetic characters.
+ */
+export function isConfidentVendor(vendor) {
+  if (!vendor || typeof vendor !== 'string') return false;
+  const trimmed = vendor.trim();
+  if (trimmed.length < 2) return false;
+
+  const lower = trimmed.toLowerCase();
+  const unconfidentKeywords = [
+    'unknown', 'unidentified', 'n/a', 'na', 'none', 'null', 'undefined',
+    'pending', 'unspecified', 'general', 'receipt', 'invoice', 'statement',
+    'cash', 'visa', 'mastercard', 'amex', 'discover', 'debit', 'credit',
+    'credit card', 'total', 'subtotal', 'customer copy', 'merchant copy',
+    'store', 'vendor', 'contractor', 'payee'
+  ];
+
+  if (unconfidentKeywords.includes(lower)) return false;
+
+  // Must contain at least two letter characters (rejects pure barcodes, dates, order numbers, symbol noise)
+  const letterCount = (trimmed.match(/[a-zA-Z\u00C0-\u024F]/g) || []).length;
+  if (letterCount < 2) return false;
+
+  return true;
+}
 
 /**
  * Ensures the top-level 'App Folders' container exists under projectFolderId,
@@ -566,6 +595,13 @@ export async function ensureVendorFolder(accessToken, projectFolderId, vendorNam
 
   // 3. Locate or create the vendor folder
   return await findOrCreateFolder(accessToken, cleanVendor, vendorsStoresFolderId);
+}
+
+/**
+ * Ensures the 'Unknown Vendors' exception queue folder exists inside 'App Folders'
+ */
+export async function ensureUnknownVendorsFolder(accessToken, projectFolderId) {
+  return await ensureAppSubfolder(accessToken, projectFolderId, UNKNOWN_VENDORS_FOLDER_NAME);
 }
 
 /**

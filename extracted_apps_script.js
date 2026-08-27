@@ -554,9 +554,23 @@ function parseNewInvoices(mainFolderId) {
             processedCount++;
           }
 
-          // 5. Move the file to the archive folder
-          file.moveTo(archiveFolder);
-          addLog(`Archived ${fileName} to Processed Invoices.`);
+          // 5. Move the file to Vendors / Stores / [Vendor Name] if vendor is confident, else Unknown Vendors exception queue
+          let destinationFolder = null;
+          const vendorName = parsedData.contractorVendor || '';
+          if (isConfidentVendorInAppsScript(vendorName)) {
+            try {
+              destinationFolder = ensureVendorFolderInAppsScript(appFoldersContainer, vendorName.trim());
+            } catch (vErr) {
+              addLog(`Failed to resolve vendor folder for "${vendorName}": ${vErr.message}. Falling back to Unknown Vendors.`);
+            }
+          }
+
+          if (!destinationFolder) {
+            destinationFolder = ensureUnknownVendorsFolderInAppsScript(appFoldersContainer);
+          }
+
+          file.moveTo(destinationFolder);
+          addLog(`Moved ${fileName} to folder "${destinationFolder.getName()}".`);
         } else {
           addLog(`Failed to parse data for ${fileName}`);
         }
@@ -572,6 +586,83 @@ function parseNewInvoices(mainFolderId) {
   } finally {
     writeLogFile(folderId);
   }
+}
+
+/**
+ * Ensures Vendors / Stores and the specific vendor folder exist inside App Folders.
+ */
+function ensureVendorFolderInAppsScript(appFoldersContainer, vendorName) {
+  if (!appFoldersContainer || !vendorName) return null;
+  
+  // 1. Locate or create "Vendors / Stores" inside "App Folders"
+  let vendorsStoresFolder = null;
+  const subs = appFoldersContainer.getFolders();
+  while (subs.hasNext()) {
+    const sub = subs.next();
+    const subName = sub.getName().toLowerCase();
+    if (subName === "vendors / stores" || subName === "vendors/stores" || subName === "vendors") {
+      vendorsStoresFolder = sub;
+      break;
+    }
+  }
+  if (!vendorsStoresFolder) {
+    vendorsStoresFolder = appFoldersContainer.createFolder("Vendors / Stores");
+  }
+
+  // 2. Clean vendor name
+  const cleanVendor = String(vendorName).trim().replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ');
+  if (!cleanVendor) return vendorsStoresFolder;
+
+  // 3. Locate or create the vendor folder inside "Vendors / Stores"
+  const vSubs = vendorsStoresFolder.getFolders();
+  while (vSubs.hasNext()) {
+    const vSub = vSubs.next();
+    if (vSub.getName().toLowerCase() === cleanVendor.toLowerCase()) {
+      return vSub;
+    }
+  }
+  return vendorsStoresFolder.createFolder(cleanVendor);
+}
+
+/**
+ * Checks if a vendor name string is confident vs generic placeholder/unidentified in Apps Script.
+ */
+function isConfidentVendorInAppsScript(vendor) {
+  if (!vendor || typeof vendor !== 'string') return false;
+  const trimmed = vendor.trim();
+  if (trimmed.length < 2) return false;
+
+  const lower = trimmed.toLowerCase();
+  const unconfidentKeywords = [
+    'unknown', 'unidentified', 'n/a', 'na', 'none', 'null', 'undefined',
+    'pending', 'unspecified', 'general', 'receipt', 'invoice', 'statement',
+    'cash', 'visa', 'mastercard', 'amex', 'discover', 'debit', 'credit',
+    'credit card', 'total', 'subtotal', 'customer copy', 'merchant copy',
+    'store', 'vendor', 'contractor', 'payee'
+  ];
+
+  if (unconfidentKeywords.includes(lower)) return false;
+
+  const letterCount = (trimmed.match(/[a-zA-Z\u00C0-\u024F]/g) || []).length;
+  if (letterCount < 2) return false;
+
+  return true;
+}
+
+/**
+ * Ensures the 'Unknown Vendors' exception queue folder exists inside App Folders in Apps Script.
+ */
+function ensureUnknownVendorsFolderInAppsScript(appFoldersContainer) {
+  if (!appFoldersContainer) return null;
+  const subs = appFoldersContainer.getFolders();
+  while (subs.hasNext()) {
+    const sub = subs.next();
+    const subName = sub.getName().toLowerCase();
+    if (subName === "unknown vendors" || subName === "unknown_vendors" || subName === "unidentified vendors") {
+      return sub;
+    }
+  }
+  return appFoldersContainer.createFolder("Unknown Vendors");
 }
 
 /**

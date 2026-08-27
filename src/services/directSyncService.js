@@ -1,6 +1,9 @@
 import {
   ensureAppSubfolder,
+  ensureUnknownVendorsFolder,
+  ensureVendorFolder,
   findSpreadsheetInFolder,
+  isConfidentVendor,
   listFilesWithDescriptionInFolder,
   moveFileInDrive
 } from './googleDrive.js';
@@ -180,43 +183,40 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
     const rangeData = await rangeRes.json();
     const rows = rangeData.values || [];
 
-    // Find target phase block row
-    const targetAliases = getPhaseAliases(tradePh);
-    let blockHeaderRowIdx = -1;
+    // Find phase header row index
+    let phaseHeaderRowIdx = -1;
+    const targetPhaseAliases = getPhaseAliases(tradePh);
 
     for (let r = 0; r < rows.length; r++) {
-      const colA = String(rows[r]?.[0] || '').trim();
-      if (isPhaseHeaderLabel(colA)) {
-        const cleanCol = normalizeKey(colA);
-        if (targetAliases.some((alias) => cleanCol.includes(alias) || alias.includes(cleanCol))) {
-          blockHeaderRowIdx = r;
+      const cellVal = rows[r]?.[0] || '';
+      if (cellVal && isPhaseHeaderLabel(cellVal)) {
+        const rowPhaseNorm = normalizeKey(cellVal);
+        if (targetPhaseAliases.includes(rowPhaseNorm)) {
+          phaseHeaderRowIdx = r;
           break;
         }
       }
     }
 
-    if (blockHeaderRowIdx === -1) {
-      console.warn(`Phase header "${tradePh}" not found in sheet tab "${sheetTitle}".`);
+    if (phaseHeaderRowIdx === -1) {
+      console.warn(`Phase header "${tradePh}" not found in sheet "${sheetTitle}".`);
       continue;
     }
 
-    // Find next block header
-    let nextBlockHeaderRowIdx = rows.length;
-    for (let r = blockHeaderRowIdx + 1; r < rows.length; r++) {
-      const colA = String(rows[r]?.[0] || '').trim();
+    // Find first empty row below phase header
+    let targetRowIdx = -1;
+    for (let r = phaseHeaderRowIdx + 1; r < rows.length; r++) {
+      const row = rows[r] || [];
+      const colA = row[0] || '';
+      const colB = row[1] || '';
+      const colC = row[2] || '';
+      const colD = row[3] || '';
+
       if (isPhaseHeaderLabel(colA)) {
-        nextBlockHeaderRowIdx = r;
         break;
       }
-    }
 
-    // Find empty row
-    let targetRowIdx = -1;
-    for (let r = blockHeaderRowIdx + 1; r < nextBlockHeaderRowIdx; r++) {
-      const colB = String(rows[r]?.[1] || '').trim();
-      const colC = String(rows[r]?.[2] || '').trim();
-      const colD = String(rows[r]?.[3] || '').trim();
-      if (!colB && !colC && !colD) {
+      if (!colA && !colB && !colC && !colD) {
         targetRowIdx = r;
         break;
       }
@@ -261,8 +261,21 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
       });
     }
 
-    // Move file to Processed Invoices
-    await moveFileInDrive(accessToken, file.id, uploadsFolderId, archiveFolderId);
+    // Move file to Vendors / Stores / [Vendor Name] if vendor is confidently identified, else Unknown Vendors exception queue
+    let destinationFolderId = null;
+    if (isConfidentVendor(vendor)) {
+      try {
+        destinationFolderId = await ensureVendorFolder(accessToken, projectFolderId, vendor.trim());
+      } catch (vErr) {
+        console.warn(`Failed to resolve vendor folder for "${vendor}", falling back to Unknown Vendors:`, vErr);
+      }
+    }
+
+    if (!destinationFolderId) {
+      destinationFolderId = await ensureUnknownVendorsFolder(accessToken, projectFolderId);
+    }
+
+    await moveFileInDrive(accessToken, file.id, uploadsFolderId, destinationFolderId);
     processedCount++;
   }
 
