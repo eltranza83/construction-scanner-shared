@@ -139,20 +139,20 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
     assert.equal(allowedForUserB[0].id, 'lot_private_b');
   });
 
-  it('4. Built-in Admin has comprehensive access to all projects', async () => {
-    const adminUser = { email: 'adepecgroup@gmail.com' };
+  it('4. Zero-Knowledge Project Discovery: Users and Admins only discover owned or invited projects', async () => {
+    const adminUser = { email: 'adepecgroup@gmail.com', uid: 'uid_admin_000' };
     const testProjects = [
-      { id: 'lot_1', name: 'Lot 1', ownerEmail: 'builder1@gmail.com', members: ['builder1@gmail.com'] },
-      { id: 'lot_2', name: 'Lot 2', ownerEmail: 'builder2@gmail.com', members: ['builder2@gmail.com'] }
+      { id: 'lot_1', name: 'Lot 1', ownerUid: 'uid_builder_1', memberUids: ['uid_builder_1'] },
+      { id: 'lot_2', name: 'Lot 2', ownerUid: 'uid_admin_000', memberUids: ['uid_admin_000'] }
     ];
 
-    const isAdmin = adminUser.email === 'adepecgroup@gmail.com';
+    // Admin only discovers projects where admin UID is owner or in memberUids
     const accessible = testProjects.filter(p => {
-      if (isAdmin) return true;
-      return p.ownerEmail === adminUser.email || p.members.includes(adminUser.email);
+      return p.ownerUid === adminUser.uid || p.memberUids.includes(adminUser.uid);
     });
 
-    assert.equal(accessible.length, 2);
+    assert.equal(accessible.length, 1);
+    assert.equal(accessible[0].id, 'lot_2');
   });
 
   it('5. Fresh Device Scenario: Zero local storage discovers cloud projects and selects top project', () => {
@@ -184,21 +184,21 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
     assert.notEqual(activeProject.id, staleLocalId);
   });
 
-  it('7. Security Rules Simulation: Evaluates isProjectAuthorized for Owner, Member, Admin, and Stranger', () => {
-    function simulateIsProjectAuthorized(projectDoc, authUser, isAdminUser = false) {
-      if (!authUser || !authUser.email) return false;
-      if (isAdminUser) return true;
-      if (!projectDoc) return true; // Legacy migration safeguard before root doc exists
-      if (projectDoc.ownerEmail === authUser.email) return true;
-      if (authUser.uid && projectDoc.ownerUid === authUser.uid) return true;
-      if (Array.isArray(projectDoc.members) && projectDoc.members.includes(authUser.email)) return true;
+  it('7. Security Rules Simulation: Evaluates isProjectAuthorized for Owner, Member, and Uninvited Admin', () => {
+    function simulateIsProjectAuthorized(projectDoc, authUser) {
+      if (!authUser || !authUser.uid) return false;
+      if (!projectDoc) return false;
+      if (projectDoc.ownerUid === authUser.uid) return true;
+      if (Array.isArray(projectDoc.memberUids) && projectDoc.memberUids.includes(authUser.uid)) return true;
       return false;
     }
 
     const lot3Doc = {
-      ownerEmail: 'acepeda83@gmail.com',
+      id: 'lot_3',
       ownerUid: 'uid_ace',
-      members: ['acepeda83@gmail.com', 'superintendent@adepec.com']
+      ownerEmail: 'acepeda83@gmail.com',
+      members: ['acepeda83@gmail.com', 'superintendent@adepec.com'],
+      memberUids: ['uid_ace', 'uid_super']
     };
 
     // 1. Owner -> Authorized
@@ -207,14 +207,14 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
     // 2. Member -> Authorized
     assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'superintendent@adepec.com', uid: 'uid_super' }), true);
 
-    // 3. Admin -> Authorized
-    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'adepecgroup@gmail.com' }, true), true);
+    // 3. Uninvited Admin -> STRICTLY DENIED (Zero-Knowledge Privacy)
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'adepecgroup@gmail.com', uid: 'uid_admin_000' }), false);
 
-    // 4. Stranger / Unaffiliated Authenticated User -> STRICTLY DENIED
-    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'hacker@competitor.com', uid: 'uid_hacker' }, false), false);
+    // 4. Stranger -> STRICTLY DENIED
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'hacker@competitor.com', uid: 'uid_hacker' }), false);
 
     // 5. Unauthenticated User -> STRICTLY DENIED
-    assert.equal(simulateIsProjectAuthorized(lot3Doc, null, false), false);
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, null), false);
   });
 
   it('8. Non-Destructive Guarantee: Project profile document creation does not mutate subcollections', () => {

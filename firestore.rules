@@ -66,34 +66,30 @@ service cloud.firestore {
     }
 
     match /memories/{memoryId} {
-      allow get: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
-      allow list: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow get, list: if signedIn() && resource.data.uid == request.auth.uid;
       allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
-      allow update: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid) && request.resource.data.uid == resource.data.uid;
-      allow delete: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == resource.data.uid;
+      allow delete: if signedIn() && resource.data.uid == request.auth.uid;
     }
 
     function isProjectAuthorized(projectData) {
-      return isAdmin()
-        || request.auth.uid == projectData.ownerUid
+      return request.auth.uid == projectData.ownerUid
         || (projectData.memberUids != null && request.auth.uid in projectData.memberUids);
     }
 
     match /projects/{projectId} {
       allow get: if signedIn() && isProjectAuthorized(resource.data);
       allow list: if signedIn() && (
-        isAdmin()
-        || resource.data.ownerUid == request.auth.uid
+        resource.data.ownerUid == request.auth.uid
         || (resource.data.memberUids != null && request.auth.uid in resource.data.memberUids)
       );
       allow create: if signedIn()
         && request.resource.data.ownerUid == request.auth.uid
         && request.resource.data.id == projectId;
-      allow update: if signedIn() && (
-        isAdmin()
-        || (resource.data.ownerUid == request.auth.uid && request.resource.data.ownerUid == resource.data.ownerUid)
-      );
-      allow delete: if signedIn() && (isAdmin() || resource.data.ownerUid == request.auth.uid);
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid;
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
     }
 
     match /projects/{projectId}/purchasing_items/{itemId} {
@@ -108,15 +104,12 @@ service cloud.firestore {
 
     match /project_invites/{inviteId} {
       allow get, list: if signedIn() && (
-        isAdmin()
-        || resource.data.invitedEmail == request.auth.token.email
+        resource.data.invitedEmail == request.auth.token.email
         || resource.data.invitedByUid == request.auth.uid
       );
-      allow create: if signedIn() && (
-        isAdmin()
-        || request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid
-      );
-      allow update, delete: if isAdmin() || (signedIn() && resource.data.invitedByUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.auth.uid == get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.ownerUid;
+      allow update, delete: if signedIn() && resource.data.invitedByUid == request.auth.uid;
     }
 
     match /purchasing_templates/{templateId}/items/{itemId} {

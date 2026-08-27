@@ -2,15 +2,18 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 /**
- * Simulates Firestore Security Rules logic for /projects, /finishes, and /purchasing_items
+ * Simulates Pure Zero-Knowledge Firestore Security Rules logic:
+ * Admins have administrative power over invites and templates,
+ * but ZERO uninvited eavesdropping into any tenant's private projects, finishes, purchasing, or AI memories.
  */
 function evaluateFirestoreProjectSecurityRule({
   path,
   operation,
   auth,
   projectDoc = null,
+  memoryDoc = null,
   requestData = null,
-  adminEmails = ['adepecgroup@gmail.com', 'acepeda83@gmail.com']
+  adminEmails = ['adepecgroup@gmail.com']
 }) {
   const signedIn = Boolean(auth && auth.uid && auth.token && auth.token.email);
   if (!signedIn) return { allowed: false, reason: 'Unauthenticated' };
@@ -19,10 +22,25 @@ function evaluateFirestoreProjectSecurityRule({
 
   function isProjectAuthorized(project) {
     if (!project) return false;
-    if (isAdmin) return true;
     if (project.ownerUid === auth.uid) return true;
     if (Array.isArray(project.memberUids) && project.memberUids.includes(auth.uid)) return true;
     return false;
+  }
+
+  // Path: memories/{memoryId}
+  if (path.startsWith('memories/')) {
+    if (operation === 'get' || operation === 'list') {
+      const allowed = memoryDoc?.uid === auth.uid;
+      return { allowed, reason: allowed ? 'Authorized' : 'Cross-tenant memory access denied (Zero-Knowledge)' };
+    }
+    if (operation === 'create') {
+      const allowed = requestData?.uid === auth.uid;
+      return { allowed, reason: allowed ? 'Authorized' : 'Cannot create memory for another UID' };
+    }
+    if (operation === 'update' || operation === 'delete') {
+      const allowed = memoryDoc?.uid === auth.uid;
+      return { allowed, reason: allowed ? 'Authorized' : 'Cannot modify memory for another UID' };
+    }
   }
 
   // Path: projects/{projectId}
@@ -37,7 +55,7 @@ function evaluateFirestoreProjectSecurityRule({
     if (operation === 'list') {
       const isOwner = projectDoc?.ownerUid === auth.uid;
       const isMember = Array.isArray(projectDoc?.memberUids) && projectDoc.memberUids.includes(auth.uid);
-      const allowed = isAdmin || isOwner || isMember;
+      const allowed = isOwner || isMember;
       return { allowed, reason: allowed ? 'Authorized' : 'Cross-tenant project list denied' };
     }
 
@@ -50,13 +68,13 @@ function evaluateFirestoreProjectSecurityRule({
     if (operation === 'update') {
       const isOwner = projectDoc?.ownerUid === auth.uid;
       const preservesOwner = requestData?.ownerUid === projectDoc?.ownerUid;
-      const allowed = (isAdmin || isOwner) && preservesOwner;
+      const allowed = isOwner && preservesOwner;
       return { allowed, reason: allowed ? 'Authorized' : 'Non-owners cannot update project metadata' };
     }
 
     if (operation === 'delete') {
       const isOwner = projectDoc?.ownerUid === auth.uid;
-      const allowed = isAdmin || isOwner;
+      const allowed = isOwner;
       return { allowed, reason: allowed ? 'Authorized' : 'Non-owners cannot delete project' };
     }
   }
@@ -77,15 +95,21 @@ function evaluateFirestoreProjectSecurityRule({
     }
   }
 
+  // Path: purchasing_templates
+  if (path.startsWith('purchasing_templates/')) {
+    if (operation === 'read') return { allowed: true, reason: 'Templates readable by authenticated users' };
+    if (operation === 'write') return { allowed: isAdmin, reason: isAdmin ? 'Admin write permitted' : 'Templates write protected' };
+  }
+
   return { allowed: false, reason: 'Unknown rule configuration' };
 }
 
-describe('Multi-Tenant Identity & UID Security Rules Suite', () => {
-  const userA = { uid: 'uid_alice_123', token: { email: 'builder.alice@gmail.com' } };
-  const userB = { uid: 'uid_bob_456', token: { email: 'builder.bob@gmail.com' } };
-  const adminUser = { uid: 'uid_admin_000', token: { email: 'adepecgroup@gmail.com' } };
+describe('Zero-Knowledge Multi-Tenant Identity & UID Security Rules Suite', () => {
+  const userAlice = { uid: 'uid_alice_123', token: { email: 'builder.alice@gmail.com' } };
+  const userBob = { uid: 'uid_bob_456', token: { email: 'builder.bob@gmail.com' } };
+  const rootAdmin = { uid: 'uid_admin_000', token: { email: 'adepecgroup@gmail.com' } };
 
-  const lot3Project = {
+  const aliceLot3 = {
     id: 'lot_3',
     name: 'Lot 3',
     ownerUid: 'uid_alice_123',
@@ -94,160 +118,172 @@ describe('Multi-Tenant Identity & UID Security Rules Suite', () => {
     memberUids: ['uid_alice_123']
   };
 
-  it('1. Owner (User A) has full get, list, update, delete access on their own project', () => {
+  const aliceMemory = {
+    id: 'mem_123',
+    uid: 'uid_alice_123',
+    fact: 'Builder prefers Sherwin Williams Pure White for all master bedrooms'
+  };
+
+  it('1. Owner (Alice) has full get, list, update, delete access on her own project', () => {
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3',
       operation: 'get',
-      auth: userA,
-      projectDoc: lot3Project
+      auth: userAlice,
+      projectDoc: aliceLot3
     }).allowed, true);
 
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3',
       operation: 'update',
-      auth: userA,
-      projectDoc: lot3Project,
-      requestData: { ...lot3Project, name: 'Lot 3 - Revised' }
+      auth: userAlice,
+      projectDoc: aliceLot3,
+      requestData: { ...aliceLot3, name: 'Lot 3 - Revised' }
     }).allowed, true);
   });
 
-  it('2. Stranger (User B) is STRICTLY REJECTED from reading or listing User A project', () => {
-    // get rejection
+  it('2. Stranger (Bob) is STRICTLY REJECTED from reading or listing Alice project', () => {
     const getResult = evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3',
       operation: 'get',
-      auth: userB,
-      projectDoc: lot3Project
+      auth: userBob,
+      projectDoc: aliceLot3
     });
     assert.equal(getResult.allowed, false);
     assert.match(getResult.reason, /Cross-tenant/);
 
-    // list rejection
     const listResult = evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3',
       operation: 'list',
-      auth: userB,
-      projectDoc: lot3Project
+      auth: userBob,
+      projectDoc: aliceLot3
     });
     assert.equal(listResult.allowed, false);
   });
 
-  it('3. Stranger (User B) cannot read or write User A finishes or purchasing items', () => {
-    // Finish read/write denied
+  it('3. Stranger (Bob) cannot read or write Alice finishes or purchasing items', () => {
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3/finishes/spec_paint_1',
       operation: 'read',
-      auth: userB,
-      projectDoc: lot3Project
+      auth: userBob,
+      projectDoc: aliceLot3
     }).allowed, false);
 
-    assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/lot_3/finishes/spec_paint_1',
-      operation: 'write',
-      auth: userB,
-      projectDoc: lot3Project
-    }).allowed, false);
-
-    // Purchasing read/write denied
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3/purchasing_items/item_lumber_1',
       operation: 'read',
-      auth: userB,
-      projectDoc: lot3Project
+      auth: userBob,
+      projectDoc: aliceLot3
     }).allowed, false);
   });
 
-  it('4. User B can create their own isolated project and become its exclusive owner', () => {
-    const createResult = evaluateFirestoreProjectSecurityRule({
-      path: 'projects/sunset_ridge_1',
-      operation: 'create',
-      auth: userB,
-      requestData: {
-        id: 'sunset_ridge_1',
-        name: 'Sunset Ridge 1',
-        ownerUid: 'uid_bob_456',
-        ownerEmail: 'builder.bob@gmail.com',
-        memberUids: ['uid_bob_456']
-      }
+  it('4. Zero-Knowledge Admin Isolation: Root Admin is STRICTLY DENIED from reading uninvited tenant project', () => {
+    // Admin CANNOT get Alice's project
+    const adminGet = evaluateFirestoreProjectSecurityRule({
+      path: 'projects/lot_3',
+      operation: 'get',
+      auth: rootAdmin,
+      projectDoc: aliceLot3
     });
+    assert.equal(adminGet.allowed, false);
+    assert.match(adminGet.reason, /Cross-tenant project get denied/);
 
-    assert.equal(createResult.allowed, true);
+    // Admin CANNOT list Alice's project
+    const adminList = evaluateFirestoreProjectSecurityRule({
+      path: 'projects/lot_3',
+      operation: 'list',
+      auth: rootAdmin,
+      projectDoc: aliceLot3
+    });
+    assert.equal(adminList.allowed, false);
 
-    // User A cannot delete User B's new project
-    const bobProject = {
-      id: 'sunset_ridge_1',
-      ownerUid: 'uid_bob_456',
-      memberUids: ['uid_bob_456']
-    };
-    assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/sunset_ridge_1',
+    // Admin CANNOT delete Alice's project
+    const adminDelete = evaluateFirestoreProjectSecurityRule({
+      path: 'projects/lot_3',
       operation: 'delete',
-      auth: userA,
-      projectDoc: bobProject
-    }).allowed, false);
+      auth: rootAdmin,
+      projectDoc: aliceLot3
+    });
+    assert.equal(adminDelete.allowed, false);
   });
 
-  it('5. Explicit Sharing: Adding User B to memberUids grants read/write to finishes and purchasing', () => {
-    const sharedLot3 = {
-      ...lot3Project,
-      members: ['acepeda83@gmail.com', 'builder.bob@gmail.com'],
-      memberUids: ['uid_ace_123', 'uid_bob_456']
-    };
-
-    // User B now allowed on project get
-    assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/lot_3',
-      operation: 'get',
-      auth: userB,
-      projectDoc: sharedLot3
-    }).allowed, true);
-
-    // User B now allowed on finishes
+  it('5. Zero-Knowledge Admin Isolation: Root Admin cannot read uninvited finishes, purchasing, or AI memories', () => {
+    // Finishes blocked
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3/finishes/spec_paint_1',
       operation: 'read',
-      auth: userB,
-      projectDoc: sharedLot3
-    }).allowed, true);
+      auth: rootAdmin,
+      projectDoc: aliceLot3
+    }).allowed, false);
 
-    // But User B STILL cannot delete the project! Only owner can delete.
+    // Purchasing blocked
     assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/lot_3',
-      operation: 'delete',
-      auth: userB,
-      projectDoc: sharedLot3
+      path: 'projects/lot_3/purchasing_items/item_1',
+      operation: 'read',
+      auth: rootAdmin,
+      projectDoc: aliceLot3
+    }).allowed, false);
+
+    // Private AI memory blocked (even from root admin)
+    assert.equal(evaluateFirestoreProjectSecurityRule({
+      path: 'memories/mem_123',
+      operation: 'get',
+      auth: rootAdmin,
+      memoryDoc: aliceMemory
     }).allowed, false);
   });
 
-  it('6. Instant Revocation: Removing User B from memberUids revokes all access immediately', () => {
-    // Revoked state (User B removed)
-    const revokedLot3 = {
-      ...lot3Project,
-      members: ['acepeda83@gmail.com'],
-      memberUids: ['uid_ace_123']
+  it('6. Explicit Collaboration: Alice explicitly inviting Root Admin grants access', () => {
+    const sharedWithAdmin = {
+      ...aliceLot3,
+      members: ['builder.alice@gmail.com', 'adepecgroup@gmail.com'],
+      memberUids: ['uid_alice_123', 'uid_admin_000']
+    };
+
+    // Root Admin now allowed to get project
+    assert.equal(evaluateFirestoreProjectSecurityRule({
+      path: 'projects/lot_3',
+      operation: 'get',
+      auth: rootAdmin,
+      projectDoc: sharedWithAdmin
+    }).allowed, true);
+
+    // Root Admin now allowed to view finishes
+    assert.equal(evaluateFirestoreProjectSecurityRule({
+      path: 'projects/lot_3/finishes/spec_paint_1',
+      operation: 'read',
+      auth: rootAdmin,
+      projectDoc: sharedWithAdmin
+    }).allowed, true);
+  });
+
+  it('7. Instant Revocation: Alice removing Root Admin from memberUids revokes all access', () => {
+    const revokedFromAdmin = {
+      ...aliceLot3,
+      members: ['builder.alice@gmail.com'],
+      memberUids: ['uid_alice_123']
     };
 
     assert.equal(evaluateFirestoreProjectSecurityRule({
       path: 'projects/lot_3',
       operation: 'get',
-      auth: userB,
-      projectDoc: revokedLot3
-    }).allowed, false);
-
-    assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/lot_3/finishes/spec_paint_1',
-      operation: 'read',
-      auth: userB,
-      projectDoc: revokedLot3
+      auth: rootAdmin,
+      projectDoc: revokedFromAdmin
     }).allowed, false);
   });
 
-  it('7. Admin has universal observability across all projects', () => {
+  it('8. Root Admin maintains exclusive administrative rights over master purchasing templates', () => {
+    // Regular user cannot edit master template
     assert.equal(evaluateFirestoreProjectSecurityRule({
-      path: 'projects/lot_3',
-      operation: 'get',
-      auth: adminUser,
-      projectDoc: lot3Project
+      path: 'purchasing_templates/master/items/drywall',
+      operation: 'write',
+      auth: userAlice
+    }).allowed, false);
+
+    // Root Admin CAN edit master template
+    assert.equal(evaluateFirestoreProjectSecurityRule({
+      path: 'purchasing_templates/master/items/drywall',
+      operation: 'write',
+      auth: rootAdmin
     }).allowed, true);
   });
 });

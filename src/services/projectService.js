@@ -78,7 +78,6 @@ export class FirestoreProjectAdapter {
     const database = this._getDb();
     const userEmail = (user?.email || '').trim().toLowerCase();
     const userUid = (user?.uid || user?.firebaseUid || '').trim();
-    const isAdmin = isBuiltInAdmin(userEmail);
 
     if (!database || (!userEmail && !userUid)) {
       const cached = getStoredJson(APP_STORAGE_KEYS.projects, []);
@@ -89,36 +88,27 @@ export class FirestoreProjectAdapter {
       const projectsCol = collection(database, 'projects');
       const itemsMap = new Map();
 
-      if (isAdmin) {
-        // Admin gets all projects
-        const snap = await getDocs(projectsCol);
-        snap.forEach((docSnap) => {
-          const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
-          itemsMap.set(norm.id, norm);
-        });
-      } else {
-        // Non-admin queries by memberUids and ownerUid
-        if (userUid) {
-          try {
-            const memberQuery = query(projectsCol, where('memberUids', 'array-contains', userUid));
-            const snap = await getDocs(memberQuery);
-            snap.forEach((docSnap) => {
-              const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
-              itemsMap.set(norm.id, norm);
-            });
-          } catch (qErr) {
-            console.warn('[FirestoreProjectAdapter] memberUids query error, attempting ownerUid query:', qErr?.message);
-          }
-
-          try {
-            const ownerQuery = query(projectsCol, where('ownerUid', '==', userUid));
-            const snap = await getDocs(ownerQuery);
-            snap.forEach((docSnap) => {
-              const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
-              itemsMap.set(norm.id, norm);
-            });
-          } catch (_) {}
+      // Every user (including admins) discovers only projects where they are an owner or explicit member
+      if (userUid) {
+        try {
+          const memberQuery = query(projectsCol, where('memberUids', 'array-contains', userUid));
+          const snap = await getDocs(memberQuery);
+          snap.forEach((docSnap) => {
+            const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
+            itemsMap.set(norm.id, norm);
+          });
+        } catch (qErr) {
+          console.warn('[FirestoreProjectAdapter] memberUids query error, attempting ownerUid query:', qErr?.message);
         }
+
+        try {
+          const ownerQuery = query(projectsCol, where('ownerUid', '==', userUid));
+          const snap = await getDocs(ownerQuery);
+          snap.forEach((docSnap) => {
+            const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
+            itemsMap.set(norm.id, norm);
+          });
+        } catch (_) {}
       }
 
       const items = Array.from(itemsMap.values());
