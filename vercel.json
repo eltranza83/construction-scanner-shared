@@ -1,4 +1,4 @@
-﻿{
+{
   "headers": [
     {
       "source": "/(index.html|sw.js|manifest.json)",
