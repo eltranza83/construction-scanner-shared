@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { createProjectFolder, listProjectFolders } from '../services/settingsDrive';
 import { getDriveErrorMessage, getFolderErrorMessage, getValidationErrorMessage } from '../services/appErrors';
 import { toCanonicalProjectId } from '../services/googleDocsPurchasingService';
+import { saveUserProject, deleteUserProject } from '../services/projectService';
 
 export function useSettingsProjects({
   activeProject,
   googleToken,
+  googleUser,
   projects,
   setActiveProject,
   setError,
@@ -87,6 +89,7 @@ export function useSettingsProjects({
       localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
 
       const updatedProj = updatedProjects.find(p => p.id === editingProject.id);
+      saveUserProject(updatedProj, googleUser);
 
       if (activeProject && activeProject.id === editingProject.id) {
         setActiveProject(updatedProj);
@@ -123,6 +126,7 @@ export function useSettingsProjects({
     const updatedProjects = [...projects, newProj];
     setProjects(updatedProjects);
     localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
+    saveUserProject(newProj, googleUser);
 
     setActiveProject(newProj);
     localStorage.setItem('jobscan_active_project', JSON.stringify(newProj));
@@ -152,6 +156,7 @@ export function useSettingsProjects({
     const updatedProjects = projects.filter(p => p.id !== projectId);
     setProjects(updatedProjects);
     localStorage.setItem('jobscan_projects', JSON.stringify(updatedProjects));
+    deleteUserProject(projectId, googleUser);
 
     if (activeProject && activeProject.id === projectId) {
       setActiveProject(null);

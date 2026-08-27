@@ -73,12 +73,38 @@ service cloud.firestore {
       allow delete: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
     }
 
+    function isProjectAuthorized(projectId) {
+      return signedIn() && (
+        isAdmin()
+        || !exists(/databases/$(database)/documents/projects/$(projectId))
+        || get(/databases/$(database)/documents/projects/$(projectId)).data.ownerEmail == request.auth.token.email
+        || get(/databases/$(database)/documents/projects/$(projectId)).data.ownerUid == request.auth.uid
+        || request.auth.token.email in get(/databases/$(database)/documents/projects/$(projectId)).data.members
+      );
+    }
+
+    match /projects/{projectId} {
+      allow read: if signedIn() && (
+        isAdmin()
+        || resource.data.ownerEmail == request.auth.token.email
+        || resource.data.ownerUid == request.auth.uid
+        || request.auth.token.email in resource.data.members
+        || (!('ownerEmail' in resource.data) && !('ownerUid' in resource.data))
+      );
+      allow create: if signedIn();
+      allow update, delete: if signedIn() && (
+        isAdmin()
+        || resource.data.ownerEmail == request.auth.token.email
+        || resource.data.ownerUid == request.auth.uid
+      );
+    }
+
     match /projects/{projectId}/purchasing_items/{itemId} {
-      allow read, write: if signedIn();
+      allow read, write: if isProjectAuthorized(projectId);
     }
 
     match /projects/{projectId}/finishes/{finishId} {
-      allow read, write: if signedIn();
+      allow read, write: if isProjectAuthorized(projectId);
     }
 
     match /purchasing_templates/{templateId}/items/{itemId} {

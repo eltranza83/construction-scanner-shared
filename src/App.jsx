@@ -68,6 +68,7 @@ export default function App() {
     resetProjectSelection
   } = useProjects({
     googleToken,
+    googleUser,
     setSuccess
   });
   const {
