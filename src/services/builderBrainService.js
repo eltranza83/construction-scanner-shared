@@ -38,6 +38,15 @@ import {
   INTENT_MODALITIES
 } from './semanticIntentService.js';
 
+import {
+  fetchProjectFinishes,
+  saveFinishSpec,
+  deleteFinishSpec,
+  findMatchingFinish,
+  formatFinishesForAI,
+  FINISH_SCOPES
+} from './finishService.js';
+
 let _activeSessionCognitiveState = {
   turnIndex: 0,
   lastSuggestionTurn: -999,
@@ -344,8 +353,8 @@ export function buildGroundingSystemInstruction(context) {
   }
 
   let specRecords = 'No finish specifications recorded.';
-  if (projectSpecs.length > 0) {
-    specRecords = projectSpecs.map(s => `* ${s.category} (${s.location}): ${s.brand ? s.brand + ' - ' : ''}${s.title || s.code}${s.sheen ? ` (${s.sheen})` : ''}`).join('\n');
+  if (Array.isArray(projectSpecs) && projectSpecs.length > 0) {
+    specRecords = formatFinishesForAI(projectSpecs).summaryText;
   }
 
   let driveRecords = 'No Drive folders or files indexed.';
@@ -578,7 +587,18 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
       * You MUST populate the 'folderName' argument with the specific folder name or path mentioned (e.g. { "folderName": "Google Doc Purchasing List" }, { "folderName": "Purchasing List" }, or { "folderName": "App Folders / Google Doc Purchasing List" }).
       * You MUST NEVER leave 'folderName' empty when the user explicitly queries a specific folder.
     - BROAD FOLDER HIERARCHY INQUIRIES: When the user asks broadly what folders exist (e.g. "What folders do we have?", "List our folders", "Show me our drive directories"):
-      * Call 'get_drive_files' with empty args {} to retrieve the complete directory hierarchy.`;
+      * Call 'get_drive_files' with empty args {} to retrieve the complete directory hierarchy.
+
+16. FINISHES & MATERIAL SPECIFICATIONS INSTRUCTIONS:
+    - FIRESTORE IS THE SINGLE AUTHORITATIVE SOURCE: All paint codes, stucco finishes, stone/cantera specs, tile/grout selections, roofing shingles, and fixtures live in Firestore (/projects/{projectId}/finishes).
+    - HIERARCHICAL OVERRIDE RULE:
+      * SPECIFIC ROOM/LOCATION OVERRIDE > WHOLE-HOUSE DEFAULT.
+      * When a user asks about paint, flooring, or materials for a specific room (e.g., "What paint is in the Study?", "What tile is in the Master Bath?"), always check for location-specific overrides first. If an override exists, state it clearly (e.g., "For the Study, the accent wall is SW 6244 Naval in Satin, while the rest of the house uses SW 7005 Pure White.").
+      * When a user asks general questions (e.g., "What paint are we using on Lot 3?"), state the Whole-House default first, and mention any specific room accents or overrides.
+    - AMBIGUITY & CONSERVATIVE CLARIFICATION:
+      * If an inquiry or change request is ambiguous because multiple records share the same category (e.g., "Roofing — Whole House" vs. "Roofing — Detached Garage"), DO NOT guess or pick one arbitrarily. Clarify with the user (e.g., "Which roofing specification do you want to update — Whole House or Detached Garage?").
+    - DYNAMIC ATTRIBUTES ARE FIRST-CLASS DATA:
+      * Attributes like Texture, Sealant, Thickness, Warranty, Sheen, Grout Color, and Joint Size are first-class specifications. Always report them accurately when asked (e.g., "What's the stucco texture?", "What's the sealant on the Cantera?").`;
 }
 
 export function isPurchaseStatusMutationCommand(query = '') {

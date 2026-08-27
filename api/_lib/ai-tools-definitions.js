@@ -306,13 +306,34 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'get_homeowner_specs',
-    description: 'Retrieve homeowner finish specifications, selections, and paint schedules.',
+    description: 'Retrieve finish specifications, selections, paint schedules, roofing materials, stucco textures, stone finishes, and fixtures from Firestore. Returns explicit whole-house defaults and location-specific overrides.',
     parameters: {
       type: 'OBJECT',
       properties: {
-        category: { type: 'STRING', description: 'Category filter (e.g., Paint, Flooring, Plumbing Fixtures, Countertops)' },
-        room: { type: 'STRING', description: 'Room location (e.g., Master Bath, Kitchen, Exterior)' }
+        category: { type: 'STRING', description: 'Category filter (e.g., Paint, Stucco, Stone, Roofing, Tile, Flooring, Plumbing Fixtures, Countertops)' },
+        room: { type: 'STRING', description: 'Room or location filter (e.g., Master Bath, Kitchen, Study, Exterior, Whole House)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55)' }
       }
+    }
+  },
+  {
+    name: 'save_finish_spec',
+    description: 'Create or update a finish/material specification in the Firestore database (e.g. "add roofing material Owens Corning Estate Gray", "change Lot 3 roofing color to Onyx Black", "set stucco texture to Medium Dash"). If multiple records exist for that category and location is ambiguous, safely asks for clarification.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        category: { type: 'STRING', description: 'Category name (e.g. Paint, Stucco, Stone, Roofing, Tile & Grout, Countertops & Flooring, Fixtures & Hardware)' },
+        codeOrProduct: { type: 'STRING', description: 'Color name, code #, or product model (e.g. SW 7005 Pure White, Dover White #104, Duration Architectural Shingle)' },
+        location: { type: 'STRING', description: 'Location or area (e.g. Whole House, Study Accent Wall, Exterior Body, Front Entry Columns)' },
+        scope: { type: 'STRING', description: 'Scope: whole_house, room_override, exterior_general, or area_specific' },
+        brand: { type: 'STRING', description: 'Brand or supplier (e.g. Sherwin-Williams, Owens Corning, Master Wall, Daltile)' },
+        sheen: { type: 'STRING', description: 'Sheen, finish, or specs (e.g. Flat, Satin, Medium Dash, Honed Smooth)' },
+        attributes: { type: 'OBJECT', description: 'Optional key-value attributes (e.g. {"texture": "Medium Dash", "sealant": "Dry-Treat", "warranty": "30-Year", "thickness": "2-inch"})' },
+        notes: { type: 'STRING', description: 'Optional notes' },
+        specId: { type: 'STRING', description: 'Optional specific finish ID if modifying a known document' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID' }
+      },
+      required: ['category', 'codeOrProduct']
     }
   },
   {

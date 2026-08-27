@@ -77,6 +77,10 @@ service cloud.firestore {
       allow read, write: if signedIn();
     }
 
+    match /projects/{projectId}/finishes/{finishId} {
+      allow read, write: if signedIn();
+    }
+
     match /purchasing_templates/{templateId}/items/{itemId} {
       allow read: if signedIn();
       allow write: if isAdmin();

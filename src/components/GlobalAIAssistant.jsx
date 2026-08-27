@@ -23,6 +23,11 @@ import {
   saveProjectDriveTree,
   loadProjectDashboard
 } from '../services/builderBrainService';
+import {
+  fetchProjectFinishes,
+  saveFinishSpec,
+  deleteFinishSpec
+} from '../services/finishService';
 import { runAllAiToolDiagnostics, evaluateSystemAndDataHealth } from '../services/aiTools';
 import {
   fetchProjectDriveTree,
@@ -724,32 +729,25 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       // 4. Add Finish Selection / Paint Spec Action
       const actionAddSpecMatches = [...answer.matchAll(/\[\[ACTION:ADD_SPEC:([^\]]+)\]\]/g)];
       if (actionAddSpecMatches.length > 0) {
-        const existingSpecs = loadProjectSpecs(projectId);
-        const newSpecs = [];
-        actionAddSpecMatches.forEach((m) => {
+        actionAddSpecMatches.forEach(async (m) => {
           try {
             const data = JSON.parse(m[1]);
-            newSpecs.push({
-              id: 'spec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
+            await saveFinishSpec(projectId, {
               category: data.category || 'Paint',
-              location: data.location || 'General',
+              location: data.location || 'Whole House',
+              scope: data.scope || (data.location && !data.location.toLowerCase().includes('whole house') ? 'room_override' : 'whole_house'),
               brand: data.brand || data.supplier || '',
               code: data.code || data.title || '',
+              name: data.code || data.title || '',
               sheen: data.sheen || data.specs || '',
+              attributes: data.attributes || {},
               notes: data.notes || '',
-              createdAt: new Date().toISOString()
+              source: 'voice_ai'
             });
           } catch (err) {
-            console.warn('Failed to parse ADD_SPEC payload:', err);
+            console.warn('Failed to parse and save ADD_SPEC payload:', err);
           }
         });
-        if (newSpecs.length > 0) {
-          const updatedSpecs = [...newSpecs, ...existingSpecs];
-          saveProjectSpecs(projectId, updatedSpecs);
-          if (googleToken && activeProject?.folderId) {
-            syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updatedSpecs);
-          }
-        }
         cleanAnswer = cleanAnswer.replace(/\[\[ACTION:ADD_SPEC:[^\]]+\]\]/g, '').trim();
       }
 

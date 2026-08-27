@@ -37,6 +37,14 @@ import {
   saveProjectDriveTree
 } from '../services/builderBrainService';
 import {
+  fetchProjectFinishes,
+  saveFinishSpec,
+  deleteFinishSpec,
+  STANDARD_FINISH_CATEGORIES,
+  FINISH_SCOPES,
+  SURFACE_TYPES
+} from '../services/finishService';
+import {
   fetchProjectDriveTree,
   createFolder,
   trashDriveFileOrFolder,
@@ -376,12 +384,16 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       .catch(() => {});
   }, [projectId, activeSubTab]);
 
-  // Finish Selections & Specs state
-  const [specs, setSpecs] = useState(() => loadProjectSpecs(projectId));
+  // Finish Selections & Specs state (Firestore-First)
+  const [specs, setSpecs] = useState([]);
   const [specsCategoryFilter, setSpecsCategoryFilter] = useState('all');
   const [showAddSpecModal, setShowAddSpecModal] = useState(false);
+  const [editingSpecId, setEditingSpecId] = useState(null);
+  const [customAttributeEntries, setCustomAttributeEntries] = useState([]);
   const [newSpecForm, setNewSpecForm] = useState({
     category: 'Paint',
+    scope: 'whole_house',
+    surface: 'Interior Walls',
     location: '',
     brand: 'Sherwin-Williams',
     code: '',
@@ -392,8 +404,13 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const [finishDriveLink, setFinishDriveLink] = useState(null);
 
   useEffect(() => {
-    const loadedSpecs = loadProjectSpecs(projectId);
-    setSpecs(loadedSpecs);
+    let isMounted = true;
+    fetchProjectFinishes(projectId).then((loaded) => {
+      if (isMounted && Array.isArray(loaded)) {
+        setSpecs(loaded);
+      }
+    }).catch((err) => console.warn('Error loading finishes:', err));
+    return () => { isMounted = false; };
   }, [projectId]);
 
   useEffect(() => {
@@ -581,40 +598,125 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   };
 
-  const handleAddSpecSubmit = (e) => {
-    e.preventDefault();
-    if (!newSpecForm.code.trim() && !newSpecForm.location.trim()) return;
-    const newSpec = {
-      id: 'spec_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
-      category: newSpecForm.category || 'Paint',
-      location: newSpecForm.location.trim() || 'General',
-      brand: newSpecForm.brand.trim() || '',
-      code: newSpecForm.code.trim() || '',
-      sheen: newSpecForm.sheen.trim() || '',
-      notes: newSpecForm.notes.trim() || '',
-      createdAt: new Date().toISOString()
-    };
-    const updated = [newSpec, ...specs];
-    setSpecs(updated);
-    saveProjectSpecs(projectId, updated);
-    if (googleToken && activeProject?.folderId) {
-      syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated).then((res) => {
-        if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
-      });
-    }
-    setNewSpecForm({ category: 'Paint', location: '', brand: 'Sherwin-Williams', code: '', sheen: 'Flat/Eggshell', notes: '' });
-    setShowAddSpecModal(false);
+  const handleOpenAddSpecModal = () => {
+    setEditingSpecId(null);
+    setCustomAttributeEntries([]);
+    setNewSpecForm({
+      category: 'Paint',
+      scope: 'whole_house',
+      surface: 'Interior Walls',
+      location: '',
+      brand: 'Sherwin-Williams',
+      code: '',
+      sheen: 'Flat/Eggshell',
+      notes: ''
+    });
+    setShowAddSpecModal(true);
   };
 
-  const handleDeleteSpec = (specId, specTitle) => {
+  const handleOpenEditSpecModal = (spec) => {
+    setEditingSpecId(spec.id);
+    const attrEntries = spec.attributes && typeof spec.attributes === 'object'
+      ? Object.entries(spec.attributes).map(([k, v]) => ({ key: k, value: v }))
+      : [];
+    setCustomAttributeEntries(attrEntries);
+    setNewSpecForm({
+      category: spec.category || 'Paint',
+      scope: spec.scope || (spec.location === 'Whole House' ? 'whole_house' : 'room_override'),
+      surface: spec.surface || 'Interior Walls',
+      location: spec.location === 'Whole House' ? '' : (spec.location || ''),
+      brand: spec.brand || '',
+      code: spec.code || spec.name || spec.title || '',
+      sheen: spec.sheen || '',
+      notes: spec.notes || ''
+    });
+    setShowAddSpecModal(true);
+  };
+
+  const handleAddCustomAttributeRow = () => {
+    setCustomAttributeEntries((prev) => [...prev, { key: '', value: '' }]);
+  };
+
+  const handleRemoveCustomAttributeRow = (index) => {
+    setCustomAttributeEntries((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleUpdateCustomAttributeRow = (index, field, value) => {
+    setCustomAttributeEntries((prev) => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], [field]: value };
+      return copy;
+    });
+  };
+
+  const handleSaveSpecSubmit = async (e) => {
+    e.preventDefault();
+    if (!newSpecForm.code.trim()) return;
+
+    // Convert attribute rows to map
+    const attributesMap = {};
+    customAttributeEntries.forEach(({ key, value }) => {
+      if (key && key.trim() && value && value.trim()) {
+        attributesMap[key.trim()] = value.trim();
+      }
+    });
+
+    const locationVal = newSpecForm.location.trim() || (newSpecForm.scope === 'whole_house' ? 'Whole House' : 'General Area');
+
+    try {
+      const savedDoc = await saveFinishSpec(projectId, {
+        id: editingSpecId || undefined,
+        category: newSpecForm.category || 'Paint',
+        scope: newSpecForm.scope || (newSpecForm.location.trim() ? 'room_override' : 'whole_house'),
+        surface: newSpecForm.surface || 'Interior Walls',
+        location: locationVal,
+        brand: newSpecForm.brand.trim() || '',
+        code: newSpecForm.code.trim() || '',
+        name: newSpecForm.code.trim() || '',
+        sheen: newSpecForm.sheen.trim() || '',
+        notes: newSpecForm.notes.trim() || '',
+        attributes: attributesMap
+      });
+
+      // Local state will automatically sync via subscribeToProjectFinishes,
+      // but we update immediately for optimistic rendering:
+      setSpecs((prev) => {
+        const existingIdx = prev.findIndex((s) => s.id === savedDoc.id);
+        if (existingIdx >= 0) {
+          const updated = [...prev];
+          updated[existingIdx] = savedDoc;
+          return updated;
+        }
+        return [savedDoc, ...prev];
+      });
+
+      if (googleToken && activeProject?.folderId) {
+        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, specs).then((res) => {
+          if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
+        }).catch(() => {});
+      }
+
+      setShowAddSpecModal(false);
+      setEditingSpecId(null);
+    } catch (err) {
+      console.error('Failed to save finish spec:', err);
+      alert('Failed to save finish spec. Please check connection/Firebase.');
+    }
+  };
+
+  const handleDeleteSpec = async (specId, specTitle) => {
     if (!window.confirm(`⚠️ Confirm Deletion:\n\nAre you sure you want to delete this finish spec?\n\n"${specTitle}"`)) {
       return;
     }
-    const updated = specs.filter((s) => s.id !== specId);
-    setSpecs(updated);
-    saveProjectSpecs(projectId, updated);
-    if (googleToken && activeProject?.folderId) {
-      syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated);
+    try {
+      await deleteFinishSpec(projectId, specId);
+      const updated = specs.filter((s) => s.id !== specId);
+      setSpecs(updated);
+      if (googleToken && activeProject?.folderId) {
+        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updated);
+      }
+    } catch (err) {
+      console.error('Failed to delete spec:', err);
     }
   };
 
@@ -1147,36 +1249,54 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
             </div>
           </div>
 
-          {/* Category Filter Pills */}
+          {/* Category Filter Pills (Data-Driven) */}
           <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {[
-              { id: 'all', label: `All (${specs.length})` },
-              { id: 'Paint', label: `🎨 Paint (${specs.filter((s) => (s.category || '').toLowerCase() === 'paint').length})` },
-              { id: 'Tile & Grout', label: `🧱 Tile & Grout (${specs.filter((s) => (s.category || '').toLowerCase().includes('tile')).length})` },
-              { id: 'Countertops & Flooring', label: `🪚 Countertops/Flooring (${specs.filter((s) => (s.category || '').toLowerCase().includes('counter') || (s.category || '').toLowerCase().includes('floor')).length})` },
-              { id: 'Fixtures & Hardware', label: `💡 Fixtures (${specs.filter((s) => (s.category || '').toLowerCase().includes('fixture')).length})` },
-              { id: 'Exterior', label: `🏡 Exterior (${specs.filter((s) => (s.category || '').toLowerCase() === 'exterior').length})` },
-              { id: 'Appliances & Custom', label: `📝 Custom (${specs.filter((s) => (s.category || '').toLowerCase().includes('appliance') || (s.category || '').toLowerCase() === 'general').length})` }
-            ].map((f) => (
-              <button
-                key={f.id}
-                onClick={() => setSpecsCategoryFilter(f.id)}
-                style={{
-                  padding: '6px 10px',
-                  borderRadius: '20px',
-                  border: '1px solid',
-                  borderColor: specsCategoryFilter === f.id ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
-                  backgroundColor: specsCategoryFilter === f.id ? 'rgba(245, 158, 11, 0.15)' : 'var(--color-zinc-900)',
-                  color: specsCategoryFilter === f.id ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  cursor: 'pointer',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {f.label}
-              </button>
-            ))}
+            {(() => {
+              const catCounts = {};
+              specs.forEach((s) => {
+                const c = s.category || 'General';
+                catCounts[c] = (catCounts[c] || 0) + 1;
+              });
+
+              const pills = [{ id: 'all', label: `All (${specs.length})` }];
+              
+              // Standard preset categories if present or top defaults
+              STANDARD_FINISH_CATEGORIES.forEach((std) => {
+                const count = catCounts[std.id] || 0;
+                if (count > 0 || ['Paint', 'Tile & Grout', 'Stucco', 'Stone', 'Roofing', 'Countertops & Flooring', 'Fixtures & Hardware'].includes(std.id)) {
+                  pills.push({ id: std.id, label: `${std.label.split(' ')[0]} ${std.id} (${count})` });
+                  delete catCounts[std.id];
+                }
+              });
+
+              // Any remaining custom categories
+              Object.entries(catCounts).forEach(([catName, count]) => {
+                if (!pills.some((p) => p.id === catName)) {
+                  pills.push({ id: catName, label: `📝 ${catName} (${count})` });
+                }
+              });
+
+              return pills.map((f) => (
+                <button
+                  key={f.id}
+                  onClick={() => setSpecsCategoryFilter(f.id)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '20px',
+                    border: '1px solid',
+                    borderColor: specsCategoryFilter === f.id ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
+                    backgroundColor: specsCategoryFilter === f.id ? 'rgba(245, 158, 11, 0.15)' : 'var(--color-zinc-900)',
+                    color: specsCategoryFilter === f.id ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    whiteSpace: 'nowrap'
+                  }}
+                >
+                  {f.label}
+                </button>
+              ));
+            })()}
           </div>
 
           {/* Finishes List / Cards */}
@@ -1185,12 +1305,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               if (specsCategoryFilter === 'all') return true;
               const cat = (s.category || '').toLowerCase();
               const f = specsCategoryFilter.toLowerCase();
-              if (f === 'paint') return cat === 'paint';
-              if (f.includes('tile')) return cat.includes('tile');
-              if (f.includes('counter')) return cat.includes('counter') || cat.includes('floor');
-              if (f.includes('fixture')) return cat.includes('fixture');
-              if (f === 'exterior') return cat === 'exterior';
-              return cat.includes('appliance') || cat === 'general';
+              return cat === f || cat.includes(f) || f.includes(cat);
             });
 
             if (filtered.length === 0) {
@@ -1220,80 +1335,141 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
             }
 
             return (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '10px' }}>
-                {filtered.map((s) => (
-                  <div
-                    key={s.id}
-                    style={{
-                      backgroundColor: 'var(--color-zinc-900)',
-                      border: '1px solid var(--color-zinc-800)',
-                      borderTop: '3px solid var(--color-amber-500)',
-                      borderRadius: '8px',
-                      padding: '12px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      gap: '8px',
-                      position: 'relative'
-                    }}
-                  >
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <span
-                        style={{
-                          backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                          color: 'var(--color-amber-400)',
-                          fontSize: '0.7rem',
-                          fontWeight: 800,
-                          padding: '2px 8px',
-                          borderRadius: '4px',
-                          textTransform: 'uppercase'
-                        }}
-                      >
-                        {s.category || 'Spec'}
-                      </span>
-                      <button
-                        onClick={() => handleDeleteSpec(s.id, `${s.location}: ${s.code || s.title || ''}`)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: 'var(--color-zinc-500)',
-                          cursor: 'pointer',
-                          padding: '2px'
-                        }}
-                        title="Delete Spec"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '10px' }}>
+                {filtered.map((s) => {
+                  const isWholeHouse = s.scope === 'whole_house' || s.scope === 'exterior_general' || (s.location || '').toLowerCase().includes('whole house');
+                  const attrEntries = s.attributes && typeof s.attributes === 'object' ? Object.entries(s.attributes) : [];
+
+                  return (
+                    <div
+                      key={s.id}
+                      style={{
+                        backgroundColor: 'var(--color-zinc-900)',
+                        border: '1px solid var(--color-zinc-800)',
+                        borderTop: isWholeHouse ? '3px solid var(--color-amber-500)' : '3px solid #3b82f6',
+                        borderRadius: '8px',
+                        padding: '12px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '8px',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                          <span
+                            style={{
+                              backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                              color: 'var(--color-amber-400)',
+                              fontSize: '0.7rem',
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: '4px',
+                              textTransform: 'uppercase'
+                            }}
+                          >
+                            {s.category || 'Spec'}
+                          </span>
+                          <span
+                            style={{
+                              backgroundColor: isWholeHouse ? 'rgba(16, 185, 129, 0.12)' : 'rgba(59, 130, 246, 0.12)',
+                              color: isWholeHouse ? '#34d399' : '#60a5fa',
+                              fontSize: '0.65rem',
+                              fontWeight: 700,
+                              padding: '1px 6px',
+                              borderRadius: '4px'
+                            }}
+                          >
+                            {isWholeHouse ? '🏠 Whole House' : '📍 Specific Area'}
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                          <button
+                            onClick={() => handleOpenEditSpecModal(s)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--color-zinc-400)',
+                              cursor: 'pointer',
+                              padding: '3px'
+                            }}
+                            title="Edit Spec"
+                          >
+                            <Edit2 size={13} />
+                          </button>
+                          <button
+                            onClick={() => handleDeleteSpec(s.id, `${s.location}: ${s.code || s.name || s.title || ''}`)}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: 'var(--color-zinc-500)',
+                              cursor: 'pointer',
+                              padding: '3px'
+                            }}
+                            title="Delete Spec"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>
+                          <span>📍 {s.location || 'Whole House'}</span>
+                          {s.surface && (
+                            <span style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', color: '#d4d4d8', padding: '1px 6px', borderRadius: '4px', fontSize: '0.68rem' }}>
+                              {s.surface}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-100)', marginTop: '2px' }}>
+                          {s.brand ? `${s.brand} — ` : ''}{s.code || s.name || s.title || 'Unspecified'}
+                        </div>
+                      </div>
+
+                      {(s.sheen || s.specs) && (
+                        <div style={{ fontSize: '0.75rem', color: 'var(--color-zinc-300)', backgroundColor: 'var(--color-zinc-950)', padding: '4px 8px', borderRadius: '4px' }}>
+                          <strong>Finish / Specs:</strong> {s.sheen || s.specs}
+                        </div>
+                      )}
+
+                      {/* Custom Attributes Tags */}
+                      {attrEntries.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '2px' }}>
+                          {attrEntries.map(([k, v]) => (
+                            <span
+                              key={k}
+                              style={{
+                                fontSize: '0.7rem',
+                                backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                                border: '1px solid var(--color-zinc-800)',
+                                color: 'var(--color-zinc-300)',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                              }}
+                            >
+                              <strong style={{ color: 'var(--color-zinc-400)' }}>{k}:</strong> {v}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      {s.notes && (
+                        <div style={{ fontSize: '0.72rem', color: 'var(--color-zinc-400)', fontStyle: 'italic', marginTop: '2px' }}>
+                          "{s.notes}"
+                        </div>
+                      )}
                     </div>
-
-                    <div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)', textTransform: 'uppercase' }}>
-                        📍 {s.location || 'General Area'}
-                      </div>
-                      <div style={{ fontSize: '0.95rem', fontWeight: 800, color: 'var(--color-zinc-100)', marginTop: '2px' }}>
-                        {s.brand ? `${s.brand} — ` : ''}{s.code || s.title || 'Unspecified'}
-                      </div>
-                    </div>
-
-                    {(s.sheen || s.specs) && (
-                      <div style={{ fontSize: '0.78rem', color: 'var(--color-zinc-300)', backgroundColor: 'var(--color-zinc-950)', padding: '4px 8px', borderRadius: '4px' }}>
-                        <strong>Finish / Specs:</strong> {s.sheen || s.specs}
-                      </div>
-                    )}
-
-                    {s.notes && (
-                      <div style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontStyle: 'italic' }}>
-                        "{s.notes}"
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             );
           })()}
         </div>
       )}
 
-      {/* ADD FINISH SPEC MODAL */}
+      {/* ADD / EDIT FINISH SPEC MODAL */}
       {showAddSpecModal && (
         <div
           style={{
@@ -1315,8 +1491,10 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
               borderTop: '4px solid var(--color-amber-500)',
               borderRadius: '12px',
               padding: '20px',
-              maxWidth: '460px',
+              maxWidth: '480px',
               width: '100%',
+              maxHeight: '90vh',
+              overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
               gap: '14px'
@@ -1325,17 +1503,17 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800, color: 'var(--color-zinc-100)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <Palette size={18} style={{ color: 'var(--color-amber-400)' }} />
-                Add Finish Selection for {projectName}
+                {editingSpecId ? `Edit Finish Spec` : `Add Finish Selection for ${projectName}`}
               </h3>
               <button
-                onClick={() => setShowAddSpecModal(false)}
+                onClick={() => { setShowAddSpecModal(false); setEditingSpecId(null); }}
                 style={{ background: 'transparent', border: 'none', color: 'var(--color-zinc-400)', cursor: 'pointer' }}
               >
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleAddSpecSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <form onSubmit={handleSaveSpecSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               <div>
                 <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Category</label>
                 <select
@@ -1354,18 +1532,104 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 >
                   <option value="Paint">🎨 Paint & Stains</option>
                   <option value="Tile & Grout">🧱 Tile, Grout & Stone</option>
+                  <option value="Stucco">🏡 Stucco & Exterior Plaster</option>
+                  <option value="Stone">🏛️ Architectural Stone / Cantera</option>
+                  <option value="Roofing">🏠 Roofing & Gutters</option>
                   <option value="Countertops & Flooring">🪚 Countertops & Flooring</option>
                   <option value="Fixtures & Hardware">💡 Plumbing & Electrical Fixtures</option>
-                  <option value="Exterior">🏡 Exterior & Roofing</option>
+                  <option value="Siding & Millwork">🪵 Siding, Trim & Millwork</option>
                   <option value="Appliances & Custom">📝 Appliances & Custom</option>
                 </select>
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Room / Surface Location</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Surface / Application</label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '4px', marginBottom: '6px' }}>
+                  {['Interior Walls', 'Ceilings', 'Trim & Doors', 'Cabinets', 'Exterior Body / Walls', 'Accent Wall / Feature', 'Flooring / Countertop'].map((surf) => (
+                    <button
+                      key={surf}
+                      type="button"
+                      onClick={() => setNewSpecForm({ ...newSpecForm, surface: surf })}
+                      style={{
+                        padding: '4px 8px',
+                        borderRadius: '12px',
+                        border: '1px solid',
+                        borderColor: newSpecForm.surface === surf ? 'var(--color-amber-500)' : 'var(--color-zinc-800)',
+                        backgroundColor: newSpecForm.surface === surf ? 'rgba(245, 158, 11, 0.15)' : 'var(--color-zinc-950)',
+                        color: newSpecForm.surface === surf ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
+                        fontSize: '0.7rem',
+                        fontWeight: 600,
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {surf}
+                    </button>
+                  ))}
+                </div>
                 <input
                   type="text"
-                  placeholder="e.g. Interior Walls, Kitchen Island, Master Bath Shower"
+                  placeholder="e.g. Interior Walls, Ceilings, Cabinets, Trim"
+                  value={newSpecForm.surface}
+                  onChange={(e) => setNewSpecForm({ ...newSpecForm, surface: e.target.value })}
+                  style={{
+                    width: '100%',
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'var(--color-zinc-950)',
+                    color: '#fff',
+                    fontSize: '0.82rem'
+                  }}
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Scope / Default Hierarchy</label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginTop: '4px' }}>
+                  <button
+                    type="button"
+                    onClick={() => setNewSpecForm({ ...newSpecForm, scope: 'whole_house' })}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: newSpecForm.scope === 'whole_house' ? 'var(--color-amber-500)' : 'var(--color-zinc-700)',
+                      backgroundColor: newSpecForm.scope === 'whole_house' ? 'rgba(245, 158, 11, 0.15)' : 'var(--color-zinc-950)',
+                      color: newSpecForm.scope === 'whole_house' ? 'var(--color-amber-400)' : 'var(--color-zinc-400)',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    🏠 Whole-House Default
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNewSpecForm({ ...newSpecForm, scope: 'room_override' })}
+                    style={{
+                      padding: '6px 8px',
+                      borderRadius: '6px',
+                      border: '1px solid',
+                      borderColor: newSpecForm.scope === 'room_override' ? '#3b82f6' : 'var(--color-zinc-700)',
+                      backgroundColor: newSpecForm.scope === 'room_override' ? 'rgba(59, 130, 246, 0.15)' : 'var(--color-zinc-950)',
+                      color: newSpecForm.scope === 'room_override' ? '#60a5fa' : 'var(--color-zinc-400)',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    📍 Specific Room / Override
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>
+                  Location / Area <span style={{ color: 'var(--color-zinc-500)', fontWeight: 400 }}>(Optional — defaults to Whole House)</span>
+                </label>
+                <input
+                  type="text"
+                  placeholder="e.g. Whole House, Interior Walls, Master Bath Shower, Front Entry"
                   value={newSpecForm.location}
                   onChange={(e) => setNewSpecForm({ ...newSpecForm, location: e.target.value })}
                   style={{
@@ -1378,35 +1642,16 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                     fontSize: '0.85rem',
                     marginTop: '4px'
                   }}
-                  required
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Brand / Manufacturer / Store</label>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>
+                  Color Name / Code # / Product Model <span style={{ color: 'var(--color-amber-400)' }}>*</span>
+                </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sherwin-Williams, Daltile, Floor & Decor, Ferguson"
-                  value={newSpecForm.brand}
-                  onChange={(e) => setNewSpecForm({ ...newSpecForm, brand: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--color-zinc-700)',
-                    backgroundColor: 'var(--color-zinc-950)',
-                    color: '#fff',
-                    fontSize: '0.85rem',
-                    marginTop: '4px'
-                  }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Color Name / Code # / Model</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Pure White SW 7005, Cascading Waters 12x24"
+                  placeholder="e.g. SW 7005 Pure White, Dover White #104, Duration Shingle"
                   value={newSpecForm.code}
                   onChange={(e) => setNewSpecForm({ ...newSpecForm, code: e.target.value })}
                   style={{
@@ -1423,31 +1668,123 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 />
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Sheen / Size / Grout Specs</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Flat/Eggshell, Satin, Polished, Custom Polyblend Frost Grout"
-                  value={newSpecForm.sheen}
-                  onChange={(e) => setNewSpecForm({ ...newSpecForm, sheen: e.target.value })}
-                  style={{
-                    width: '100%',
-                    padding: '8px 10px',
-                    borderRadius: '6px',
-                    border: '1px solid var(--color-zinc-700)',
-                    backgroundColor: 'var(--color-zinc-950)',
-                    color: '#fff',
-                    fontSize: '0.85rem',
-                    marginTop: '4px'
-                  }}
-                />
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Brand / Supplier</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Sherwin-Williams, Master Wall"
+                    value={newSpecForm.brand}
+                    onChange={(e) => setNewSpecForm({ ...newSpecForm, brand: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--color-zinc-700)',
+                      backgroundColor: 'var(--color-zinc-950)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      marginTop: '4px'
+                    }}
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Finish / Sheen / Specs</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Flat, Satin, Sand Finish"
+                    value={newSpecForm.sheen}
+                    onChange={(e) => setNewSpecForm({ ...newSpecForm, sheen: e.target.value })}
+                    style={{
+                      width: '100%',
+                      padding: '8px 10px',
+                      borderRadius: '6px',
+                      border: '1px solid var(--color-zinc-700)',
+                      backgroundColor: 'var(--color-zinc-950)',
+                      color: '#fff',
+                      fontSize: '0.85rem',
+                      marginTop: '4px'
+                    }}
+                  />
+                </div>
+              </div>
+
+              {/* Dynamic Custom Details Section */}
+              <div style={{ backgroundColor: 'rgba(255, 255, 255, 0.02)', border: '1px solid var(--color-zinc-800)', borderRadius: '6px', padding: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: customAttributeEntries.length > 0 ? '8px' : '0' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-300)' }}>
+                    Custom Trade Details <span style={{ color: 'var(--color-zinc-500)', fontWeight: 400 }}>(Texture, Sealant, Thickness, Warranty, etc.)</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleAddCustomAttributeRow}
+                    style={{
+                      padding: '2px 8px',
+                      borderRadius: '4px',
+                      backgroundColor: 'rgba(245, 158, 11, 0.15)',
+                      border: '1px solid var(--color-amber-500)',
+                      color: 'var(--color-amber-400)',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '3px'
+                    }}
+                  >
+                    <Plus size={12} /> Add Detail
+                  </button>
+                </div>
+
+                {customAttributeEntries.map((row, idx) => (
+                  <div key={idx} style={{ display: 'flex', gap: '6px', marginBottom: '6px', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      placeholder="e.g. Texture"
+                      value={row.key}
+                      onChange={(e) => handleUpdateCustomAttributeRow(idx, 'key', e.target.value)}
+                      style={{
+                        width: '40%',
+                        padding: '6px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--color-zinc-700)',
+                        backgroundColor: 'var(--color-zinc-950)',
+                        color: '#fff',
+                        fontSize: '0.78rem'
+                      }}
+                    />
+                    <input
+                      type="text"
+                      placeholder="e.g. Medium Dash"
+                      value={row.value}
+                      onChange={(e) => handleUpdateCustomAttributeRow(idx, 'value', e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '6px 8px',
+                        borderRadius: '4px',
+                        border: '1px solid var(--color-zinc-700)',
+                        backgroundColor: 'var(--color-zinc-950)',
+                        color: '#fff',
+                        fontSize: '0.78rem'
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCustomAttributeRow(idx)}
+                      style={{ background: 'transparent', border: 'none', color: 'var(--color-zinc-500)', cursor: 'pointer', padding: '2px' }}
+                      title="Remove row"
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                ))}
               </div>
 
               <div>
                 <label style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--color-zinc-400)' }}>Additional Notes (Optional)</label>
                 <input
                   type="text"
-                  placeholder="e.g. Store #124, 4 extra boxes in garage, receipt in Drive"
+                  placeholder="e.g. Order 15% extra for waste, custom tint"
                   value={newSpecForm.notes}
                   onChange={(e) => setNewSpecForm({ ...newSpecForm, notes: e.target.value })}
                   style={{
@@ -1463,17 +1800,18 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 />
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '10px' }}>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
                 <button
                   type="button"
-                  onClick={() => setShowAddSpecModal(false)}
+                  onClick={() => { setShowAddSpecModal(false); setEditingSpecId(null); }}
                   style={{
-                    backgroundColor: 'transparent',
-                    border: '1px solid var(--color-zinc-700)',
-                    color: 'var(--color-zinc-300)',
-                    borderRadius: '6px',
                     padding: '8px 14px',
+                    borderRadius: '6px',
+                    border: '1px solid var(--color-zinc-700)',
+                    backgroundColor: 'transparent',
+                    color: 'var(--color-zinc-300)',
                     fontSize: '0.8rem',
+                    fontWeight: 700,
                     cursor: 'pointer'
                   }}
                 >
@@ -1482,17 +1820,17 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
                 <button
                   type="submit"
                   style={{
+                    padding: '8px 16px',
+                    borderRadius: '6px',
+                    border: 'none',
                     backgroundColor: 'var(--color-amber-500)',
                     color: '#000',
-                    border: 'none',
-                    borderRadius: '6px',
-                    padding: '8px 16px',
                     fontSize: '0.8rem',
                     fontWeight: 800,
                     cursor: 'pointer'
                   }}
                 >
-                  Save Finish Spec
+                  {editingSpecId ? 'Save Changes' : 'Add Finish'}
                 </button>
               </div>
             </form>

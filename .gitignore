@@ -27,7 +27,6 @@ dist-ssr/
 *.suo
 *.ntvsca
 *.njsproj
-*.sln
-*.swp
 *.xlsx
 .vercel
+demo-video/

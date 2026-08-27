@@ -82,6 +82,30 @@ export const PROJECT_DOC_REGISTRY = {
       '<!-- section: approved -->\n## 1. Approved Change Orders\n\n' +
       '<!-- section: pending -->\n## 2. Pending Client Review\n\n' +
       '<!-- section: draft -->\n## 3. Draft & In-Estimation\n'
+  },
+
+  finishes_specs: {
+    docType: 'finishes_specs',
+    displayName: 'Finishes & Material Selections',
+    masterResourceType: 'finishes_master',
+    projectResourceType: 'project_finishes',
+    folderPatterns: ['finishes', 'specs', 'selections', 'finishes & specs', 'finishes and specs', 'materials'],
+    filePatterns: [/finishes.*(spec|selection|list|schedule)/i, /material.*spec/i, /finishes.*and.*specs/i],
+    canonicalFileName: 'Finishes and Material Selections.docx',
+    defaultFolderName: 'Finishes & Specifications',
+    masterTemplate: (version = 'v1.0') =>
+      '# Finishes & Material Specifications (Company Master Standards — ' + version + ')\n' +
+      'DocumentId: doc_finishes_master_uuid\n' +
+      '<!-- version: ' + version.replace('v', '') + ' -->\n\n' +
+      '<!-- section: paint -->\n## 1. Paint & Stains\n* [Whole House - Interior Walls]: Sherwin-Williams SW 7005 Pure White (Flat)\n* [Whole House - Ceilings]: Sherwin-Williams SW 7005 Pure White Flat\n* [Whole House - Trim & Doors]: Sherwin-Williams SW 7005 Pure White (Semi-Gloss)\n\n' +
+      '<!-- section: roofing -->\n## 2. Roofing & Gutters\n* [Whole House - Main Roof]: Owens Corning Duration Architectural Shingle (Estate Gray)\n',
+    projectTemplate: (projectId, docId = '', fileName = 'Finishes and Material Selections.docx', masterVersion = 'v1.0') =>
+      '# Finishes & Material Specifications - Project ' + projectId + ' (Template: ' + masterVersion + ')\n' +
+      'DocumentId: ' + docId + '\n' +
+      'DocumentName: ' + fileName + '\n' +
+      '<!-- initial_master_version: ' + masterVersion + ' -->\n\n' +
+      '<!-- section: paint -->\n## 1. Paint & Stains\n\n' +
+      '<!-- section: roofing -->\n## 2. Roofing & Gutters\n'
   }
 };
 

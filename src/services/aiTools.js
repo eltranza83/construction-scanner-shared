@@ -48,6 +48,15 @@ import {
   MASTER_PROJECT_ID
 } from './googleDocsPurchasingService.js';
 import { purchasingService, PURCHASING_STATUSES, TRADE_SECTION_MAP as STRUCTURED_TRADE_MAP } from './purchasingService.js';
+import {
+  fetchProjectFinishes,
+  saveFinishSpec,
+  deleteFinishSpec,
+  findMatchingFinish,
+  formatFinishesForAI,
+  FINISH_SCOPES,
+  exportToGoogleDocMarkdown as exportFinishesToMarkdown
+} from './finishService.js';
 import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
 import { fetchGoogleDocText } from './googleDrive.js';
 import { normalizeSpreadsheetDate, getTodayCalendarDate } from './sheetsDataService.js';
@@ -102,6 +111,11 @@ export const TOOL_REGISTRY = {
     type: 'ACTION',
     source: 'Purchasing Exporter',
     description: 'Generates a clean printable/exportable Markdown Google Doc checklist from Firestore.'
+  },
+  export_finishes_doc: {
+    type: 'ACTION',
+    source: 'Finishes Exporter',
+    description: 'Generates a clean printable/exportable Markdown Google Doc specification sheet from Firestore.'
   },
   remove_purchasing_section: {
     type: 'WRITE',
@@ -1764,27 +1778,117 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       break;
     }
 
+    case 'get_project_finishes':
     case 'get_homeowner_specs': {
-      const cat = (args.category || '').toLowerCase();
-      const room = (args.room || '').toLowerCase();
-      const specs = projectSpecs.filter(s => {
+      const cat = (args.category || '').toLowerCase().trim();
+      const room = (args.room || args.location || '').toLowerCase().trim();
+      const surface = (args.surface || '').toLowerCase().trim();
+      const targetProj = args.projectId || projectContext?.projectId;
+      
+      let allSpecs = Array.isArray(projectSpecs) && projectSpecs.length > 0 ? projectSpecs : [];
+      if (targetProj && allSpecs.length === 0) {
+        try {
+          allSpecs = await fetchProjectFinishes(targetProj);
+        } catch (_) {}
+      }
+
+      const filtered = allSpecs.filter(s => {
         const matchesCat = !cat || (s.category || '').toLowerCase().includes(cat);
-        const matchesRoom = !room || (s.location || '').toLowerCase().includes(room);
-        return matchesCat && matchesRoom;
+        const matchesRoom = !room || (s.location || '').toLowerCase().includes(room) || (s.scope || '').toLowerCase().includes(room);
+        const matchesSurface = !surface || (s.surface || '').toLowerCase().includes(surface);
+        return matchesCat && matchesRoom && matchesSurface;
+      });
+
+      const formatted = formatFinishesForAI(filtered);
+      resultPayload = {
+        found: formatted.found,
+        count: formatted.count,
+        wholeHouseDefaults: formatted.wholeHouseDefaults,
+        locationOverrides: formatted.locationOverrides,
+        categories: formatted.categories,
+        summaryText: formatted.summaryText,
+        provenance: 'Firestore (/projects/' + (targetProj || 'active') + '/finishes)'
+      };
+      break;
+    }
+
+    case 'save_finish_spec': {
+      const targetProj = args.projectId || projectContext?.projectId;
+      if (!targetProj) {
+        resultPayload = {
+          success: false,
+          error: 'No active project identified to save finish specification.'
+        };
+        break;
+      }
+
+      let allSpecs = Array.isArray(projectSpecs) ? projectSpecs : [];
+      try {
+        allSpecs = await fetchProjectFinishes(targetProj);
+      } catch (_) {}
+
+      // Check conservative matching if specId not explicitly provided
+      if (!args.specId) {
+        const matchResult = findMatchingFinish(allSpecs, {
+          category: args.category,
+          location: args.location,
+          surface: args.surface,
+          scope: args.scope
+        });
+
+        if (matchResult.ambiguous) {
+          resultPayload = {
+            success: false,
+            ambiguous: true,
+            message: `I found multiple ${args.category} specifications for this project (${matchResult.candidates.map(c => `${c.location} [${c.surface || 'General'}]: ${c.brand ? c.brand + ' ' : ''}${c.code}`).join(', ')}). Which specific surface or location would you like me to update?`,
+            candidates: matchResult.candidates
+          };
+          break;
+        }
+
+        if (matchResult.match) {
+          // Exact single match found -> update that document in place
+          args.specId = matchResult.match.id;
+        }
+      }
+
+      const saved = await saveFinishSpec(targetProj, {
+        id: args.specId || undefined,
+        category: args.category,
+        location: args.location || 'Whole House',
+        surface: args.surface || undefined,
+        scope: args.scope,
+        code: args.codeOrProduct || args.code,
+        name: args.codeOrProduct || args.name,
+        brand: args.brand,
+        sheen: args.sheen,
+        attributes: args.attributes || {},
+        notes: args.notes,
+        source: 'voice_ai'
       });
 
       resultPayload = {
-        found: specs.length > 0,
-        count: specs.length,
-        message: specs.length === 0 ? 'I cannot locate any finish or paint specifications matching that request.' : undefined,
-        specs: specs.map(s => ({
-          category: s.category,
-          location: s.location,
-          brand: s.brand,
-          title: s.title || s.code,
-          sheen: s.sheen,
-          notes: s.notes
-        }))
+        success: true,
+        action: args.specId ? 'updated' : 'created',
+        spec: saved,
+        message: `Successfully ${args.specId ? 'updated' : 'saved'} ${saved.category} specification (${saved.location} - ${saved.surface}: ${saved.brand ? saved.brand + ' ' : ''}${saved.code}) in Firestore.`
+      };
+      break;
+    }
+
+    case 'export_finishes_doc': {
+      const targetProj = args.projectId || projectContext?.projectId || 'lot_3';
+      const projLabel = projectContext?.activeProjectName || targetProj || 'Lot';
+
+      const markdown = await exportFinishesToMarkdown(targetProj, {
+        title: `Finishes & Material Specifications - ${projLabel}`
+      });
+
+      resultPayload = {
+        success: true,
+        projectId: targetProj,
+        markdown,
+        message: `Generated clean finishes & material specifications export for ${projLabel}.`
       };
       break;
     }
