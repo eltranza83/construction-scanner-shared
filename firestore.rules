@@ -73,6 +73,15 @@ service cloud.firestore {
       allow delete: if signedIn() && (isAdmin() || resource.data.uid == request.auth.uid);
     }
 
+    match /projects/{projectId} {
+      allow read, create, update: if signedIn();
+      allow delete: if signedIn() && (
+        isAdmin()
+        || resource.data.ownerEmail == request.auth.token.email
+        || resource.data.ownerUid == request.auth.uid
+      );
+    }
+
     match /projects/{projectId}/purchasing_items/{itemId} {
       allow read, write: if signedIn();
     }
