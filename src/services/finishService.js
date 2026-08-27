@@ -227,7 +227,7 @@ export class FirestoreFinishAdapter {
       }
 
       // Check legacy migration if Firestore is empty
-      const migrated = migrateLegacyLocalStorageSpecs(projectId);
+      const migrated = await migrateLegacyLocalStorageSpecs(projectId);
       if (migrated && migrated.length > 0) {
         const sorted = sortFinishes(migrated);
         await this.fallback.saveSpecs(projectId, sorted);
