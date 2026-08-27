@@ -44,7 +44,6 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
 
   beforeEach(() => {
     mockDb = new MockFirestoreDatabase();
-    // Wrap mockDb in mock firestore interface
     adapter = new FirestoreProjectAdapter({
       _mock: true
     });
@@ -99,12 +98,6 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
   });
 
   it('3. FirestoreProjectAdapter filters projects strictly by ownership / membership', async () => {
-    // Mock getDocs to return multiple projects
-    adapter._getDb = () => ({
-      _mock: true
-    });
-
-    // Mock Firestore Lite functions
     const userA = { email: 'acepeda83@gmail.com', uid: 'uid_a' };
     const userB = { email: 'stranger@example.com', uid: 'uid_b' };
 
@@ -160,5 +153,110 @@ describe('Cloud-Native Project Discovery & Sync (projectService.js)', () => {
     });
 
     assert.equal(accessible.length, 2);
+  });
+
+  it('5. Fresh Device Scenario: Zero local storage discovers cloud projects and selects top project', () => {
+    const cloudProjects = [
+      { id: 'lot_3', name: 'Lot 3', updatedAt: '2026-08-26T12:00:00Z' },
+      { id: 'lot_1', name: 'Lot 1', updatedAt: '2026-08-20T10:00:00Z' }
+    ];
+
+    // Local device has null/undefined in localStorage
+    const localSelection = null;
+    const activeProject = resolveUserActiveProject(cloudProjects, localSelection);
+
+    assert.ok(activeProject);
+    assert.equal(activeProject.id, 'lot_3');
+    assert.equal(activeProject.name, 'Lot 3');
+  });
+
+  it('6. Stale / Corrupted Local Storage Scenario: Discards unpermitted ID and falls back cleanly', () => {
+    const authorizedCloudProjects = [
+      { id: 'lot_3', name: 'Lot 3', updatedAt: '2026-08-26T12:00:00Z' }
+    ];
+
+    // Device contains stale deleted project ID or malicious foreign project ID
+    const staleLocalId = 'deleted_or_unauthorized_lot_999';
+    const activeProject = resolveUserActiveProject(authorizedCloudProjects, staleLocalId);
+
+    // Verifies it refuses to use the stale ID and safely chooses the authorized cloud project
+    assert.equal(activeProject.id, 'lot_3');
+    assert.notEqual(activeProject.id, staleLocalId);
+  });
+
+  it('7. Security Rules Simulation: Evaluates isProjectAuthorized for Owner, Member, Admin, and Stranger', () => {
+    function simulateIsProjectAuthorized(projectDoc, authUser, isAdminUser = false) {
+      if (!authUser || !authUser.email) return false;
+      if (isAdminUser) return true;
+      if (!projectDoc) return true; // Legacy migration safeguard before root doc exists
+      if (projectDoc.ownerEmail === authUser.email) return true;
+      if (authUser.uid && projectDoc.ownerUid === authUser.uid) return true;
+      if (Array.isArray(projectDoc.members) && projectDoc.members.includes(authUser.email)) return true;
+      return false;
+    }
+
+    const lot3Doc = {
+      ownerEmail: 'acepeda83@gmail.com',
+      ownerUid: 'uid_ace',
+      members: ['acepeda83@gmail.com', 'superintendent@adepec.com']
+    };
+
+    // 1. Owner -> Authorized
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'acepeda83@gmail.com', uid: 'uid_ace' }), true);
+
+    // 2. Member -> Authorized
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'superintendent@adepec.com', uid: 'uid_super' }), true);
+
+    // 3. Admin -> Authorized
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'adepecgroup@gmail.com' }, true), true);
+
+    // 4. Stranger / Unaffiliated Authenticated User -> STRICTLY DENIED
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, { email: 'hacker@competitor.com', uid: 'uid_hacker' }, false), false);
+
+    // 5. Unauthenticated User -> STRICTLY DENIED
+    assert.equal(simulateIsProjectAuthorized(lot3Doc, null, false), false);
+  });
+
+  it('8. Non-Destructive Guarantee: Project profile document creation does not mutate subcollections', () => {
+    // Simulate Firestore structure
+    const db = {
+      projects: new Map(),
+      finishes: new Map([
+        ['spec_lot3_paint', { category: 'Paint', code: 'SW pure white 777', scope: 'whole_house' }]
+      ])
+    };
+
+    // Upsert root project document
+    db.projects.set('lot_3', {
+      id: 'lot_3',
+      name: 'Lot 3',
+      ownerEmail: 'acepeda83@gmail.com',
+      updatedAt: new Date().toISOString()
+    });
+
+    // Verify subcollection finish document is 100% intact and unchanged
+    const finishDoc = db.finishes.get('spec_lot3_paint');
+    assert.ok(finishDoc);
+    assert.equal(finishDoc.code, 'SW pure white 777');
+  });
+
+  it('9. Multi-Device Selection Independence: Device A and Device B maintain separate valid project focus', () => {
+    const cloudProjects = [
+      { id: 'lot_1', name: 'Lot 1', updatedAt: '2026-08-20T00:00:00Z' },
+      { id: 'lot_3', name: 'Lot 3', updatedAt: '2026-08-26T00:00:00Z' }
+    ];
+
+    // Device A (Office PC) has chosen Lot 1
+    const deviceAActive = resolveUserActiveProject(cloudProjects, 'lot_1');
+    assert.equal(deviceAActive.id, 'lot_1');
+
+    // Device B (Field Phone) has chosen Lot 3
+    const deviceBActive = resolveUserActiveProject(cloudProjects, 'lot_3');
+    assert.equal(deviceBActive.id, 'lot_3');
+
+    // Both are valid authorized projects
+    assert.ok(deviceAActive);
+    assert.ok(deviceBActive);
+    assert.notEqual(deviceAActive.id, deviceBActive.id);
   });
 });

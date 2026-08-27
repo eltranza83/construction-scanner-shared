@@ -194,3 +194,4 @@ export async function saveUserProject(project, user = null) {
 export async function deleteUserProject(projectId, user = null) {
   return await defaultProjectAdapter.deleteProject(projectId, user);
 }
+
