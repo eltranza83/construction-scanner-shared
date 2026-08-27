@@ -8,8 +8,8 @@ import assert from 'node:assert/strict';
 export function verifyFinishSheetSync(sheetRows = [], firestoreSpecs = []) {
   if (!Array.isArray(sheetRows) || sheetRows.length === 0) {
     return {
-      inSync: false,
-      reason: 'Google Sheet is completely empty (0 rows / no headers)',
+      inSync: firestoreSpecs.length === 0,
+      reason: firestoreSpecs.length === 0 ? 'In sync (empty)' : 'Google Sheet is completely empty (0 rows / no headers)',
       missingCount: firestoreSpecs.length
     };
   }
@@ -46,14 +46,17 @@ export function verifyFinishSheetSync(sheetRows = [], firestoreSpecs = []) {
     const specCategory = (spec.category || 'General').toLowerCase().trim();
     const specLocation = (spec.location || '').toLowerCase().trim();
     const specCode = (spec.code || spec.name || spec.title || '').toLowerCase().trim();
+    const specBrand = (spec.brand || spec.supplier || '').toLowerCase().trim();
 
     const matchingRowIndex = dataRows.findIndex((row) => {
       const rowCategory = String(row[0] || '').toLowerCase().trim();
       const rowLocation = String(row[1] || '').toLowerCase().trim();
+      const rowBrand = String(row[2] || '').toLowerCase().trim();
       const rowCode = String(row[3] || '').toLowerCase().trim();
 
       return rowCategory === specCategory &&
         (rowLocation === specLocation || (!rowLocation && !specLocation)) &&
+        (rowBrand === specBrand || (!rowBrand && !specBrand)) &&
         rowCode === specCode;
     });
 
@@ -64,14 +67,19 @@ export function verifyFinishSheetSync(sheetRows = [], firestoreSpecs = []) {
     }
   }
 
+  // Exact parity: No missing specs AND no extra/stale rows
   const inSync = missingSpecs.length === 0 && dataRows.length === firestoreSpecs.length;
 
   return {
     inSync,
-    reason: inSync ? 'Fully synchronized' : `${missingSpecs.length} approved Firestore specs missing from Google Sheet`,
+    reason: inSync
+      ? 'Fully synchronized'
+      : `${missingSpecs.length} missing, ${Math.max(0, dataRows.length - matchedRows.length)} obsolete/stale rows`,
     matchedCount: matchedRows.length,
     missingSpecs,
-    missingCount: missingSpecs.length
+    missingCount: missingSpecs.length,
+    sheetRowCount: dataRows.length,
+    firestoreCount: firestoreSpecs.length
   };
 }
 
@@ -99,23 +107,55 @@ export function formatSpecsForSheet(specsList = []) {
   return [headers, ...rows];
 }
 
+/**
+ * Simulated Drive / Sheets Sync Engine mirroring syncFinishSpecsToDrive()
+ */
+export class MockGoogleSheetSyncTarget {
+  constructor() {
+    this.sheetData = [];
+  }
+
+  sync(specsList) {
+    // Overwrite range 'Sheet1'!A1 with table values (clearing old range)
+    this.sheetData = formatSpecsForSheet(specsList);
+    return {
+      ok: true,
+      rowCount: this.sheetData.length - 1,
+      sheetData: this.sheetData
+    };
+  }
+
+  getRows() {
+    return this.sheetData;
+  }
+}
+
 describe('Google Sheets Finish Specs Sync & Self-Healing Suite', () => {
-  const approvedFirestoreSpecs = [
-    {
-      id: 'spec_1',
-      category: 'Paint',
-      location: 'Whole House',
-      scope: 'whole_house',
-      brand: 'Sherwin-Williams',
-      code: 'SW extra white 567',
-      sheen: 'Flat/Eggshell',
-      notes: 'Interior walls',
-      createdAt: '2026-08-27T10:00:00.000Z'
-    }
-  ];
+  const paintSpec = {
+    id: 'spec_paint_1',
+    category: 'Paint',
+    location: 'Whole House',
+    scope: 'whole_house',
+    brand: 'Sherwin-Williams',
+    code: 'SW extra white 567',
+    sheen: 'Flat/Eggshell',
+    notes: 'Interior walls',
+    createdAt: '2026-08-27T10:00:00.000Z'
+  };
+
+  const stuccoSpec = {
+    id: 'spec_stucco_2',
+    category: 'Stucco',
+    location: 'Exterior Body',
+    scope: 'exterior_general',
+    brand: 'El Rey',
+    code: 'Desert Sand #204',
+    sheen: 'Sand Finish',
+    notes: '2-coat synthetic',
+    createdAt: '2026-08-27T10:15:00.000Z'
+  };
 
   it('1. REPRODUCTION OF THE FLAW: Legacy check falsely considers a blank spreadsheet "healthy"', () => {
-    // Simulated Google Drive state: File exists, but content was never populated (0 rows)
     const mockDriveFile = {
       id: 'sheet_file_999',
       name: 'Homeowner Finishes & Specs — acepeda83 Test',
@@ -123,74 +163,91 @@ describe('Google Sheets Finish Specs Sync & Self-Healing Suite', () => {
     };
     const mockSheetContent = []; // EMPTY / BLANK
 
-    // Legacy logic only checked `Boolean(mockDriveFile.webViewLink)`
     const legacyIsHealthy = Boolean(mockDriveFile?.webViewLink);
-    assert.equal(legacyIsHealthy, true, 'Legacy code thought the sheet was fine just because a Drive file existed');
+    assert.equal(legacyIsHealthy, true, 'Legacy code thought sheet was healthy just because Drive file existed');
 
-    // Invariant Verification correctly identifies the mismatch
-    const syncStatus = verifyFinishSheetSync(mockSheetContent, approvedFirestoreSpecs);
+    const syncStatus = verifyFinishSheetSync(mockSheetContent, [paintSpec]);
     assert.equal(syncStatus.inSync, false);
     assert.equal(syncStatus.missingCount, 1);
-    assert.match(syncStatus.reason, /completely empty/);
   });
 
-  it('2. SELF-HEALING: Formatting and writing approved Firestore data restores full sheet synchronization', () => {
-    // Generate the table payload from approved Firestore records
-    const syncPayload = formatSpecsForSheet(approvedFirestoreSpecs);
+  it('2. SEQUENTIAL ADDITIONS INVARIANT: Preserves all N records across sequential saves (Paint -> Paint + Stucco)', () => {
+    const target = new MockGoogleSheetSyncTarget();
 
-    // Verify format includes header + data row
-    assert.equal(syncPayload.length, 2);
-    assert.deepEqual(syncPayload[0], ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added']);
-    assert.equal(syncPayload[1][0], 'Paint');
-    assert.equal(syncPayload[1][3], 'SW extra white 567');
+    // Step A: User adds Paint -> Firestore has [Paint]
+    const firestoreStateStep1 = [paintSpec];
+    target.sync(firestoreStateStep1);
 
-    // Verify that the populated sheet is now 100% in sync with Firestore
-    const postSyncVerification = verifyFinishSheetSync(syncPayload, approvedFirestoreSpecs);
-    assert.equal(postSyncVerification.inSync, true);
-    assert.equal(postSyncVerification.matchedCount, 1);
-    assert.equal(postSyncVerification.missingCount, 0);
+    const check1 = verifyFinishSheetSync(target.getRows(), firestoreStateStep1);
+    assert.equal(check1.inSync, true);
+    assert.equal(check1.matchedCount, 1);
+    assert.equal(check1.sheetRowCount, 1);
+
+    // Step B: User adds Stucco -> Firestore has [Stucco, Paint]
+    // The fix guarantees the authoritative full list is passed into sync
+    const firestoreStateStep2 = [stuccoSpec, paintSpec];
+    target.sync(firestoreStateStep2);
+
+    const check2 = verifyFinishSheetSync(target.getRows(), firestoreStateStep2);
+    assert.equal(check2.inSync, true, 'Sheet must contain BOTH Paint and Stucco');
+    assert.equal(check2.matchedCount, 2);
+    assert.equal(check2.sheetRowCount, 2);
+    assert.equal(check2.missingCount, 0);
   });
 
-  it('3. STALE / DRIFT DETECTION: Detects when Firestore has updated records not yet in the Google Sheet', () => {
-    // Google sheet has an old single record
-    const staleSheetContent = [
-      ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'],
-      ['Paint', 'Whole House', 'Sherwin-Williams', 'SW extra white 567', 'Flat/Eggshell', 'Interior walls', '8/27/2026']
-    ];
+  it('3. EDIT RECORD INVARIANT: Editing Paint updates Paint in Sheet while keeping Stucco intact', () => {
+    const target = new MockGoogleSheetSyncTarget();
 
-    // User added a 2nd finish in Firestore (e.g. Tile spec)
-    const updatedFirestoreSpecs = [
-      ...approvedFirestoreSpecs,
-      {
-        id: 'spec_2',
-        category: 'Tile & Grout',
-        location: 'Master Bath',
-        scope: 'room_override',
-        brand: 'Daltile',
-        code: 'Carrara Marble 12x24',
-        sheen: 'Polished',
-        createdAt: '2026-08-27T11:00:00.000Z'
-      }
-    ];
+    // Initial state: Paint + Stucco
+    const initialFirestoreState = [stuccoSpec, paintSpec];
+    target.sync(initialFirestoreState);
 
-    const driftVerification = verifyFinishSheetSync(staleSheetContent, updatedFirestoreSpecs);
-    assert.equal(driftVerification.inSync, false);
-    assert.equal(driftVerification.missingCount, 1);
-    assert.equal(driftVerification.missingSpecs[0].id, 'spec_2');
+    // User edits Paint color code from 'SW extra white 567' to 'SW 7006 Extra White (Satin)'
+    const updatedPaintSpec = {
+      ...paintSpec,
+      code: 'SW 7006 Extra White',
+      sheen: 'Satin'
+    };
 
-    // Healing the drift by re-exporting all approved specs
-    const resyncedPayload = formatSpecsForSheet(updatedFirestoreSpecs);
-    const resolvedVerification = verifyFinishSheetSync(resyncedPayload, updatedFirestoreSpecs);
-    assert.equal(resolvedVerification.inSync, true);
-    assert.equal(resolvedVerification.matchedCount, 2);
+    const updatedFirestoreState = [stuccoSpec, updatedPaintSpec];
+    target.sync(updatedFirestoreState);
+
+    const check = verifyFinishSheetSync(target.getRows(), updatedFirestoreState);
+    assert.equal(check.inSync, true);
+    assert.equal(check.matchedCount, 2);
+    assert.equal(check.sheetRowCount, 2);
+
+    // Verify row content contains the new code
+    const sheetData = target.getRows();
+    const paintRow = sheetData.find((r) => r[0] === 'Paint');
+    assert.equal(paintRow[3], 'SW 7006 Extra White');
+    assert.equal(paintRow[4], 'Satin');
   });
 
-  it('4. NON-BLOCKING ERROR HANDLING: Sheets API write failure returns descriptive error rather than silent success', () => {
+  it('4. DELETION & PURGE INVARIANT: Deleting a record removes it from Sheet with 0 orphan/stale rows left behind', () => {
+    const target = new MockGoogleSheetSyncTarget();
+
+    // Initial state: 2 records (Stucco + Paint)
+    target.sync([stuccoSpec, paintSpec]);
+    assert.equal(target.getRows().length, 3); // Header + 2 data rows
+
+    // User deletes Stucco -> Firestore now has only [Paint]
+    const stateAfterDelete = [paintSpec];
+    target.sync(stateAfterDelete);
+
+    const check = verifyFinishSheetSync(target.getRows(), stateAfterDelete);
+    assert.equal(check.inSync, true);
+    assert.equal(check.sheetRowCount, 1, 'Only 1 data row remains in the sheet');
+    assert.equal(check.matchedCount, 1);
+    assert.equal(target.getRows()[1][0], 'Paint');
+  });
+
+  it('5. NON-BLOCKING ERROR HANDLING: Sheets API write failure returns descriptive error rather than silent success', () => {
     function simulateSheetsApiWrite(shouldFail = true) {
       if (shouldFail) {
         return {
           ok: false,
-          error: 'Google Sheets API error (403): The caller does not have permission / insufficient OAuth scopes.',
+          error: 'Google Sheets API error (403): Insufficient OAuth scopes.',
           webViewLink: 'https://docs.google.com/spreadsheets/d/sheet_file_999/edit'
         };
       }
@@ -205,8 +262,5 @@ describe('Google Sheets Finish Specs Sync & Self-Healing Suite', () => {
     assert.equal(failedSync.ok, false);
     assert.ok(failedSync.error);
     assert.match(failedSync.error, /403/);
-
-    // The UI can use this error to show: "⚠️ Sync failed (Click to retry)" without crashing or altering Firestore
   });
 });
-

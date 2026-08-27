@@ -707,24 +707,20 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
         attributes: attributesMap
       });
 
-      // Local state will automatically sync via subscribeToProjectFinishes,
-      // but we update immediately for optimistic rendering:
-      let updatedList = [];
-      setSpecs((prev) => {
-        const existingIdx = prev.findIndex((s) => s.id === savedDoc.id);
-        if (existingIdx >= 0) {
-          const updated = [...prev];
-          updated[existingIdx] = savedDoc;
-          updatedList = updated;
-          return updated;
-        }
-        updatedList = [savedDoc, ...prev];
-        return updatedList;
-      });
+      // 1. Authoritative Full List: Synchronously compute full updated dataset
+      // to guarantee complete data parity and prevent React async closure staleness
+      const existingIdx = specs.findIndex((s) => s.id === savedDoc.id);
+      const fullApprovedList = existingIdx >= 0
+        ? specs.map((s, idx) => (idx === existingIdx ? savedDoc : s))
+        : [savedDoc, ...specs];
 
+      // 2. Optimistic UI update
+      setSpecs(fullApprovedList);
+
+      // 3. Synchronize the complete approved Firestore dataset to Google Sheet
       if (googleToken && activeProject?.folderId) {
         setSheetSyncStatus('syncing');
-        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updatedList.length > 0 ? updatedList : [savedDoc]).then((res) => {
+        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, fullApprovedList).then((res) => {
           if (res?.ok && res?.webViewLink) {
             setFinishDriveLink(res.webViewLink);
             setSheetSyncStatus('synced');
