@@ -678,18 +678,21 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
 
       // Local state will automatically sync via subscribeToProjectFinishes,
       // but we update immediately for optimistic rendering:
+      let updatedList = [];
       setSpecs((prev) => {
         const existingIdx = prev.findIndex((s) => s.id === savedDoc.id);
         if (existingIdx >= 0) {
           const updated = [...prev];
           updated[existingIdx] = savedDoc;
+          updatedList = updated;
           return updated;
         }
-        return [savedDoc, ...prev];
+        updatedList = [savedDoc, ...prev];
+        return updatedList;
       });
 
       if (googleToken && activeProject?.folderId) {
-        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, specs).then((res) => {
+        syncFinishSpecsToDrive(googleToken, activeProject.folderId, projectName, updatedList.length > 0 ? updatedList : [savedDoc]).then((res) => {
           if (res?.webViewLink) setFinishDriveLink(res.webViewLink);
         }).catch(() => {});
       }

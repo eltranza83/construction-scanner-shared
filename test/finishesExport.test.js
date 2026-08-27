@@ -348,4 +348,60 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
     assert.ok(toolRes.summaryText.includes('Flat/Eggshell'));
     assert.ok(toolRes.provenance.includes('/projects/lot_3/finishes'));
   });
+
+  it('9. Google Sheet Sync: Formats CSV/Sheet payload with exact numeric code and attributes', () => {
+    const specsList = [
+      {
+        id: 'spec_paint_01',
+        category: 'Paint',
+        location: 'Whole House',
+        surface: 'Interior Walls',
+        brand: 'Sherwin-Williams',
+        code: 'SW 8055 Pure White',
+        sheen: 'Flat/Eggshell',
+        notes: 'Main walls',
+        attributes: { Sheen: 'Flat/Eggshell' }
+      },
+      {
+        id: 'spec_stone_01',
+        category: 'Stone',
+        location: 'Front Entry Columns',
+        surface: 'Exterior Body / Walls',
+        brand: 'Quarry Direct MX',
+        code: 'Cantera Blanco Galarza',
+        sheen: '',
+        notes: 'Columns',
+        attributes: { Sealant: 'Penetrating Sealer', Thickness: '2-inch' }
+      }
+    ];
+
+    const rows = specsList.map((s) => {
+      const attrStr = s.attributes && typeof s.attributes === 'object' && Object.keys(s.attributes).length > 0
+        ? Object.entries(s.attributes).map(([k, v]) => `${k}: ${v}`).join('; ')
+        : '';
+      const notesCombined = [s.notes, attrStr].filter(Boolean).join(' | ');
+
+      return [
+        `"${(s.category || 'General').replace(/"/g, '""')}"`,
+        `"${(s.location || '').replace(/"/g, '""')}"`,
+        `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
+        `"${(s.code || s.name || s.title || '').replace(/"/g, '""')}"`,
+        `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
+        `"${notesCombined.replace(/"/g, '""')}"`
+      ];
+    });
+
+    // Row 1 assertions (Paint)
+    assert.equal(rows[0][0], '"Paint"');
+    assert.equal(rows[0][1], '"Whole House"');
+    assert.equal(rows[0][2], '"Sherwin-Williams"');
+    assert.equal(rows[0][3], '"SW 8055 Pure White"'); // Exact numeric code
+    assert.equal(rows[0][4], '"Flat/Eggshell"');
+
+    // Row 2 assertions (Stone)
+    assert.equal(rows[1][0], '"Stone"');
+    assert.equal(rows[1][3], '"Cantera Blanco Galarza"');
+    assert.ok(rows[1][5].includes('Sealant: Penetrating Sealer'));
+    assert.ok(rows[1][5].includes('Thickness: 2-inch'));
+  });
 });

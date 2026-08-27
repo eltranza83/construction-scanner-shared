@@ -972,15 +972,22 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
 
     // 2. Format CSV content
     const headers = ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'];
-    const rows = specsList.map((s) => [
-      `"${(s.category || 'General').replace(/"/g, '""')}"`,
-      `"${(s.location || '').replace(/"/g, '""')}"`,
-      `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
-      `"${(s.code || s.title || '').replace(/"/g, '""')}"`,
-      `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
-      `"${(s.notes || '').replace(/"/g, '""')}"`,
-      `"${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}"`
-    ]);
+    const rows = specsList.map((s) => {
+      const attrStr = s.attributes && typeof s.attributes === 'object' && Object.keys(s.attributes).length > 0
+        ? Object.entries(s.attributes).map(([k, v]) => `${k}: ${v}`).join('; ')
+        : '';
+      const notesCombined = [s.notes, attrStr].filter(Boolean).join(' | ');
+
+      return [
+        `"${(s.category || 'General').replace(/"/g, '""')}"`,
+        `"${(s.location || '').replace(/"/g, '""')}"`,
+        `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
+        `"${(s.code || s.name || s.title || '').replace(/"/g, '""')}"`,
+        `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
+        `"${notesCombined.replace(/"/g, '""')}"`,
+        `"${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}"`
+      ];
+    });
     const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
     const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const fileName = `Homeowner Finishes & Specs — ${projectName || 'Project'}.csv`;
