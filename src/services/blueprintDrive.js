@@ -1,7 +1,7 @@
 import {
+  ensureAppSubfolder,
   fetchDriveFileBlob,
   findFileInFolder,
-  findOrCreateFolder,
   getFileContent,
   getDriveFileMediaUrl,
   listPhotosInPhase,
@@ -102,7 +102,7 @@ function buildPinPhotoAttachment(selectedPhoto, formData, accessToken, projectFo
 }
 
 async function ensureXRayFolder(accessToken, projectFolderId) {
-  return await findOrCreateFolder(accessToken, X_RAY_FOLDER_NAME, projectFolderId);
+  return await ensureAppSubfolder(accessToken, projectFolderId, X_RAY_FOLDER_NAME);
 }
 
 async function saveBlueprintConfig(accessToken, blueprintDataFileId, config) {

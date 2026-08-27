@@ -224,45 +224,72 @@ function parseNewInvoices(mainFolderId) {
       try {
         const mainFolder = DriveApp.getFolderById(mainFolderId);
         
-        // Find or create "Invoice Uploads" and "Processed Invoices" subfolders dynamically
+        // 1. Locate or create "App Folders" operational container under the main Lot folder
+        let appFoldersContainer = null;
+        const rootSubfolders = mainFolder.getFolders();
+        while (rootSubfolders.hasNext()) {
+          const sub = rootSubfolders.next();
+          if (sub.getName().toLowerCase() === "app folders") {
+            appFoldersContainer = sub;
+            break;
+          }
+        }
+        if (!appFoldersContainer) {
+          appFoldersContainer = mainFolder.createFolder("App Folders");
+        }
+
+        // 2. Find or create "Invoice Uploads" and "Processed Invoices" inside "App Folders"
         let foundUploads = false;
         let foundArchive = false;
-        const subfolders = mainFolder.getFolders();
-        while (subfolders.hasNext()) {
-          const sub = subfolders.next();
+        const appSubfolders = appFoldersContainer.getFolders();
+        while (appSubfolders.hasNext()) {
+          const sub = appSubfolders.next();
           const name = sub.getName().toLowerCase();
-          if (name.includes("uploads") || name.includes("invoice uploads")) {
+          if (name === "invoice uploads" || name.includes("uploads")) {
             folderId = sub.getId();
             foundUploads = true;
-          } else if (name.includes("processed") || name.includes("processed invoices") || name.includes("archive")) {
+          } else if (name === "processed invoices" || name.includes("processed") || name.includes("archive")) {
             archiveFolderId = sub.getId();
             foundArchive = true;
           }
         }
         
         if (!foundUploads) {
-          const newUploads = mainFolder.createFolder("Invoice Uploads");
+          const newUploads = appFoldersContainer.createFolder("Invoice Uploads");
           folderId = newUploads.getId();
         }
         
         if (!foundArchive) {
-          const newArchive = mainFolder.createFolder("Processed Invoices");
+          const newArchive = appFoldersContainer.createFolder("Processed Invoices");
           archiveFolderId = newArchive.getId();
         }
         
-        // Find the Google Spreadsheet inside the main project folder
-        const filesInMain = mainFolder.getFiles();
-        while (filesInMain.hasNext()) {
-          const f = filesInMain.next();
-          if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
-            spreadsheetId = f.getId();
+        // 3. Find the Google Spreadsheet inside "App Folders", "Master Budget Sheet", or main folder
+        const searchContainers = [appFoldersContainer, mainFolder];
+        const innerFolders = appFoldersContainer.getFolders();
+        while (innerFolders.hasNext()) {
+          const sub = innerFolders.next();
+          if (sub.getName().toLowerCase().includes("budget")) {
+            searchContainers.unshift(sub); // Prioritize Master Budget Sheet
             break;
           }
         }
+
+        for (let i = 0; i < searchContainers.length; i++) {
+          const filesInContainer = searchContainers[i].getFiles();
+          while (filesInContainer.hasNext()) {
+            const f = filesInContainer.next();
+            if (f.getMimeType() === MimeType.GOOGLE_SHEETS) {
+              spreadsheetId = f.getId();
+              break;
+            }
+          }
+          if (spreadsheetId) break;
+        }
         
-        addLog(`Resolved project IDs dynamically: Uploads folder = ${folderId}, Archive = ${archiveFolderId}, Spreadsheet = ${spreadsheetId}`);
+        addLog(`Resolved project IDs dynamically via App Folders: Uploads folder = ${folderId}, Archive = ${archiveFolderId}, Spreadsheet = ${spreadsheetId}`);
       } catch (e) {
-        addLog(`Error resolving dynamic folders for mainFolderId ${mainFolderId}: ${e.message}.`);
+        addLog(`Error resolving dynamic App Folders for mainFolderId ${mainFolderId}: ${e.message}.`);
       }
     }
     

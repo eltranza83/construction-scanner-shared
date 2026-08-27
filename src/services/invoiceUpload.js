@@ -1,4 +1,4 @@
-import { findOrCreateFolder, uploadFileToDrive } from './googleDrive.js';
+import { ensureAppSubfolder, uploadFileToDrive } from './googleDrive.js';
 
 function dataURLtoBlob(dataUrl) {
   const arr = dataUrl.split(',');
@@ -126,7 +126,7 @@ export async function syncInvoiceDocument({
       };
       const splitPdfBlob = await generateDocumentPDF(splitMetadata, images);
       const projectFolder = resolveSplitProjectFolder(projects, selectedFolder, split);
-      const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', projectFolder.folderId);
+      const uploadsFolder = await ensureAppSubfolder(googleToken, projectFolder.folderId, 'Invoice Uploads');
       const splitFileName = buildInvoiceFileName({
         ...splitMetadata,
         lotNumber: projectFolder.lotName
@@ -146,7 +146,7 @@ export async function syncInvoiceDocument({
       }
     }
   } else {
-    const uploadsFolder = await findOrCreateFolder(googleToken, 'Invoice Uploads', selectedFolder.id);
+    const uploadsFolder = await ensureAppSubfolder(googleToken, selectedFolder.id, 'Invoice Uploads');
     mainUploadResult = await uploadFileToDrive(
       googleToken,
       uploadsFolder,

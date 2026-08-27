@@ -340,31 +340,74 @@ export async function listFolders(accessToken, parentId = 'root') {
 }
 
 export async function findSpreadsheetInFolder(accessToken, folderId, preferredName = 'JobScan_Expense_Log') {
-  const query = `'${folderId}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
-  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+  if (!accessToken || !folderId) return null;
 
-  const response = await fetch(url, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  });
-
-  if (response.status === 401) {
-    const error = new Error('Google Drive session expired while searching for the project spreadsheet.');
-    error.status = 401;
-    throw error;
+  async function searchSpreadsheetsInParent(parentId) {
+    try {
+      const safeParent = escapeDriveQueryString(parentId);
+      const query = `'${safeParent}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+      const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)`;
+      const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+      if (res.status === 401) {
+        const error = new Error('Google Drive session expired while searching for the project spreadsheet.');
+        error.status = 401;
+        throw error;
+      }
+      if (!res.ok) return [];
+      const data = await res.json();
+      return data.files || [];
+    } catch (err) {
+      if (err?.status === 401) throw err;
+      return [];
+    }
   }
 
-  if (!response.ok) {
-    const errText = await response.text();
-    throw new Error(`Failed to search project folder in Google Drive: ${errText}`);
+  // 1. Check direct files under folderId
+  const directFiles = await searchSpreadsheetsInParent(folderId);
+  const nonFinishDirect = directFiles.filter(f => !f.name.toLowerCase().includes('finish'));
+  if (nonFinishDirect.length > 0) {
+    return nonFinishDirect.find(f => f.name === preferredName) || nonFinishDirect[0];
   }
 
-  const searchResult = await response.json();
-  const files = searchResult.files || [];
-  if (files.length === 0) return null;
+  // 2. Check inside App Folders / Master Budget Sheet or App Folders
+  try {
+    const safeParent = escapeDriveQueryString(folderId);
+    const appQuery = `'${safeParent}' in parents and name='${APP_FOLDERS_CONTAINER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+    const appRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(appQuery)}&fields=files(id,name)`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    if (appRes.ok) {
+      const appData = await appRes.json();
+      const appFolder = appData.files?.[0];
+      if (appFolder) {
+        // Check inside App Folders
+        const appFiles = await searchSpreadsheetsInParent(appFolder.id);
+        const nonFinishApp = appFiles.filter(f => !f.name.toLowerCase().includes('finish'));
+        if (nonFinishApp.length > 0) {
+          return nonFinishApp.find(f => f.name === preferredName) || nonFinishApp[0];
+        }
 
-  return files.find(file => file.name === preferredName) || files[0];
+        // Check inside Master Budget Sheet subfolder
+        const safeAppParent = escapeDriveQueryString(appFolder.id);
+        const budgetFolderQuery = `'${safeAppParent}' in parents and name='Master Budget Sheet' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+        const bRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(budgetFolderQuery)}&fields=files(id,name)`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        if (bRes.ok) {
+          const bData = await bRes.json();
+          const budgetFolder = bData.files?.[0];
+          if (budgetFolder) {
+            const budgetFiles = await searchSpreadsheetsInParent(budgetFolder.id);
+            if (budgetFiles.length > 0) {
+              return budgetFiles.find(f => f.name === preferredName) || budgetFiles[0];
+            }
+          }
+        }
+      }
+    }
+  } catch (_) {}
+
+  return directFiles[0] || null;
 }
 
 /**
@@ -487,6 +530,44 @@ export async function appendRowToSheet(accessToken, sheetId, rowData) {
 
 const inFlightFolderPromises = new Map();
 
+export const APP_FOLDERS_CONTAINER_NAME = 'App Folders';
+export const VENDORS_STORES_FOLDER_NAME = 'Vendors / Stores';
+
+/**
+ * Ensures the top-level 'App Folders' container exists under projectFolderId,
+ * and locates or creates the requested operational subfolder inside it.
+ * Guarantees zero duplicate operational folders at the Lot root.
+ */
+export async function ensureAppSubfolder(accessToken, projectFolderId, subfolderName) {
+  if (!accessToken || !projectFolderId || !subfolderName) return null;
+  assertDriveFolderParent(projectFolderId, `ensure app subfolder ${subfolderName}`);
+
+  // 1. Locate or create 'App Folders' container under the project root
+  const appFoldersId = await findOrCreateFolder(accessToken, APP_FOLDERS_CONTAINER_NAME, projectFolderId);
+  if (!appFoldersId) return null;
+
+  // 2. Locate or create the operational subfolder inside 'App Folders'
+  return await findOrCreateFolder(accessToken, subfolderName, appFoldersId);
+}
+
+/**
+ * Ensures the vendor-specific subfolder exists inside 'App Folders / Vendors / Stores / [Vendor Name]'
+ */
+export async function ensureVendorFolder(accessToken, projectFolderId, vendorName) {
+  if (!accessToken || !projectFolderId || !vendorName) return null;
+  
+  // 1. Locate or create 'Vendors / Stores' inside 'App Folders'
+  const vendorsStoresFolderId = await ensureAppSubfolder(accessToken, projectFolderId, VENDORS_STORES_FOLDER_NAME);
+  if (!vendorsStoresFolderId) return null;
+
+  // 2. Sanitize vendor name for Google Drive folder creation
+  const cleanVendor = String(vendorName).trim().replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ');
+  if (!cleanVendor) return vendorsStoresFolderId;
+
+  // 3. Locate or create the vendor folder
+  return await findOrCreateFolder(accessToken, cleanVendor, vendorsStoresFolderId);
+}
+
 /**
  * Find or create a subfolder inside a parent folder in Google Drive.
  * Deduplicates concurrent requests for the same folder to prevent duplicate folder creation.
@@ -537,20 +618,24 @@ export async function findOrCreateFolder(accessToken, folderName, parentId) {
 
 /**
  * Creates and uploads a photo file into a dynamically resolved subfolder hierarchy in Google Drive.
+ * Resolves into App Folders / X-Ray Photos / Project_Photos / [Category] / [Phase]
  */
 export async function uploadPhotoToPhaseFolder(accessToken, rootFolderId, categoryName, phaseName, fileName, mimeType, fileBlob) {
-  // 1. Find or create "Project_Photos" folder inside the root project folder
-  const photosFolderId = await findOrCreateFolder(accessToken, 'Project_Photos', rootFolderId);
+  // 1. Ensure X-Ray Photos exists inside App Folders
+  const xRayFolderId = await ensureAppSubfolder(accessToken, rootFolderId, 'X-Ray Photos');
   
-  // 2. Find or create category folder inside "Project_Photos"
-  const cleanCategoryName = categoryName.replace(/[^a-zA-Z0-9_]/g, '_');
+  // 2. Find or create "Project_Photos" inside "X-Ray Photos"
+  const photosFolderId = await findOrCreateFolder(accessToken, 'Project_Photos', xRayFolderId);
+  
+  // 3. Find or create category folder inside "Project_Photos"
+  const cleanCategoryName = categoryName.replace(/[^a-zA-Z0-9_ -]/g, '_').trim();
   const categoryFolderId = await findOrCreateFolder(accessToken, cleanCategoryName, photosFolderId);
   
-  // 3. Find or create phase folder inside category folder
-  const cleanPhaseName = phaseName.replace(/[^a-zA-Z0-9_]/g, '_');
+  // 4. Find or create phase folder inside category folder
+  const cleanPhaseName = phaseName.replace(/[^a-zA-Z0-9_ -]/g, '_').trim();
   const phaseFolderId = await findOrCreateFolder(accessToken, cleanPhaseName, categoryFolderId);
   
-  // 4. Upload file to phase folder
+  // 5. Upload file to phase folder
   return await uploadFileToDrive(accessToken, phaseFolderId, fileName, mimeType, fileBlob);
 }
 

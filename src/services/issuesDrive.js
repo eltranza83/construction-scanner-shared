@@ -1,4 +1,5 @@
 import {
+  ensureAppSubfolder,
   fetchDriveFileBlob,
   findFileInFolder,
   findOrCreateFolder,
@@ -18,7 +19,7 @@ function buildJsonBlob(data) {
 }
 
 async function ensureXRayFolder(accessToken, projectFolderId) {
-  return await findOrCreateFolder(accessToken, X_RAY_FOLDER_NAME, projectFolderId);
+  return await ensureAppSubfolder(accessToken, projectFolderId, X_RAY_FOLDER_NAME);
 }
 
 async function ensureIssuePhotosFolder(accessToken, xRayFolderId) {

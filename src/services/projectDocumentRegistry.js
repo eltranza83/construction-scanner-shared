@@ -10,10 +10,10 @@ export const PROJECT_DOC_REGISTRY = {
     mimeType: 'application/vnd.google-apps.document',
     masterResourceType: 'purchasing_master',
     projectResourceType: 'project_purchasing',
-    folderPatterns: ['purchasing', 'purchasing list', 'purchasing checklist', 'google doc purchasing list', 'materials'],
+    folderPatterns: ['purchasing list doc', 'purchasing', 'purchasing list', 'purchasing checklist', 'google doc purchasing list', 'materials'],
     filePatterns: [/purchasing.*checklist/i, /purchasing.*list/i, /materials.*list/i],
     canonicalFileName: 'Purchasing Checklist',
-    defaultFolderName: 'Google Doc Purchasing List',
+    defaultFolderName: 'Purchasing List Doc',
     masterTemplate: (version = 'v1.0') =>
       '# Master Fixtures & Hardware Purchasing Checklist (Company Master Template — ' + version + ')\n' +
       'DocumentId: doc_master_template_uuid\n' +
