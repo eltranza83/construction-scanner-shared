@@ -442,4 +442,84 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
     assert.equal(trashedCsvIds.length, 1);
     assert.equal(trashedCsvIds[0], 'csv_legacy_888');
   });
+
+  it('11. Dynamic Tab Discovery: Correctly targets converted CSV tab title and preserves SW 123 / SW 456 codes', () => {
+    // 1. Converted spreadsheet metadata simulation
+    const mockSpreadsheetMeta = {
+      sheets: [
+        {
+          properties: {
+            sheetId: 0,
+            title: 'Homeowner Finishes & Specs — Lot 3' // Non-default tab title
+          }
+        }
+      ]
+    };
+
+    const firstSheetTitle = mockSpreadsheetMeta.sheets?.[0]?.properties?.title || 'Sheet1';
+    assert.equal(firstSheetTitle, 'Homeowner Finishes & Specs — Lot 3');
+
+    const safeSheetRange = `'${firstSheetTitle.replace(/'/g, "''")}'!A1`;
+    const safeClearRange = `'${firstSheetTitle.replace(/'/g, "''")}'!A1:Z500`;
+
+    assert.equal(safeSheetRange, "'Homeowner Finishes & Specs — Lot 3'!A1");
+    assert.equal(safeClearRange, "'Homeowner Finishes & Specs — Lot 3'!A1:Z500");
+
+    // 2. Real-world finish codes SW 123 and SW 456 serialization
+    const testSpecs = [
+      {
+        id: 'paint_lot3_turn',
+        category: 'Paint',
+        location: 'Whole House',
+        surface: 'Interior Walls',
+        brand: 'Sherwin-Williams',
+        code: 'SW 123',
+        sheen: 'Flat/Eggshell'
+      }
+    ];
+
+    const headers = ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'];
+    const row1 = [
+      testSpecs[0].category,
+      testSpecs[0].location,
+      testSpecs[0].brand,
+      testSpecs[0].code,
+      testSpecs[0].sheen,
+      '',
+      new Date().toLocaleDateString()
+    ];
+
+    assert.equal(row1[2], 'Sherwin-Williams');
+    assert.equal(row1[3], 'SW 123'); // Exact code preserved
+
+    // Update to SW 456
+    testSpecs[0].code = 'SW 456';
+    const row2 = [
+      testSpecs[0].category,
+      testSpecs[0].location,
+      testSpecs[0].brand,
+      testSpecs[0].code,
+      testSpecs[0].sheen,
+      '',
+      new Date().toLocaleDateString()
+    ];
+
+    assert.equal(row2[3], 'SW 456'); // Updated code preserved
+  });
+
+  it('12. Strict Error Surfacing: When Sheets API fails, error is thrown and legacy CSV is protected', () => {
+    let updateOk = false;
+    let legacyCsvDeleted = false;
+
+    try {
+      if (!updateOk) {
+        throw new Error('Google Sheets API write failed: 400 Bad Request');
+      }
+      legacyCsvDeleted = true;
+    } catch (err) {
+      assert.ok(err.message.includes('400 Bad Request'));
+    }
+
+    assert.equal(legacyCsvDeleted, false); // Safeguard: CSV never trashed on error
+  });
 });

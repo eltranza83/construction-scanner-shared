@@ -1038,9 +1038,27 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
       targetWebViewLink = `https://docs.google.com/spreadsheets/d/${targetSheetId}/edit`;
     }
 
-    // 5. Update native Google Sheet content in place via Google Sheets API
+    // 5. Discover the actual first tab title of the target spreadsheet (handles Sheet1, converted CSV tab names, or renamed tabs)
+    let firstSheetTitle = 'Sheet1';
+    try {
+      const metaRes = await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetSheetId}?fields=sheets.properties(sheetId,title)`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      if (metaRes.ok) {
+        const metaData = await metaRes.json();
+        if (metaData.sheets?.[0]?.properties?.title) {
+          firstSheetTitle = metaData.sheets[0].properties.title;
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch spreadsheet metadata, falling back to Sheet1:', e);
+    }
+
+    const safeSheetRange = `'${firstSheetTitle.replace(/'/g, "''")}'!A1`;
+    const safeClearRange = `'${firstSheetTitle.replace(/'/g, "''")}'!A1:Z500`;
+
     // Clear old rows first to prevent orphan entries when records are deleted or modified
-    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/Sheet1!A1:Z500:clear`, {
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/${encodeURIComponent(safeClearRange)}:clear`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -1048,7 +1066,7 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
       }
     }).catch(() => {});
 
-    const updateUrl = `${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/Sheet1!A1?valueInputOption=USER_ENTERED`;
+    const updateUrl = `${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/${encodeURIComponent(safeSheetRange)}?valueInputOption=USER_ENTERED`;
     const updateRes = await fetch(updateUrl, {
       method: 'PUT',
       headers: {
@@ -1062,7 +1080,8 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
 
     if (!updateRes.ok) {
       const errText = await updateRes.text();
-      console.warn('Google Sheets API update warning:', errText);
+      console.error('Google Sheets API update failed:', errText);
+      throw new Error(`Google Sheets API write failed: ${errText}`);
     }
 
     // 6. Safe Migration Cleanup Safeguard:
