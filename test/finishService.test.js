@@ -4,15 +4,16 @@ import {
   normalizeFinishSpec,
   findMatchingFinish,
   formatFinishesForAI,
-  FINISH_SCOPES
+  FINISH_SCOPES,
+  cleanProjectId,
+  FirestoreFinishAdapter
 } from '../src/services/finishService.js';
 
 describe('Finishes & Specs Engine (finishService.js)', () => {
   it('1. Correctly normalizes whole-house and exterior specifications with default scopes', () => {
-    // Whole house paint
     const paintSpec = normalizeFinishSpec({
       category: 'Paint',
-      location: '', // empty defaults to whole house
+      location: '',
       brand: 'Sherwin-Williams',
       code: 'SW 7005 Pure White',
       sheen: 'Flat'
@@ -24,7 +25,6 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
     assert.equal(paintSpec.code, 'SW 7005 Pure White');
     assert.equal(paintSpec.sheen, 'Flat');
 
-    // Whole house roofing
     const roofSpec = normalizeFinishSpec({
       category: 'Roofing',
       location: 'Whole House',
@@ -60,7 +60,6 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
   });
 
   it('3. Supports open-ended dynamic attributes for any construction trade (Stucco, Stone, Tile, etc.)', () => {
-    // Stucco with custom attributes
     const stuccoSpec = normalizeFinishSpec({
       category: 'Stucco',
       location: 'Exterior Main Body',
@@ -78,7 +77,6 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
     assert.equal(stuccoSpec.attributes.texture, 'Medium Dash / Sand');
     assert.equal(stuccoSpec.attributes.baseCoat, '1-Coat Stucco over Metal Lath');
 
-    // Cantera Stone with thickness, finish, and sealant
     const stoneSpec = normalizeFinishSpec({
       category: 'Stone',
       location: 'Front Entry Columns & Portico',
@@ -131,11 +129,10 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
     const aiData = formatFinishesForAI(specs);
     assert.equal(aiData.found, true);
     assert.equal(aiData.count, 3);
-    assert.equal(aiData.wholeHouseDefaults.length, 2); // Paint Whole House + Stucco Exterior
-    assert.equal(aiData.locationOverrides.length, 1); // Study Accent Wall
+    assert.equal(aiData.wholeHouseDefaults.length, 2);
+    assert.equal(aiData.locationOverrides.length, 1);
     assert.equal(aiData.locationOverrides[0].location, 'Study Accent Wall');
 
-    // Verify structured text output
     assert.ok(aiData.summaryText.includes('--- WHOLE-HOUSE & GENERAL SPECIFICATIONS ---'));
     assert.ok(aiData.summaryText.includes('--- ROOM & LOCATION-SPECIFIC OVERRIDES / ACCENTS ---'));
     assert.ok(aiData.summaryText.includes('[Paint - Study Accent Wall (Surface: Accent Wall / Feature)] (OVERRIDE): Sherwin-Williams SW 6244 Naval'));
@@ -167,17 +164,14 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
       })
     ];
 
-    // Query for Paint (only 1 paint record exists) -> confident single match
     const paintMatch = findMatchingFinish(specs, { category: 'Paint' });
     assert.equal(paintMatch.ambiguous, false);
     assert.equal(paintMatch.match.id, 'paint_main');
 
-    // Query for "Roofing on Detached Garage" -> matches location specifically
     const garageRoofMatch = findMatchingFinish(specs, { category: 'Roofing', location: 'Detached Garage' });
     assert.equal(garageRoofMatch.ambiguous, false);
     assert.equal(garageRoofMatch.match.id, 'roof_garage');
 
-    // Query for "Change roofing color" without location when 2 roofing records exist -> flags as AMBIGUOUS!
     const ambiguousRoofMatch = findMatchingFinish(specs, { category: 'Roofing' });
     assert.equal(ambiguousRoofMatch.ambiguous, true);
     assert.equal(ambiguousRoofMatch.match, null);
@@ -201,10 +195,31 @@ describe('Finishes & Specs Engine (finishService.js)', () => {
       sheen: 'Eggshell'
     }, existing.id);
 
-    assert.equal(updated.id, 'spec_paint_123'); // ID preserved
+    assert.equal(updated.id, 'spec_paint_123');
     assert.equal(updated.code, 'SW 7005 Pure White Extra Tint');
     assert.equal(updated.sheen, 'Eggshell');
-    assert.equal(updated.createdAt, '2026-08-01T10:00:00.000Z'); // Original createdAt kept
+    assert.equal(updated.createdAt, '2026-08-01T10:00:00.000Z');
+  });
+
+  it('7. FirestoreFinishAdapter offline fallback saves and returns clean specifications', async () => {
+    const adapter = new FirestoreFinishAdapter(null);
+    const saved = await adapter.saveSpec('lot_3', {
+      category: 'Paint',
+      location: 'Whole House',
+      brand: 'Sherwin-Williams',
+      code: 'SW TEST 123',
+      sheen: 'Flat/Eggshell'
+    });
+
+    assert.ok(saved.id);
+    assert.equal(saved.code, 'SW TEST 123');
+
+    const specs = await adapter.getSpecs('lot_3');
+    assert.equal(specs.length, 1);
+    assert.equal(specs[0].code, 'SW TEST 123');
+
+    await adapter.deleteSpec('lot_3', saved.id);
+    const afterDelete = await adapter.getSpecs('lot_3');
+    assert.equal(afterDelete.length, 0);
   });
 });
-

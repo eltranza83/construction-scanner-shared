@@ -732,7 +732,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       setEditingSpecId(null);
     } catch (err) {
       console.error('Failed to save finish spec:', err);
-      alert('Failed to save finish spec. Please check connection/Firebase.');
+      alert(`Failed to save finish spec: ${err?.message || 'Please check connection/Firebase.'}`);
     }
   };
 
@@ -749,6 +749,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       }
     } catch (err) {
       console.error('Failed to delete spec:', err);
+      alert(`Failed to delete finish spec: ${err?.message || 'Please check connection/Firebase.'}`);
     }
   };
 

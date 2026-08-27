@@ -226,7 +226,7 @@ export class FirestoreFinishAdapter {
         return sorted;
       }
 
-      // Check legacy migration if Firestore is empty
+      // Check legacy non-destructive migration if Firestore is currently empty
       const migrated = await migrateLegacyLocalStorageSpecs(projectId);
       if (migrated && migrated.length > 0) {
         const sorted = sortFinishes(migrated);
@@ -234,49 +234,52 @@ export class FirestoreFinishAdapter {
         return sorted;
       }
 
-      // Check fallback cache
-      const fallbackSpecs = await this.fallback.getSpecs(projectId);
-      return sortFinishes(fallbackSpecs);
+      return [];
     } catch (err) {
-      console.warn('[FirestoreFinishAdapter] Falling back to local cache:', err?.message);
-      return await this.fallback.getSpecs(projectId);
+      console.error('[FirestoreFinishAdapter] Error fetching cloud finishes:', err);
+      throw err;
     }
   }
 
   async saveSpec(projectId, spec) {
     const normalized = normalizeFinishSpec(spec, spec.id);
-    await this.fallback.saveSpec(projectId, normalized);
-
     const database = this._getDb();
-    if (!database) return normalized;
 
-    try {
-      const cleanId = cleanProjectId(projectId);
-      const docRef = doc(database, 'projects', cleanId, 'finishes', normalized.id);
-      await setDoc(docRef, normalized, { merge: true });
-      return normalized;
-    } catch (err) {
-      console.warn(`[FirestoreFinishAdapter] Firestore save failed (${err?.message}), saved to local cache.`);
+    if (!database) {
+      // Offline fallback only if DB object is completely unavailable
+      await this.fallback.saveSpec(projectId, normalized);
       return normalized;
     }
+
+    const cleanId = cleanProjectId(projectId);
+    const docRef = doc(database, 'projects', cleanId, 'finishes', normalized.id);
+    
+    // Direct authoritative Cloud Firestore write (errors propagate to UI)
+    await setDoc(docRef, normalized, { merge: true });
+
+    // Update local cache backup only after cloud write succeeds
+    await this.fallback.saveSpec(projectId, normalized);
+    return normalized;
   }
 
   async deleteSpec(projectId, finishId) {
     if (!finishId) return true;
-    await this.fallback.deleteSpec(projectId, finishId);
-
     const database = this._getDb();
-    if (!database) return true;
 
-    try {
-      const cleanId = cleanProjectId(projectId);
-      const docRef = doc(database, 'projects', cleanId, 'finishes', finishId);
-      await deleteDoc(docRef);
-      return true;
-    } catch (err) {
-      console.warn(`[FirestoreFinishAdapter] Firestore delete failed (${err?.message}), deleted from local cache.`);
+    if (!database) {
+      await this.fallback.deleteSpec(projectId, finishId);
       return true;
     }
+
+    const cleanId = cleanProjectId(projectId);
+    const docRef = doc(database, 'projects', cleanId, 'finishes', finishId);
+    
+    // Direct authoritative Cloud Firestore delete (errors propagate to UI)
+    await deleteDoc(docRef);
+
+    // Update local cache backup
+    await this.fallback.deleteSpec(projectId, finishId);
+    return true;
   }
 }
 
@@ -469,10 +472,31 @@ export async function migrateLegacyLocalStorageSpecs(projectId) {
   if (typeof window === 'undefined' || !window.localStorage) return [];
 
   const cleanId = cleanProjectId(projectId);
-  const legacyKey = `sitetactix_specs_${cleanId}`;
-  const rawKeyAlt = `sitetactix_specs_${projectId}`;
+  const possibleKeys = [
+    `sitetactix_finishes_${cleanId}`,
+    `sitetactix_finishes_${projectId}`,
+    `sitetactix_specs_${cleanId}`,
+    `sitetactix_specs_${projectId}`,
+    `jobscan_specs_${cleanId}`,
+    `jobscan_specs_${projectId}`,
+    'jobscan_specs',
+    'sitetactix_specs'
+  ];
 
-  const raw = window.localStorage.getItem(legacyKey) || window.localStorage.getItem(rawKeyAlt);
+  let raw = null;
+  for (const k of possibleKeys) {
+    const val = window.localStorage.getItem(k);
+    if (val) {
+      try {
+        const parsed = JSON.parse(val);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          raw = val;
+          break;
+        }
+      } catch (_) {}
+    }
+  }
+
   if (!raw) return [];
 
   try {
@@ -496,11 +520,7 @@ export async function migrateLegacyLocalStorageSpecs(projectId) {
       }
     }
 
-    // Set migration flag and clean legacy key
-    window.localStorage.setItem(`sitetactix_specs_migrated_${cleanId}`, 'true');
-    window.localStorage.removeItem(legacyKey);
-    if (rawKeyAlt !== legacyKey) window.localStorage.removeItem(rawKeyAlt);
-
+    // Local copy is preserved untouched as backup
     return migratedList;
   } catch (err) {
     console.error(`[finishService] Migration error for ${cleanId}:`, err);
