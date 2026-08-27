@@ -949,7 +949,8 @@ export async function trashDriveFileOrFolder(accessToken, fileOrFolderId) {
 }
 
 /**
- * Creates/locates "Finish Specs & Buyer Handover" folder and syncs the finish specs CSV/Sheet.
+ * Creates/locates "Finish Specs & Buyer Handover" folder and syncs the finish specs into a canonical native Google Sheet.
+ * Safeguard: Legacy CSVs are only trashed AFTER native Google Sheet is verified and successfully updated.
  */
 export async function syncFinishSpecsToDrive(accessToken, projectFolderId, projectName, specsList = []) {
   if (!accessToken || !projectFolderId) return null;
@@ -970,7 +971,7 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
     }
     if (!finishFolderId) return null;
 
-    // 2. Format CSV content
+    // 2. Format table values for Google Sheets API
     const headers = ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'];
     const rows = specsList.map((s) => {
       const attrStr = s.attributes && typeof s.attributes === 'object' && Object.keys(s.attributes).length > 0
@@ -979,56 +980,115 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
       const notesCombined = [s.notes, attrStr].filter(Boolean).join(' | ');
 
       return [
-        `"${(s.category || 'General').replace(/"/g, '""')}"`,
-        `"${(s.location || '').replace(/"/g, '""')}"`,
-        `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
-        `"${(s.code || s.name || s.title || '').replace(/"/g, '""')}"`,
-        `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
-        `"${notesCombined.replace(/"/g, '""')}"`,
-        `"${s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()}"`
+        s.category || 'General',
+        s.location || '',
+        s.brand || s.supplier || '',
+        s.code || s.name || s.title || '',
+        s.sheen || s.specs || '',
+        notesCombined,
+        s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
       ];
     });
-    const csvContent = [headers.join(','), ...rows.map((r) => r.join(','))].join('\r\n');
-    const csvBlob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const fileName = `Homeowner Finishes & Specs — ${projectName || 'Project'}.csv`;
+    const tableValues = [headers, ...rows];
 
-    // 3. Check if file already exists in finishFolderId
+    // 3. Search for existing canonical native Google Sheet and legacy CSV files in finishFolderId
     const safeSubParent = escapeDriveQueryString(finishFolderId);
-    const fileQuery = `'${safeSubParent}' in parents and name='${escapeDriveQueryString(fileName)}' and trashed=false`;
-    const fileSearchRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(fileQuery)}&fields=files(id,name,webViewLink)&pageSize=1`, {
+    
+    // 3a. Search for native Google Sheets
+    const sheetQuery = `'${safeSubParent}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+    const sheetSearchRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(sheetQuery)}&fields=files(id,name,webViewLink)&pageSize=10`, {
       headers: { Authorization: `Bearer ${accessToken}` }
     });
-    const fileData = await fileSearchRes.json();
-    const existingFile = fileData.files?.[0];
+    const sheetData = await sheetSearchRes.json();
+    const existingNativeSheet = sheetData.files?.[0];
 
-    if (existingFile?.id) {
-      // Overwrite file content
-      const patchRes = await fetch(`https://www.googleapis.com/upload/drive/v3/files/${existingFile.id}?uploadType=media`, {
-        method: 'PATCH',
+    // 3b. Search for legacy CSV files (to safely migrate after verified write)
+    const csvQuery = `'${safeSubParent}' in parents and (mimeType='text/csv' or name contains '.csv') and trashed=false`;
+    const csvSearchRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(csvQuery)}&fields=files(id,name)&pageSize=10`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    const csvData = await csvSearchRes.json();
+    const legacyCsvFiles = csvData.files || [];
+
+    let targetSheetId = existingNativeSheet?.id;
+    let targetWebViewLink = existingNativeSheet?.webViewLink;
+
+    // 4. If no native Google Sheet exists, create one via Drive API
+    if (!targetSheetId) {
+      const canonicalSheetName = `Homeowner Finishes & Specs — ${projectName || 'Project'}`;
+      const createRes = await fetch(`${GOOGLE_DRIVE_API_BASE}/files`, {
+        method: 'POST',
         headers: {
           Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'text/csv'
+          'Content-Type': 'application/json'
         },
-        body: csvBlob
+        body: JSON.stringify({
+          name: canonicalSheetName,
+          mimeType: 'application/vnd.google-apps.spreadsheet',
+          parents: [finishFolderId]
+        })
       });
-      if (patchRes.ok) {
-        return {
-          folderId: finishFolderId,
-          fileId: existingFile.id,
-          webViewLink: existingFile.webViewLink
-        };
+
+      if (!createRes.ok) {
+        throw new Error('Failed to create native Google Sheet');
+      }
+
+      const createdSheet = await createRes.json();
+      targetSheetId = createdSheet.id;
+      targetWebViewLink = `https://docs.google.com/spreadsheets/d/${targetSheetId}/edit`;
+    }
+
+    // 5. Update native Google Sheet content in place via Google Sheets API
+    // Clear old rows first to prevent orphan entries when records are deleted or modified
+    await fetch(`${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/Sheet1!A1:Z500:clear`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      }
+    }).catch(() => {});
+
+    const updateUrl = `${GOOGLE_SHEETS_API_BASE}/${targetSheetId}/values/Sheet1!A1?valueInputOption=USER_ENTERED`;
+    const updateRes = await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        values: tableValues
+      })
+    });
+
+    if (!updateRes.ok) {
+      const errText = await updateRes.text();
+      console.warn('Google Sheets API update warning:', errText);
+    }
+
+    // 6. Safe Migration Cleanup Safeguard:
+    // Only trash legacy CSVs AFTER the native Google Sheet has been successfully verified & written
+    if (updateRes.ok && legacyCsvFiles.length > 0) {
+      for (const csvFile of legacyCsvFiles) {
+        try {
+          await fetch(`${GOOGLE_DRIVE_API_BASE}/files/${csvFile.id}`, {
+            method: 'PATCH',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ trashed: true })
+          });
+        } catch (_) {}
       }
     }
 
-    // Upload new file to finishFolderId
-    const uploaded = await uploadFileToDrive(accessToken, finishFolderId, fileName, 'text/csv', csvBlob, 'Adepec Finish Selections & Specs');
     return {
       folderId: finishFolderId,
-      fileId: uploaded?.id,
-      webViewLink: uploaded?.webViewLink
+      fileId: targetSheetId,
+      webViewLink: targetWebViewLink || `https://docs.google.com/spreadsheets/d/${targetSheetId}/edit`
     };
   } catch (err) {
-    console.warn('Error syncing finish specs to Drive:', err);
+    console.warn('Error syncing finish specs to native Google Sheet:', err);
     return null;
   }
 }

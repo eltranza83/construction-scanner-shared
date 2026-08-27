@@ -412,6 +412,37 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   }, [projectId]);
 
   useEffect(() => {
+    let isMounted = true;
+    if (googleToken && activeProject?.folderId) {
+      const folderName = 'Finish Specs & Buyer Handover';
+      const safeParent = String(activeProject.folderId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+      const q = `'${safeParent}' in parents and name='${folderName}' and mimeType='application/vnd.google-apps.folder' and trashed=false`;
+      fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=1`, {
+        headers: { Authorization: `Bearer ${googleToken}` }
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          const finishFolderId = data.files?.[0]?.id;
+          if (finishFolderId && isMounted) {
+            const safeSub = String(finishFolderId).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+            const sheetQ = `'${safeSub}' in parents and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false`;
+            return fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(sheetQ)}&fields=files(id,name,webViewLink)&pageSize=1`, {
+              headers: { Authorization: `Bearer ${googleToken}` }
+            })
+              .then((r) => r.json())
+              .then((sData) => {
+                if (isMounted && sData.files?.[0]?.webViewLink) {
+                  setFinishDriveLink(sData.files[0].webViewLink);
+                }
+              });
+          }
+        })
+        .catch(() => {});
+    }
+    return () => { isMounted = false; };
+  }, [googleToken, activeProject?.folderId]);
+
+  useEffect(() => {
     if (googleToken && activeProject?.folderId) {
       fetchProjectDriveTree(googleToken, activeProject.folderId).then((tree) => {
         if (tree) {

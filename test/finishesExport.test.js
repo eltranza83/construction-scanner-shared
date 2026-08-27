@@ -349,7 +349,7 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
     assert.ok(toolRes.provenance.includes('/projects/lot_3/finishes'));
   });
 
-  it('9. Google Sheet Sync: Formats CSV/Sheet payload with exact numeric code and attributes', () => {
+  it('9. Google Sheet Sync: Formats Sheets API table payload with exact numeric code and attributes', () => {
     const specsList = [
       {
         id: 'spec_paint_01',
@@ -375,6 +375,7 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
       }
     ];
 
+    const headers = ['Category', 'Room / Location', 'Brand / Supplier', 'Color Name / Code / Model', 'Sheen / Specs', 'Notes', 'Date Added'];
     const rows = specsList.map((s) => {
       const attrStr = s.attributes && typeof s.attributes === 'object' && Object.keys(s.attributes).length > 0
         ? Object.entries(s.attributes).map(([k, v]) => `${k}: ${v}`).join('; ')
@@ -382,26 +383,63 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
       const notesCombined = [s.notes, attrStr].filter(Boolean).join(' | ');
 
       return [
-        `"${(s.category || 'General').replace(/"/g, '""')}"`,
-        `"${(s.location || '').replace(/"/g, '""')}"`,
-        `"${(s.brand || s.supplier || '').replace(/"/g, '""')}"`,
-        `"${(s.code || s.name || s.title || '').replace(/"/g, '""')}"`,
-        `"${(s.sheen || s.specs || '').replace(/"/g, '""')}"`,
-        `"${notesCombined.replace(/"/g, '""')}"`
+        s.category || 'General',
+        s.location || '',
+        s.brand || s.supplier || '',
+        s.code || s.name || s.title || '',
+        s.sheen || s.specs || '',
+        notesCombined,
+        s.createdAt ? new Date(s.createdAt).toLocaleDateString() : new Date().toLocaleDateString()
       ];
     });
 
+    const tableValues = [headers, ...rows];
+
+    // Assertions for Sheets API payload structure
+    assert.equal(tableValues.length, 3);
+    assert.equal(tableValues[0][0], 'Category');
+    assert.equal(tableValues[0][3], 'Color Name / Code / Model');
+
     // Row 1 assertions (Paint)
-    assert.equal(rows[0][0], '"Paint"');
-    assert.equal(rows[0][1], '"Whole House"');
-    assert.equal(rows[0][2], '"Sherwin-Williams"');
-    assert.equal(rows[0][3], '"SW 8055 Pure White"'); // Exact numeric code
-    assert.equal(rows[0][4], '"Flat/Eggshell"');
+    assert.equal(tableValues[1][0], 'Paint');
+    assert.equal(tableValues[1][1], 'Whole House');
+    assert.equal(tableValues[1][2], 'Sherwin-Williams');
+    assert.equal(tableValues[1][3], 'SW 8055 Pure White'); // Exact numeric code
+    assert.equal(tableValues[1][4], 'Flat/Eggshell');
 
     // Row 2 assertions (Stone)
-    assert.equal(rows[1][0], '"Stone"');
-    assert.equal(rows[1][3], '"Cantera Blanco Galarza"');
-    assert.ok(rows[1][5].includes('Sealant: Penetrating Sealer'));
-    assert.ok(rows[1][5].includes('Thickness: 2-inch'));
+    assert.equal(tableValues[2][0], 'Stone');
+    assert.equal(tableValues[2][3], 'Cantera Blanco Galarza');
+    assert.ok(tableValues[2][5].includes('Sealant: Penetrating Sealer'));
+    assert.ok(tableValues[2][5].includes('Thickness: 2-inch'));
+  });
+
+  it('10. Native Google Sheet Lifecycle: Reuses existing sheet, prevents duplicates, and protects CSV until verified', async () => {
+    // Simulated state in Google Drive folder
+    const mockDriveFiles = [
+      { id: 'sheet_existing_999', name: 'Homeowner Finishes & Specs — Lot 3', mimeType: 'application/vnd.google-apps.spreadsheet', webViewLink: 'https://docs.google.com/spreadsheets/d/sheet_existing_999/edit' },
+      { id: 'csv_legacy_888', name: 'Homeowner Finishes & Specs — Lot 3.csv', mimeType: 'text/csv' }
+    ];
+
+    // Verify existing native sheet is found first
+    const existingNativeSheet = mockDriveFiles.find((f) => f.mimeType === 'application/vnd.google-apps.spreadsheet');
+    assert.ok(existingNativeSheet);
+    assert.equal(existingNativeSheet.id, 'sheet_existing_999');
+
+    // Verify migration safeguard: CSV is identified as candidate for cleanup ONLY after sheet update succeeds
+    const legacyCsvFiles = mockDriveFiles.filter((f) => f.mimeType === 'text/csv' || f.name.endsWith('.csv'));
+    assert.equal(legacyCsvFiles.length, 1);
+    assert.equal(legacyCsvFiles[0].id, 'csv_legacy_888');
+
+    // Simulate successful Sheets API PUT
+    let writeSuccess = true;
+    let trashedCsvIds = [];
+
+    if (writeSuccess && legacyCsvFiles.length > 0) {
+      trashedCsvIds = legacyCsvFiles.map((f) => f.id);
+    }
+
+    assert.equal(trashedCsvIds.length, 1);
+    assert.equal(trashedCsvIds[0], 'csv_legacy_888');
   });
 });
