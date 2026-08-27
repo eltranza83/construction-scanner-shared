@@ -231,10 +231,6 @@ export class FirestoreFinishAdapter {
       if (migrated && migrated.length > 0) {
         const sorted = sortFinishes(migrated);
         await this.fallback.saveSpecs(projectId, sorted);
-        for (const spec of sorted) {
-          const docRef = doc(database, 'projects', cleanId, 'finishes', spec.id);
-          await setDoc(docRef, spec, { merge: true }).catch(() => {});
-        }
         return sorted;
       }
 
@@ -473,33 +469,10 @@ export async function migrateLegacyLocalStorageSpecs(projectId) {
   if (typeof window === 'undefined' || !window.localStorage) return [];
 
   const cleanId = cleanProjectId(projectId);
-  const possibleKeys = [
-    `sitetactix_finishes_${cleanId}`,
-    `sitetactix_finishes_${projectId}`,
-    `sitetactix_specs_${cleanId}`,
-    `sitetactix_specs_${projectId}`,
-    `jobscan_specs_${cleanId}`,
-    `jobscan_specs_${projectId}`,
-    'jobscan_specs',
-    'sitetactix_specs'
-  ];
+  const legacyKey = `sitetactix_specs_${cleanId}`;
+  const rawKeyAlt = `sitetactix_specs_${projectId}`;
 
-  let raw = null;
-  let sourceKey = null;
-  for (const k of possibleKeys) {
-    const val = window.localStorage.getItem(k);
-    if (val) {
-      try {
-        const parsed = JSON.parse(val);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          raw = val;
-          sourceKey = k;
-          break;
-        }
-      } catch (_) {}
-    }
-  }
-
+  const raw = window.localStorage.getItem(legacyKey) || window.localStorage.getItem(rawKeyAlt);
   if (!raw) return [];
 
   try {
@@ -522,6 +495,11 @@ export async function migrateLegacyLocalStorageSpecs(projectId) {
         }
       }
     }
+
+    // Set migration flag and clean legacy key
+    window.localStorage.setItem(`sitetactix_specs_migrated_${cleanId}`, 'true');
+    window.localStorage.removeItem(legacyKey);
+    if (rawKeyAlt !== legacyKey) window.localStorage.removeItem(rawKeyAlt);
 
     return migratedList;
   } catch (err) {

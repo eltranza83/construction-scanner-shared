@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import {
   APP_STORAGE_KEYS,
   loadStoredAppState,
@@ -6,74 +6,58 @@ import {
   persistProjects
 } from '../services/appStorage';
 import {
-  fetchUserProjects,
-  saveUserProject,
-  resolveUserActiveProject
-} from '../services/projectService';
-import {
   loadProjectsConfigFromDrive,
+  resolveActiveProject,
   saveProjectsConfigToDrive
 } from '../services/projectCloudSync';
 
-export function useProjects({ googleToken, googleUser, setSuccess } = {}) {
+export function useProjects({ googleToken, setSuccess } = {}) {
   const [selectedFolder, setSelectedFolder] = useState(() => loadStoredAppState().selectedFolder);
   const [projects, setProjects] = useState(() => loadStoredAppState().projects);
   const [activeProject, setActiveProject] = useState(() => loadStoredAppState().activeProject);
 
-  const syncProjectsFromFirestore = useCallback(async (user) => {
+  const syncProjectsFromCloud = async (token) => {
     try {
-      const cloudProjects = await fetchUserProjects(user);
-      if (Array.isArray(cloudProjects) && cloudProjects.length > 0) {
-        setProjects(cloudProjects);
-        persistProjects(cloudProjects);
+      const cloudProjects = await loadProjectsConfigFromDrive(token, projects);
+      if (!cloudProjects) return;
 
-        const storedActiveId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
-        const resolved = resolveUserActiveProject(cloudProjects, storedActiveId);
-        if (resolved) {
-          setActiveProject(resolved);
-          setSelectedFolder({ id: resolved.folderId, name: resolved.folderName });
-          persistActiveProject(resolved);
-        }
+      setProjects(cloudProjects);
+      persistProjects(cloudProjects);
+
+      const activeProjId = localStorage.getItem(APP_STORAGE_KEYS.activeProjectId);
+      const resolvedProject = resolveActiveProject(cloudProjects, activeProjId);
+      if (resolvedProject) {
+        setActiveProject(resolvedProject);
+        setSelectedFolder({ id: resolvedProject.folderId, name: resolvedProject.folderName });
+        persistActiveProject(resolvedProject);
       }
     } catch (err) {
-      console.warn('[useProjects] Cloud sync failed:', err);
+      console.error('Failed to sync projects from Google Drive:', err);
     }
-  }, []);
+  };
 
-  // Sync from Firestore whenever googleUser is present or changes
-  useEffect(() => {
-    if (googleUser?.email) {
-      syncProjectsFromFirestore(googleUser);
+  const saveProjectsToCloud = async (updatedProjects, token = googleToken) => {
+    if (!token) return;
+    try {
+      await saveProjectsConfigToDrive(token, updatedProjects);
+    } catch (err) {
+      console.error('Failed to save projects to Google Drive:', err);
     }
-  }, [googleUser, syncProjectsFromFirestore]);
-
-  // Secondary Drive sync (legacy fallback)
-  useEffect(() => {
-    if (googleToken && (!projects || projects.length === 0)) {
-      loadProjectsConfigFromDrive(googleToken, projects)
-        .then((driveProjects) => {
-          if (Array.isArray(driveProjects) && driveProjects.length > 0) {
-            setProjects(driveProjects);
-            persistProjects(driveProjects);
-            if (googleUser?.email) {
-              driveProjects.forEach((p) => saveUserProject(p, googleUser));
-            }
-          }
-        })
-        .catch(() => {});
-    }
-  }, [googleToken, googleUser, projects]);
+  };
 
   const updateProjects = (newProjects) => {
     setProjects(newProjects);
     persistProjects(newProjects);
-    if (googleUser?.email) {
-      newProjects.forEach((p) => saveUserProject(p, googleUser));
-    }
     if (googleToken) {
-      saveProjectsConfigToDrive(googleToken, newProjects);
+      saveProjectsToCloud(newProjects, googleToken);
     }
   };
+
+  useEffect(() => {
+    if (googleToken) {
+      syncProjectsFromCloud(googleToken);
+    }
+  }, [googleToken]);
 
   const selectActiveProject = (projectId) => {
     if (!projectId) {
@@ -83,7 +67,7 @@ export function useProjects({ googleToken, googleUser, setSuccess } = {}) {
       return;
     }
 
-    const proj = projects.find((p) => p.id === projectId || p.canonicalId === projectId);
+    const proj = projects.find(p => p.id === projectId);
     if (proj) {
       setActiveProject(proj);
       setSelectedFolder({ id: proj.folderId, name: proj.folderName });
@@ -107,7 +91,6 @@ export function useProjects({ googleToken, googleUser, setSuccess } = {}) {
     setActiveProject,
     updateProjects,
     selectActiveProject,
-    resetProjectSelection,
-    syncProjectsFromFirestore
+    resetProjectSelection
   };
 }

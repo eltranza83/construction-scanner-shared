@@ -32,7 +32,6 @@ export default function Settings({
   const projectSettings = useSettingsProjects({
     activeProject,
     googleToken,
-    googleUser,
     projects,
     setActiveProject,
     setError,
