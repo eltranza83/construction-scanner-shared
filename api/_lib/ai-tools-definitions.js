@@ -305,6 +305,19 @@ export const AI_TOOL_DECLARATIONS = [
     }
   },
   {
+    name: 'get_project_finishes',
+    description: 'Retrieve finish specifications, selections, paint schedules, roofing materials, stucco textures, stone finishes, and fixtures from Firestore. Returns explicit whole-house defaults and location-specific overrides.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        category: { type: 'STRING', description: 'Category filter (e.g., Paint, Stucco, Stone, Roofing, Tile, Flooring, Plumbing Fixtures, Countertops)' },
+        room: { type: 'STRING', description: 'Room or location filter (e.g., Master Bath, Kitchen, Study, Exterior, Whole House)' },
+        surface: { type: 'STRING', description: 'Surface filter (e.g., Interior Walls, Ceilings, Trim & Doors, Cabinets, Exterior Body / Walls, Accent Wall / Feature)' },
+        projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55)' }
+      }
+    }
+  },
+  {
     name: 'get_homeowner_specs',
     description: 'Retrieve finish specifications, selections, paint schedules, roofing materials, stucco textures, stone finishes, and fixtures from Firestore. Returns explicit whole-house defaults and location-specific overrides.',
     parameters: {
@@ -312,6 +325,7 @@ export const AI_TOOL_DECLARATIONS = [
       properties: {
         category: { type: 'STRING', description: 'Category filter (e.g., Paint, Stucco, Stone, Roofing, Tile, Flooring, Plumbing Fixtures, Countertops)' },
         room: { type: 'STRING', description: 'Room or location filter (e.g., Master Bath, Kitchen, Study, Exterior, Whole House)' },
+        surface: { type: 'STRING', description: 'Surface filter (e.g., Interior Walls, Ceilings, Trim & Doors, Cabinets, Exterior Body / Walls, Accent Wall / Feature)' },
         projectId: { type: 'STRING', description: 'Optional project or lot ID (e.g. Lot 3, Lot 55)' }
       }
     }

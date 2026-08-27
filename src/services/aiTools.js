@@ -117,6 +117,21 @@ export const TOOL_REGISTRY = {
     source: 'Finishes Exporter',
     description: 'Generates a clean printable/exportable Markdown Google Doc specification sheet from Firestore.'
   },
+  get_project_finishes: {
+    type: 'READ',
+    source: 'Firestore (Finishes & Specs)',
+    description: 'Retrieves finish specifications, paint schedules, roofing, stucco, and stone from Firestore.'
+  },
+  get_homeowner_specs: {
+    type: 'READ',
+    source: 'Firestore (Finishes & Specs)',
+    description: 'Retrieves finish specifications, paint schedules, roofing, stucco, and stone from Firestore.'
+  },
+  save_finish_spec: {
+    type: 'WRITE',
+    source: 'Firestore (Finishes & Specs)',
+    description: 'Creates or updates a finish specification in Firestore.'
+  },
   remove_purchasing_section: {
     type: 'WRITE',
     source: 'Firestore (Purchasing Checklist)',

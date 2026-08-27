@@ -16,8 +16,6 @@ import {
   MoreVertical
 } from 'lucide-react';
 import {
-  loadProjectSpecs,
-  saveProjectSpecs,
   askGeminiBrain,
   loadProjectDriveTree,
   saveProjectDriveTree,
@@ -240,6 +238,17 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const [activePreviewFile, setActivePreviewFile] = useState(null);
+  const [finishCount, setFinishCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    if (projectId) {
+      fetchProjectFinishes(projectId).then((specs) => {
+        if (active) setFinishCount(Array.isArray(specs) ? specs.length : 0);
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [projectId]);
 
   // Voice State Machine & Continuous Hands-Free State
   const [voiceMode, setVoiceMode] = useState(() => {
@@ -284,11 +293,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const handleRunDiagnosticSuite = async () => {
     setIsRunningTests(true);
     try {
+      const finishes = await fetchProjectFinishes(projectId);
       const projectContext = {
         items: [],
         dashboardData: loadProjectDashboard(projectId),
         driveTree,
-        projectSpecs: loadProjectSpecs(projectId),
+        projectSpecs: finishes,
         siteSetupData: null,
         apiKey,
         googleToken
@@ -2404,7 +2414,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                       { name: 'Subcontractor Ledger', badge: '🟢 Ledger Ready', detail: 'Phase contract and quote data' },
                       { name: 'Receipts & Transactions', badge: '🟢 Records Indexed', detail: 'Payment attachments and logs' },
                       { name: 'Drive Document Tree', badge: driveTree?.subfolders?.length ? `🟢 ${driveTree.subfolders.length} Folders` : '🟡 No Files Indexed', detail: 'Blueprint and spec files' },
-                      { name: 'Finish Specs', badge: loadProjectSpecs(projectId)?.length ? `🟢 ${loadProjectSpecs(projectId).length} Specs` : '🟡 0 Specs Configured', detail: 'Paint and material selections' }
+                      { name: 'Finish Specs', badge: finishCount ? `🟢 ${finishCount} Specs` : '🟡 0 Specs Configured', detail: 'Paint and material selections' }
                     ]).map((d, idx) => (
                       <div key={idx} style={{ backgroundColor: 'rgba(0,0,0,0.3)', padding: '6px 8px', borderRadius: '6px', fontSize: '0.72rem' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 700 }}>

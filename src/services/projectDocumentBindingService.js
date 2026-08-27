@@ -47,8 +47,9 @@ export function resolveCandidateDriveFiles(driveTree, docTypeKey = 'purchasing_c
     const lowerName = fileName.toLowerCase();
     const lowerFolder = String(folderName || '').toLowerCase();
     const canonicalLower = (def.canonicalFileName || '').toLowerCase();
+    const cleanLowerName = lowerName.replace(/\.(docx|gdoc)$/i, '');
 
-    const isExactCanonical = lowerName === canonicalLower;
+    const isExactCanonical = lowerName === canonicalLower || cleanLowerName === canonicalLower;
     const folderMatch = def.folderPatterns.some(fp => lowerFolder.includes(fp));
     const fileMatch = def.filePatterns.some(fp => fp.test(lowerName) || lowerName.includes(String(fp).replace(/[^a-z0-9]/gi, '')));
 

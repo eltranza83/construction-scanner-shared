@@ -227,7 +227,13 @@ export function saveStoredReminders(reminders) {
 export function loadProjectSpecs(projectId) {
   if (!projectId) return [];
   try {
-    const raw = localStorage.getItem(`${SPECS_STORAGE_PREFIX}${projectId}`);
+    const cleanId = String(projectId).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+    const rawNew = typeof localStorage !== 'undefined' ? localStorage.getItem(`sitetactix_finishes_${cleanId}`) : null;
+    if (rawNew) {
+      const parsed = JSON.parse(rawNew);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(`${SPECS_STORAGE_PREFIX}${projectId}`) : null;
     return raw ? JSON.parse(raw) : [];
   } catch (_) {
     return [];
@@ -237,7 +243,11 @@ export function loadProjectSpecs(projectId) {
 export function saveProjectSpecs(projectId, specs) {
   if (!projectId) return;
   try {
-    localStorage.setItem(`${SPECS_STORAGE_PREFIX}${projectId}`, JSON.stringify(specs));
+    const cleanId = String(projectId).toLowerCase().replace(/[^a-z0-9]/g, '_').replace(/_+/g, '_');
+    if (typeof localStorage !== 'undefined') {
+      localStorage.setItem(`sitetactix_finishes_${cleanId}`, JSON.stringify(specs));
+      localStorage.setItem(`${SPECS_STORAGE_PREFIX}${projectId}`, JSON.stringify(specs));
+    }
   } catch (_) {}
 }
 
@@ -590,7 +600,11 @@ BEHAVIOR, VERIFICATION & CITATION RULES:
       * Call 'get_drive_files' with empty args {} to retrieve the complete directory hierarchy.
 
 16. FINISHES & MATERIAL SPECIFICATIONS INSTRUCTIONS:
-    - FIRESTORE IS THE SINGLE AUTHORITATIVE SOURCE: All paint codes, stucco finishes, stone/cantera specs, tile/grout selections, roofing shingles, and fixtures live in Firestore (/projects/{projectId}/finishes).
+    - FIRESTORE IS THE SINGLE AUTHORITATIVE SOURCE: All paint codes, stucco finishes, stone/cantera specs, tile/grout selections, roofing shingles, and fixtures live in Firestore (/projects/{projectId}/finishes) and are provided in [MODULE 4: HOMEOWNER FINISH SPECIFICATIONS].
+    - RETRIEVAL MANDATE & ZERO-HALLUCINATION:
+      * When the user asks about paint, finishes, materials, colors, sheens, stucco, stone, roofing, tile, or fixtures, check [MODULE 4: HOMEOWNER FINISH SPECIFICATIONS] or call 'get_project_finishes' / 'get_homeowner_specs'.
+      * You are STRICTLY FORBIDDEN from stating that no finish selections or paint specifications exist when records are present in [MODULE 4: HOMEOWNER FINISH SPECIFICATIONS] or returned by 'get_project_finishes'.
+      * Always report the exact brand, code/name, sheen, surface, and dynamic attributes recorded.
     - HIERARCHICAL OVERRIDE RULE:
       * SPECIFIC ROOM/LOCATION OVERRIDE > WHOLE-HOUSE DEFAULT.
       * When a user asks about paint, flooring, or materials for a specific room (e.g., "What paint is in the Study?", "What tile is in the Master Bath?"), always check for location-specific overrides first. If an override exists, state it clearly (e.g., "For the Study, the accent wall is SW 6244 Naval in Satin, while the rest of the house uses SW 7005 Pure White.").
@@ -1168,7 +1182,12 @@ export async function askGeminiBrain(
   const projectId = projectIdOverride || activeProjectName.toLowerCase().replace(/[^a-z0-9]/g, '_');
   const dashData = dashboardOverride || loadProjectDashboard(projectId);
   const driveData = driveTreeOverride || loadDriveTree(projectId);
-  const projectSpecs = loadProjectSpecs(projectId);
+  let projectSpecs = [];
+  try {
+    projectSpecs = await fetchProjectFinishes(projectId);
+  } catch (_) {
+    projectSpecs = loadProjectSpecs(projectId);
+  }
   const siteSetupProtocol = getSiteSetupProtocol();
   let lastErrorCode = null;
   let toolTelemetryList = [];

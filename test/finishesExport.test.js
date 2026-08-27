@@ -2,6 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   exportToGoogleDocMarkdown,
+  fetchProjectFinishes,
   saveFinishSpec,
   normalizeFinishSpec,
   LocalStorageFinishAdapter,
@@ -10,6 +11,7 @@ import {
 import { PROJECT_DOC_REGISTRY, getDocumentDefinition } from '../src/services/projectDocumentRegistry.js';
 import { resolveCandidateDriveFiles } from '../src/services/projectDocumentBindingService.js';
 import { executeClientToolCall } from '../src/services/aiTools.js';
+import { buildGroundingSystemInstruction } from '../src/services/builderBrainService.js';
 
 describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
   const projectId = 'lot_3_export_test';
@@ -19,7 +21,7 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
     assert.ok(def);
     assert.equal(def.docType, 'finishes_specs');
     assert.equal(def.displayName, 'Finishes & Material Selections');
-    assert.equal(def.canonicalFileName, 'Finishes and Material Selections.docx');
+    assert.equal(def.canonicalFileName, 'Finishes and Material Selections');
     assert.equal(def.defaultFolderName, 'Finishes & Specifications');
     assert.ok(def.folderPatterns.includes('finishes'));
     assert.ok(def.folderPatterns.includes('specs'));
@@ -28,7 +30,7 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
 
   it('2. Document Registry project template generates clean markdown scaffolding', () => {
     const def = getDocumentDefinition('finishes_specs');
-    const scaffold = def.projectTemplate('Lot 3', 'doc_12345', 'Finishes and Material Selections.docx', 'v1.0');
+    const scaffold = def.projectTemplate('Lot 3', 'doc_12345', 'Finishes and Material Selections', 'v1.0');
     assert.ok(scaffold.includes('# Finishes & Material Specifications - Project Lot 3'));
     assert.ok(scaffold.includes('DocumentId: doc_12345'));
     assert.ok(scaffold.includes('## 1. Paint & Stains'));
@@ -41,15 +43,15 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
       name: 'Lot 3 - 124 Main St',
       files: [
         { id: 'f_budget', name: 'Budget.xlsx' },
-        { id: 'f_finishes', name: 'Finishes and Material Selections.docx' },
-        { id: 'f_backup', name: 'Finishes and Material Selections_backup.docx' }
+        { id: 'f_finishes', name: 'Finishes and Material Selections' },
+        { id: 'f_backup', name: 'Finishes and Material Selections_backup' }
       ],
       subfolders: [
         {
           id: 'sub_specs',
           name: 'Finishes & Specifications',
           files: [
-            { id: 'f_specs_nested', name: 'Finishes and Material Selections.docx' }
+            { id: 'f_specs_nested', name: 'Finishes and Material Selections' }
           ]
         }
       ]
@@ -286,5 +288,64 @@ describe('Finishes & Specs Google Drive Export & Registry Suite', () => {
     // 8. One-Way Integrity: Exporting never mutates or overwrites Firestore storage
     const storedSpecs = await exportToGoogleDocMarkdown(realProjId);
     assert.ok(storedSpecs);
+  });
+
+  it('8. J.A.R.V.I.S. Prompt Grounding & Tool Execution: Live finish appears in prompt manifest and get_project_finishes tool returns paint specs', async () => {
+    const lot3Id = 'lot_3';
+
+    // 1. Create a finish for Lot 3: SW 7005 Pure White
+    await saveFinishSpec(lot3Id, {
+      id: 'spec_lot3_paint_int',
+      category: 'Paint',
+      location: 'Whole House',
+      surface: 'Interior Walls',
+      brand: 'Sherwin-Williams',
+      code: 'SW 7005 Pure White',
+      sheen: 'Flat/Eggshell',
+      notes: 'Main interior wall paint'
+    });
+
+    // 2. Fetch live finishes from storage
+    const liveSpecs = await fetchProjectFinishes(lot3Id);
+    assert.ok(Array.isArray(liveSpecs));
+    assert.ok(liveSpecs.length >= 1);
+    const paintSpec = liveSpecs.find(s => (s.code || '').includes('SW 7005'));
+    assert.ok(paintSpec, 'Must find SW 7005 paint specification');
+    assert.equal(paintSpec.surface, 'Interior Walls');
+    assert.equal(paintSpec.sheen, 'Flat/Eggshell');
+
+    // 3. Build grounded system instruction prompt context
+    const promptInstruction = buildGroundingSystemInstruction({
+      activeProjectName: 'Lot 3',
+      projectSpecs: liveSpecs,
+      dashData: null,
+      driveData: null,
+      siteSetupData: null,
+      inspectionsData: [],
+      pendingR: [],
+      memoriesData: []
+    });
+
+    // 4. Verify that the paint spec appears in [MODULE 4: HOMEOWNER FINISH SPECIFICATIONS]
+    assert.ok(promptInstruction.includes('[MODULE 4: HOMEOWNER FINISH SPECIFICATIONS]'));
+    assert.ok(promptInstruction.includes('Sherwin-Williams'));
+    assert.ok(promptInstruction.includes('SW 7005 Pure White'));
+    assert.ok(promptInstruction.includes('Interior Walls'));
+    assert.ok(promptInstruction.includes('Flat/Eggshell'));
+    assert.ok(!promptInstruction.includes('No finish specifications recorded'));
+
+    // 5. Verify that J.A.R.V.I.S. tool get_project_finishes executes and returns the paint spec
+    const toolRes = await executeClientToolCall(
+      'get_project_finishes',
+      { projectId: lot3Id, category: 'Paint' },
+      { projectId: lot3Id, activeProjectName: 'Lot 3', projectSpecs: liveSpecs }
+    );
+
+    assert.equal(toolRes.found, true);
+    assert.ok(toolRes.count >= 1);
+    assert.ok(toolRes.summaryText.includes('SW 7005 Pure White'));
+    assert.ok(toolRes.summaryText.includes('Interior Walls'));
+    assert.ok(toolRes.summaryText.includes('Flat/Eggshell'));
+    assert.ok(toolRes.provenance.includes('/projects/lot_3/finishes'));
   });
 });

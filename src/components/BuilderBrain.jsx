@@ -24,8 +24,6 @@ import {
 import MemoryVault from './MemoryVault.jsx';
 import { getMemories } from '../services/memoryService.js';
 import {
-  loadProjectSpecs,
-  saveProjectSpecs,
   playChimeAlert,
   loadGlobalPhases,
   saveGlobalPhases,
