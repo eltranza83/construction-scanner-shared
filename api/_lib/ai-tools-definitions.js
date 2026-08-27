@@ -306,7 +306,7 @@ export const AI_TOOL_DECLARATIONS = [
   },
   {
     name: 'get_project_finishes',
-    description: 'Retrieve finish specifications, selections, paint schedules, roofing materials, stucco textures, stone finishes, and fixtures from Firestore. Returns explicit whole-house defaults and location-specific overrides.',
+    description: 'Retrieve homeowner finish specifications, paint colors, paint schedules, roofing materials, stucco textures, stone finishes, and fixtures from Firestore. Call this tool whenever the user asks about paint colors, finishes, materials, or sheens for any lot or room. Returns explicit whole-house defaults and location-specific overrides.',
     parameters: {
       type: 'OBJECT',
       properties: {

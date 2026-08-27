@@ -10,6 +10,8 @@ import {
   migrateLegacyLocalStorageSpecs,
   FINISH_SCOPES
 } from '../src/services/finishService.js';
+import { executeClientToolCall } from '../src/services/aiTools.js';
+import { buildGroundingSystemInstruction } from '../src/services/builderBrainService.js';
 
 describe('Finishes & Specs End-to-End Integration & Real-World Scenarios', () => {
   const mockProjectId = 'lot_3_test';
@@ -259,6 +261,80 @@ describe('Finishes & Specs End-to-End Integration & Real-World Scenarios', () =>
     assert.equal(migrated[0].category, 'Paint');
     assert.equal(migrated[1].id, 'spec_1712003350_cd34');
     assert.equal(migrated[1].category, 'Tile & Grout');
+  });
+
+  // Scenario 11: Real-World Multi-Turn In-Conversation Edit (SW 7055 -> SW 8055)
+  it('Scenario 11: Edit from SW 7055 to SW 8055 updates prompt manifest and tool retrieval in same conversation', async () => {
+    const liveProjectId = 'lot_3_turn_test';
+
+    // Turn 1: Initial Finish is SW 7055 Pure White
+    const initialFinish = await saveFinishSpec(liveProjectId, {
+      id: 'spec_paint_turn_test',
+      category: 'Paint',
+      location: 'Whole House',
+      surface: 'Interior Walls',
+      brand: 'Sherwin-Williams',
+      code: 'SW 7055 Pure White',
+      sheen: 'Flat/Eggshell',
+      notes: 'Initial selection'
+    });
+
+    assert.equal(initialFinish.code, 'SW 7055 Pure White');
+
+    // J.A.R.V.I.S. tool retrieval for Turn 1
+    const turn1ToolRes = await executeClientToolCall(
+      'get_project_finishes',
+      { projectId: liveProjectId, category: 'Paint' },
+      { projectId: liveProjectId, activeProjectName: 'Lot 3' }
+    );
+    assert.ok(turn1ToolRes.summaryText.includes('SW 7055 Pure White'));
+
+    // Turn 2: User edits existing finish to SW 8055 Pure White
+    const updatedFinish = await saveFinishSpec(liveProjectId, {
+      id: 'spec_paint_turn_test', // Same ID (edit in place)
+      category: 'Paint',
+      location: 'Whole House',
+      surface: 'Interior Walls',
+      brand: 'Sherwin-Williams',
+      code: 'SW 8055 Pure White',
+      sheen: 'Flat/Eggshell',
+      notes: 'Updated selection per buyer'
+    });
+
+    assert.equal(updatedFinish.id, 'spec_paint_turn_test');
+    assert.equal(updatedFinish.code, 'SW 8055 Pure White');
+
+    // Fetch fresh finishes
+    const liveSpecs = await fetchProjectFinishes(liveProjectId);
+    assert.equal(liveSpecs.length, 1);
+    assert.equal(liveSpecs[0].code, 'SW 8055 Pure White');
+
+    // Build prompt manifest for Turn 2
+    const promptInstruction = buildGroundingSystemInstruction({
+      activeProjectName: 'Lot 3',
+      projectSpecs: liveSpecs,
+      dashData: null,
+      driveData: null,
+      siteSetupData: null,
+      inspectionsData: [],
+      pendingR: [],
+      memoriesData: []
+    });
+
+    // Verify Module 4 contains the new SW 8055 code and does NOT contain SW 7055
+    assert.ok(promptInstruction.includes('[MODULE 4: HOMEOWNER FINISH SPECIFICATIONS]'));
+    assert.ok(promptInstruction.includes('SW 8055 Pure White'));
+    assert.ok(!promptInstruction.includes('SW 7055 Pure White'));
+
+    // Verify J.A.R.V.I.S. tool call in Turn 2 returns SW 8055
+    const turn2ToolRes = await executeClientToolCall(
+      'get_project_finishes',
+      { projectId: liveProjectId, category: 'Paint' },
+      { projectId: liveProjectId, activeProjectName: 'Lot 3', projectSpecs: liveSpecs }
+    );
+    assert.equal(turn2ToolRes.found, true);
+    assert.ok(turn2ToolRes.summaryText.includes('SW 8055 Pure White'));
+    assert.ok(!turn2ToolRes.summaryText.includes('SW 7055 Pure White'));
   });
 });
 
