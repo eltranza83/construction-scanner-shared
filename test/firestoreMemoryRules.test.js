@@ -1,4 +1,4 @@
-﻿import assert from 'node:assert/strict';
+import assert from 'node:assert/strict';
 import test from 'node:test';
 
 /**
@@ -14,7 +14,7 @@ import test from 'node:test';
 function evaluateFirestoreMemoryRule({
   operation,
   auth,
-  adminEmails = ['adepecgroup@gmail.com', 'acepeda83@gmail.com', 'eltranza83@gmail.com'],
+  adminEmails = ['adepecgroup@gmail.com'],
   resource = null,
   requestResource = null
 }) {

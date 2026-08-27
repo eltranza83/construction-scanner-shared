@@ -21,9 +21,7 @@ export const DEFAULT_GOOGLE_CLIENT_ID =
 
 
 export const DEFAULT_ADMIN_EMAILS = [
-  'adepecgroup@gmail.com',
-  'acepeda83@gmail.com',
-  'eltranza83@gmail.com'
+  'adepecgroup@gmail.com'
 ];
 
 export function isBuiltInAdmin(email) {
