@@ -1,5 +1,5 @@
 import { getFirebaseDb } from './firebase.js';
-import { collection, doc, getDoc, getDocs, setDoc, deleteDoc } from 'firebase/firestore/lite';
+import { collection, doc, getDoc, getDocs, setDoc, deleteDoc, query, where } from 'firebase/firestore/lite';
 import { APP_STORAGE_KEYS, getStoredJson, persistProjects } from './appStorage.js';
 import { isBuiltInAdmin } from '../config/appConfig.js';
 import { toCanonicalProjectId } from './googleDocsPurchasingService.js';
@@ -19,6 +19,9 @@ export function normalizeProjectRecord(data, id = null) {
   const members = Array.isArray(data.members)
     ? data.members.map((m) => String(m).trim().toLowerCase())
     : (ownerEmail ? [ownerEmail] : []);
+  const memberUids = Array.isArray(data.memberUids)
+    ? data.memberUids.map((u) => String(u).trim()).filter(Boolean)
+    : (ownerUid ? [ownerUid] : []);
 
   return {
     id: canonicalId,
@@ -29,6 +32,7 @@ export function normalizeProjectRecord(data, id = null) {
     ownerEmail,
     ownerUid,
     members,
+    memberUids: Array.from(new Set(memberUids)),
     createdAt: data.createdAt || new Date().toISOString(),
     updatedAt: data.updatedAt || new Date().toISOString()
   };
@@ -73,50 +77,55 @@ export class FirestoreProjectAdapter {
   async getProjects(user = null) {
     const database = this._getDb();
     const userEmail = (user?.email || '').trim().toLowerCase();
-    const userUid = user?.uid || user?.firebaseUid || '';
+    const userUid = (user?.uid || user?.firebaseUid || '').trim();
     const isAdmin = isBuiltInAdmin(userEmail);
 
-    if (!database || !userEmail) {
+    if (!database || (!userEmail && !userUid)) {
       const cached = getStoredJson(APP_STORAGE_KEYS.projects, []);
       return Array.isArray(cached) ? cached.map((p) => normalizeProjectRecord(p, p.id)) : [];
     }
 
     try {
       const projectsCol = collection(database, 'projects');
-      const items = [];
+      const itemsMap = new Map();
 
-      const snap = await getDocs(projectsCol);
-      snap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const norm = normalizeProjectRecord(data, docSnap.id);
-        const isOwner = norm.ownerEmail === userEmail || (userUid && norm.ownerUid === userUid);
-        const isMember = norm.members.includes(userEmail);
-        if (isAdmin || isOwner || isMember || (!norm.ownerEmail && !norm.ownerUid)) {
-          items.push(norm);
+      if (isAdmin) {
+        // Admin gets all projects
+        const snap = await getDocs(projectsCol);
+        snap.forEach((docSnap) => {
+          const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
+          itemsMap.set(norm.id, norm);
+        });
+      } else {
+        // Non-admin queries by memberUids and ownerUid
+        if (userUid) {
+          try {
+            const memberQuery = query(projectsCol, where('memberUids', 'array-contains', userUid));
+            const snap = await getDocs(memberQuery);
+            snap.forEach((docSnap) => {
+              const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
+              itemsMap.set(norm.id, norm);
+            });
+          } catch (qErr) {
+            console.warn('[FirestoreProjectAdapter] memberUids query error, attempting ownerUid query:', qErr?.message);
+          }
+
+          try {
+            const ownerQuery = query(projectsCol, where('ownerUid', '==', userUid));
+            const snap = await getDocs(ownerQuery);
+            snap.forEach((docSnap) => {
+              const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
+              itemsMap.set(norm.id, norm);
+            });
+          } catch (_) {}
         }
-      });
+      }
+
+      const items = Array.from(itemsMap.values());
 
       if (items.length > 0) {
         persistProjects(items);
         return items;
-      }
-
-      // If Firestore is empty, auto-hydrate from local cache (migration safe)
-      const localCached = getStoredJson(APP_STORAGE_KEYS.projects, []);
-      if (Array.isArray(localCached) && localCached.length > 0) {
-        const migrated = [];
-        for (const localP of localCached) {
-          const norm = normalizeProjectRecord({
-            ...localP,
-            ownerEmail: userEmail,
-            ownerUid: userUid,
-            members: [userEmail]
-          }, localP.id);
-          await this.saveProject(norm, user);
-          migrated.push(norm);
-        }
-        persistProjects(migrated);
-        return migrated;
       }
 
       return [];
@@ -129,12 +138,16 @@ export class FirestoreProjectAdapter {
 
   async saveProject(project, user = null) {
     const userEmail = (user?.email || '').trim().toLowerCase();
-    const userUid = user?.uid || user?.firebaseUid || '';
+    const userUid = (user?.uid || user?.firebaseUid || '').trim();
+    const existingMemberUids = Array.isArray(project.memberUids) ? project.memberUids : [];
+    const resolvedMemberUids = userUid ? Array.from(new Set([...existingMemberUids, userUid])) : existingMemberUids;
+
     const norm = normalizeProjectRecord({
       ...project,
       ownerEmail: project.ownerEmail || userEmail,
       ownerUid: project.ownerUid || userUid,
       members: project.members || (userEmail ? [userEmail] : []),
+      memberUids: resolvedMemberUids,
       updatedAt: new Date().toISOString()
     }, project.id);
 
