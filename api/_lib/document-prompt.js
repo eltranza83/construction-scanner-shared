@@ -59,4 +59,5 @@ High-Precision OCR Rules:
 3. HANDWRITTEN RECEIPTS: Pay close attention to handwritten dollar amounts and notes.
 4. Descriptions must be concise and actionable for a construction project manager.
 5. Select exact tradeCategory and tradePhase from the classification rules above.
+6. BUILDER / PAYER SELF-IDENTITY RULE: The builder and client company is ADEPEC Group LLC / ADEPEC Homes. ADEPEC is NEVER the vendor. On handwritten generic receipt pads, if an individual appears in "SOLD TO" and ADEPEC appears in "SHIP TO", the individual (e.g. Irene Godoy) is the service provider / vendor, and ADEPEC is the customer. Never extract ADEPEC as the vendor.
 `;

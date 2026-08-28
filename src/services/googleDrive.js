@@ -537,7 +537,7 @@ export const UNKNOWN_VENDORS_FOLDER_NAME = 'Unknown Vendors';
 /**
  * Checks if a vendor name string is confident vs generic placeholder/unidentified.
  * Conservative safeguard: rejects generic terms, thermal receipt header noise (CASH, VISA, TOTAL),
- * and strings without at least 2 alphabetic characters.
+ * strings without at least 2 alphabetic characters, and the builder/payer's own company identity (ADEPEC).
  */
 export function isConfidentVendor(vendor) {
   if (!vendor || typeof vendor !== 'string') return false;
@@ -545,6 +545,10 @@ export function isConfidentVendor(vendor) {
   if (trimmed.length < 2) return false;
 
   const lower = trimmed.toLowerCase();
+
+  // Builder / Payer Self-Identity Safeguard: ADEPEC is the customer, NEVER the vendor
+  if (/\badepec\b/i.test(lower)) return false;
+
   const unconfidentKeywords = [
     'unknown', 'unidentified', 'n/a', 'na', 'none', 'null', 'undefined',
     'pending', 'unspecified', 'general', 'receipt', 'invoice', 'statement',
@@ -560,6 +564,42 @@ export function isConfidentVendor(vendor) {
   if (letterCount < 2) return false;
 
   return true;
+}
+
+/**
+ * Normalizes vendor name for deterministic matching across formatting differences
+ * Eliminates punctuation/whitespace discrepancies without making semantic assumptions:
+ * - Inserts a space after periods in initials (e.g. "L.Herrera" -> "L. Herrera")
+ * - Strips periods, commas, apostrophes, and quotes
+ * - Normalizes hyphens surrounded by whitespace
+ * - Collapses repeated whitespace
+ * - Leaves '&' vs 'and', corporate words (LLC, Inc, Co), and store numbers untouched
+ */
+export function toCanonicalVendorKey(vendorName) {
+  if (!vendorName || typeof vendorName !== 'string') return '';
+  return vendorName
+    .trim()
+    .toLowerCase()
+    .replace(/([a-z0-9])\.([a-z0-9])/gi, '$1 $2')
+    .replace(/[.,'"`]/g, '')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Lists all active subfolders under a parent folder in Google Drive.
+ */
+export async function listSubfoldersInFolder(accessToken, parentFolderId) {
+  if (!accessToken || !parentFolderId) return [];
+  assertDriveFolderParent(parentFolderId, 'list subfolders');
+  const safeParentId = escapeDriveQueryString(parentFolderId);
+  const query = `mimeType='application/vnd.google-apps.folder' and '${safeParentId}' in parents and trashed=false`;
+  const url = `${GOOGLE_DRIVE_API_BASE}/files?q=${encodeURIComponent(query)}&fields=files(id,name)&pageSize=100`;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!res.ok) throw new Error(`Failed to list subfolders: ${await res.text()}`);
+  const data = await res.json();
+  return data.files || [];
 }
 
 /**
@@ -580,20 +620,46 @@ export async function ensureAppSubfolder(accessToken, projectFolderId, subfolder
 }
 
 /**
- * Ensures the vendor-specific subfolder exists inside 'App Folders / Vendors / Stores / [Vendor Name]'
+ * Resolves or creates a vendor subfolder under 'App Folders / Vendors / Stores / [Vendor Name]'
+ * Following strict deterministic rules:
+ * 1. Exact name match -> use existing folder ID.
+ * 2. No exact match + exactly ONE canonical match -> use existing folder ID.
+ * 3. Multiple canonical matches (ambiguity) -> returns null (routes to Unknown Vendors, never guesses).
+ * 4. No match -> creates the new vendor folder (assuming confident vendor).
+ * 5. Never automatically moves, merges, renames, or consolidates existing folders.
  */
 export async function ensureVendorFolder(accessToken, projectFolderId, vendorName) {
   if (!accessToken || !projectFolderId || !vendorName) return null;
-  
+  if (!isConfidentVendor(vendorName)) return null;
+
   // 1. Locate or create 'Vendors / Stores' inside 'App Folders'
   const vendorsStoresFolderId = await ensureAppSubfolder(accessToken, projectFolderId, VENDORS_STORES_FOLDER_NAME);
   if (!vendorsStoresFolderId) return null;
 
   // 2. Sanitize vendor name for Google Drive folder creation
   const cleanVendor = String(vendorName).trim().replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ');
-  if (!cleanVendor) return vendorsStoresFolderId;
+  if (!cleanVendor) return null;
 
-  // 3. Locate or create the vendor folder
+  // 3. Inspect existing subfolders in 'Vendors / Stores'
+  const existingFolders = await listSubfoldersInFolder(accessToken, vendorsStoresFolderId);
+
+  const targetCanonical = toCanonicalVendorKey(cleanVendor);
+  const canonicalMatches = existingFolders.filter(f => toCanonicalVendorKey(f.name) === targetCanonical);
+
+  // Rule 3: Multiple canonical matches -> AMBIGUOUS DUPLICATE CONFLICT!
+  // If multiple existing folders share the canonical key (e.g. "L. Herrera" and "L.Herrera"),
+  // refuse to guess. Route to Unknown Vendors so the user can review and designate the canonical folder.
+  if (canonicalMatches.length > 1) {
+    console.warn(`[Drive Resolver] Duplicate folder conflict for "${vendorName}". Multiple existing folders (${canonicalMatches.map(f => f.name).join(', ')}) share canonical key "${targetCanonical}". Routing to Unknown Vendors.`);
+    return null;
+  }
+
+  // Rule 1 & 2: Exactly ONE canonical match -> reuse that folder ID
+  if (canonicalMatches.length === 1) {
+    return canonicalMatches[0].id;
+  }
+
+  // Rule 4: Zero matches -> Locate or create the new vendor folder
   return await findOrCreateFolder(accessToken, cleanVendor, vendorsStoresFolderId);
 }
 

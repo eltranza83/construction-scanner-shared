@@ -1,6 +1,7 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { isConfidentVendor } from '../src/services/googleDrive.js';
+import { isConfidentVendor, toCanonicalVendorKey } from '../src/services/googleDrive.js';
+import { toCanonicalLotId, resolveSplitProjectFolder } from '../src/services/invoiceUpload.js';
 
 /**
  * Mock Google Drive Virtual File System
@@ -49,9 +50,29 @@ export class MockDriveFileSystem {
   }
 
   ensureVendorFolder(projectFolderId, vendorName) {
+    if (!isConfidentVendor(vendorName)) return null;
     const vendorsStoresId = this.ensureAppSubfolder(projectFolderId, 'Vendors / Stores');
     const cleanVendor = String(vendorName).trim().replace(/[/\\?%*:|"<>]/g, ' ').replace(/\s+/g, ' ');
-    return this.findOrCreateFolder(cleanVendor, vendorsStoresId);
+    if (!cleanVendor) return null;
+
+    const existingFolders = Array.from(this.folders.values()).filter(f => f.parentId === vendorsStoresId);
+
+    const targetCanonical = toCanonicalVendorKey(cleanVendor);
+    const canonicalMatches = existingFolders.filter(f => toCanonicalVendorKey(f.name) === targetCanonical);
+
+    // Rule 3: Multiple canonical matches -> AMBIGUOUS DUPLICATE CONFLICT!
+    if (canonicalMatches.length > 1) {
+      return null;
+    }
+
+    // Rule 1 & 2: Exactly ONE canonical match -> reuse
+    if (canonicalMatches.length === 1) {
+      return canonicalMatches[0].id;
+    }
+
+    // Rule 4: Zero matches -> create
+    const created = this.createFolder(cleanVendor, vendorsStoresId);
+    return created.id;
   }
 
   findSpreadsheet(projectFolderId, preferredName = 'JobScan_Expense_Log') {
@@ -428,6 +449,153 @@ describe('Canonical Google Drive App Folders Architecture Suite', () => {
     assert.equal(item2Meta.amount, 120.00);
     assert.equal(item2Meta.date, '2026-08-18');
     assert.equal(item2Meta.rawVendorText, 'Hardware Store');
+  });
+
+  it('13. Vendor Exact Match: L. Herrera Landscaping & Sprinklers matches existing folder exactly', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+    const vendorsStoresId = drive.ensureAppSubfolder(lot3.id, 'Vendors / Stores');
+    const existingFolder = drive.createFolder('L. Herrera Landscaping & Sprinklers', vendorsStoresId);
+
+    const resolvedId = drive.ensureVendorFolder(lot3.id, 'L. Herrera Landscaping & Sprinklers');
+    assert.equal(resolvedId, existingFolder.id, 'Reuses exact matching folder ID');
+
+    // Confirm no duplicate created
+    const subfolders = Array.from(drive.folders.values()).filter(f => f.parentId === vendorsStoresId);
+    assert.equal(subfolders.length, 1);
+  });
+
+  it('14. Single Canonical Match: L.Herrera Landscaping & Sprinklers matches L. Herrera without creating a duplicate', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+    const vendorsStoresId = drive.ensureAppSubfolder(lot3.id, 'Vendors / Stores');
+    const existingFolder = drive.createFolder('L. Herrera Landscaping & Sprinklers', vendorsStoresId);
+
+    // Incoming receipt has NO space after "L."
+    const resolvedId = drive.ensureVendorFolder(lot3.id, 'L.Herrera Landscaping & Sprinklers');
+    assert.equal(resolvedId, existingFolder.id, 'Reuses single canonical matching folder ID');
+
+    // Zero duplicate created
+    const subfolders = Array.from(drive.folders.values()).filter(f => f.parentId === vendorsStoresId);
+    assert.equal(subfolders.length, 1);
+  });
+
+  it('15. Multiple Canonical Matches: When both L. Herrera and L.Herrera already exist, resolver returns null and routes to Unknown Vendors (NO automatic consolidation)', () => {
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+    const vendorsStoresId = drive.ensureAppSubfolder(lot3.id, 'Vendors / Stores');
+    const uploadsId = drive.ensureAppSubfolder(lot3.id, 'Invoice Uploads');
+    const unknownVendorsId = drive.ensureAppSubfolder(lot3.id, 'Unknown Vendors');
+
+    // Both duplicates exist in the drive
+    const folderA = drive.createFolder('L. Herrera Landscaping & Sprinklers', vendorsStoresId);
+    const folderB = drive.createFolder('L.Herrera Landscaping & Sprinklers', vendorsStoresId);
+
+    // Incoming receipt arrives with double space
+    const incomingVendor = 'L.  Herrera Landscaping & Sprinklers';
+    let destinationId = drive.ensureVendorFolder(lot3.id, incomingVendor);
+
+    // Ambiguity detected: must return null
+    assert.equal(destinationId, null, 'Ambiguous canonical match returns null');
+
+    // System routes to Unknown Vendors
+    if (!destinationId) {
+      destinationId = unknownVendorsId;
+    }
+
+    const receipt = drive.createFile('Lot 3 - Sprinklers.pdf', uploadsId, 'application/pdf', 'RECEIPT_DATA');
+    drive.moveFile(receipt.id, uploadsId, destinationId);
+
+    const movedReceipt = drive.files.get(receipt.id);
+    assert.equal(movedReceipt.parentId, unknownVendorsId, 'Receipt is safely staged in Unknown Vendors for human review');
+
+    // VERIFY ZERO SIDE EFFECTS: Both existing folders remain completely untouched
+    assert.ok(drive.folders.has(folderA.id), 'Existing folder A was NOT deleted or renamed');
+    assert.ok(drive.folders.has(folderB.id), 'Existing folder B was NOT deleted or renamed');
+  });
+
+  it('16. Builder Payer Self-Identity Safeguard: ADEPEC GROUP is rejected as a vendor and routes to Unknown Vendors', () => {
+    assert.equal(isConfidentVendor('ADEPEC GROUP'), false);
+    assert.equal(isConfidentVendor('ADEPEC Homes'), false);
+    assert.equal(isConfidentVendor('Adepec Group LLC'), false);
+
+    const drive = new MockDriveFileSystem();
+    const lot3 = drive.createFolder('Lot 3');
+    const uploadsId = drive.ensureAppSubfolder(lot3.id, 'Invoice Uploads');
+    const unknownVendorsId = drive.ensureAppSubfolder(lot3.id, 'Unknown Vendors');
+
+    let resolvedVendorId = drive.ensureVendorFolder(lot3.id, 'ADEPEC GROUP');
+    assert.equal(resolvedVendorId, null, 'Payer self-identity returns null');
+
+    if (!resolvedVendorId) {
+      resolvedVendorId = unknownVendorsId;
+    }
+
+    const cleaningReceipt = drive.createFile('Lot 3 - Cleaning - Labor.pdf', uploadsId, 'application/pdf', 'CLEANING_RECEIPT');
+    drive.moveFile(cleaningReceipt.id, uploadsId, resolvedVendorId);
+
+    // Verify receipt landed in Unknown Vendors
+    assert.equal(drive.files.get(cleaningReceipt.id).parentId, unknownVendorsId);
+
+    // Verify NO "ADEPEC GROUP" folder was created in Vendors / Stores
+    const appFolder = drive.findFolder('App Folders', lot3.id);
+    const vendorsStores = drive.findFolder('Vendors / Stores', appFolder.id);
+    if (vendorsStores) {
+      const adepecInVendors = drive.findFolder('ADEPEC GROUP', vendorsStores.id);
+      assert.equal(adepecInVendors, null, 'Zero ADEPEC folder created in Vendors / Stores');
+    }
+  });
+
+  it('17. Canonical Lot Normalization: Lot 3, L. 3, L.3, L-3, lot3 resolve to the same canonical lot ID', () => {
+    assert.equal(toCanonicalLotId('Lot 3'), 'lot_3');
+    assert.equal(toCanonicalLotId('L. 3'), 'lot_3');
+    assert.equal(toCanonicalLotId('L.3'), 'lot_3');
+    assert.equal(toCanonicalLotId('L-3'), 'lot_3');
+    assert.equal(toCanonicalLotId('lot3'), 'lot_3');
+    assert.equal(toCanonicalLotId('Lot 3A'), 'lot_3a');
+    assert.equal(toCanonicalLotId('L. 3A'), 'lot_3a');
+  });
+
+  it('18. Strict Lot Boundaries: Lot 3 can NEVER match Lot 30 or Lot 3A', () => {
+    const lot3Id = toCanonicalLotId('Lot 3');
+    const lot30Id = toCanonicalLotId('Lot 30');
+    const lot33Id = toCanonicalLotId('Lot 33');
+    const lot3AId = toCanonicalLotId('Lot 3A');
+
+    assert.notEqual(lot3Id, lot30Id, 'Lot 3 != Lot 30');
+    assert.notEqual(lot3Id, lot33Id, 'Lot 3 != Lot 33');
+    assert.notEqual(lot3Id, lot3AId, 'Lot 3 != Lot 3A');
+  });
+
+  it('19. Unresolved Lot Split Resolver: Never silently falls back to selectedFolder.id when lot is unresolved', () => {
+    const projects = [
+      { id: 'proj_1', folderId: 'folder_lot_3', name: 'Lot 3' },
+      { id: 'proj_2', folderId: 'folder_lot_4', name: 'Lot 4' }
+    ];
+    const selectedFolder = { id: 'folder_lot_3', name: 'Lot 3' };
+
+    // 1. Formatting variation matches seamlessly
+    const matchedVariation = resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: 'L. 4' });
+    assert.equal(matchedVariation.unresolved, false);
+    assert.equal(matchedVariation.folderId, 'folder_lot_4');
+
+    // 2. Non-existent lot: MUST NOT fall back to selectedFolder.id!
+    const unresolvedSplit = resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: 'Lot 99' });
+    assert.equal(unresolvedSplit.unresolved, true);
+    assert.equal(unresolvedSplit.folderId, null, 'Must NOT fall back to selectedFolder.id');
+    assert.ok(unresolvedSplit.error.includes('Could not resolve project lot "Lot 99"'));
+  });
+
+  it('20. Semantic Non-Merging Safeguard: Distinct entities remain separate folders', () => {
+    // & vs and must NOT collapse
+    assert.notEqual(toCanonicalVendorKey('Smith & Sons'), toCanonicalVendorKey('Smith and Sons'));
+
+    // Corporate suffixes must NOT collapse
+    assert.notEqual(toCanonicalVendorKey('ABC Supply'), toCanonicalVendorKey('ABC Supply Co'));
+    assert.notEqual(toCanonicalVendorKey('Rodriguez Framing LLC'), toCanonicalVendorKey('Rodriguez Framing Inc'));
+
+    // Store numbers must NOT collapse
+    assert.notEqual(toCanonicalVendorKey('84 Lumber #12'), toCanonicalVendorKey('84 Lumber #14'));
   });
 });
 

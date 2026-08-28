@@ -96,14 +96,14 @@ test('resolveSplitProjectFolder matches project names case-insensitively', () =>
     { name: 'Lot 2', folderId: 'folder-2' }
   ];
 
-  assert.deepEqual(
-    resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: ' lot 2 ' }),
-    { folderId: 'folder-2', lotName: 'Lot 2' }
-  );
-  assert.deepEqual(
-    resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: 'Lot 99' }),
-    { folderId: 'default-folder', lotName: 'Lot 99' }
-  );
+  const resolved = resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: ' lot 2 ' });
+  assert.equal(resolved.folderId, 'folder-2');
+  assert.equal(resolved.lotName, 'Lot 2');
+  assert.equal(resolved.unresolved, false);
+
+  const unresolved = resolveSplitProjectFolder(projects, selectedFolder, { lotNumber: 'Lot 99' });
+  assert.equal(unresolved.folderId, null, 'Must NOT fall back to default-folder');
+  assert.equal(unresolved.unresolved, true);
 });
 
 test('routing test splits cover every configured trade phase once', () => {

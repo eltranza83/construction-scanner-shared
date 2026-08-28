@@ -77,13 +77,70 @@ async function buildPdfBlob(item, generateDocumentPDF) {
   };
 }
 
-export function resolveSplitProjectFolder(projects, selectedFolder, split) {
-  const lotName = String(split.lotNumber || '').trim().toLowerCase();
-  const matchingProject = projects.find(project => project.name.trim().toLowerCase() === lotName);
+export function toCanonicalLotId(rawLot) {
+  if (!rawLot || typeof rawLot !== 'string') return null;
+  const trimmed = rawLot.trim().toLowerCase();
 
+  // Matches "Lot 3", "L. 3", "L.3", "L-3", "lot3", "Lot 3A"
+  // STRICT BOUNDARY: Never matches "Lot 30" or "Lot 33"
+  const match = trimmed.match(/^(?:lot|l\.?|l\b)[\s_-]*([0-9]+[a-z]?)$/i);
+  if (match) {
+    return `lot_${match[1].toLowerCase()}`;
+  }
+
+  return null;
+}
+
+export function resolveSplitProjectFolder(projects = [], selectedFolder = null, split = {}) {
+  const rawLot = String(split?.lotNumber || '').trim();
+  if (!rawLot) {
+    return {
+      folderId: null,
+      lotName: null,
+      unresolved: true,
+      error: 'Missing lot number for split allocation.'
+    };
+  }
+
+  const projectList = Array.isArray(projects) ? projects : [];
+
+  // 1. Exact match (case-insensitive)
+  const exactMatch = projectList.find(p => (p.name || '').trim().toLowerCase() === rawLot.toLowerCase());
+  if (exactMatch) {
+    return {
+      folderId: exactMatch.folderId,
+      lotName: exactMatch.name,
+      unresolved: false
+    };
+  }
+
+  // 2. Canonical lot matching (e.g. "Lot 3", "L. 3", "L.3", "L-3", "lot3")
+  const targetCanonical = toCanonicalLotId(rawLot);
+  if (targetCanonical) {
+    const canonicalMatches = projectList.filter(p => toCanonicalLotId(p.name) === targetCanonical);
+    if (canonicalMatches.length === 1) {
+      return {
+        folderId: canonicalMatches[0].folderId,
+        lotName: canonicalMatches[0].name,
+        unresolved: false
+      };
+    }
+    if (canonicalMatches.length > 1) {
+      return {
+        folderId: null,
+        lotName: rawLot,
+        unresolved: true,
+        error: `Ambiguous project resolution: multiple projects match "${rawLot}".`
+      };
+    }
+  }
+
+  // 3. Unresolved: DO NOT silently fall back to selectedFolder.id!
   return {
-    folderId: matchingProject ? matchingProject.folderId : selectedFolder.id,
-    lotName: matchingProject ? matchingProject.name : split.lotNumber
+    folderId: null,
+    lotName: rawLot,
+    unresolved: true,
+    error: `Could not resolve project lot "${rawLot}". Manual project selection required.`
   };
 }
 
@@ -126,6 +183,9 @@ export async function syncInvoiceDocument({
       };
       const splitPdfBlob = await generateDocumentPDF(splitMetadata, images);
       const projectFolder = resolveSplitProjectFolder(projects, selectedFolder, split);
+      if (projectFolder.unresolved || !projectFolder.folderId) {
+        throw new Error(projectFolder.error || `Could not resolve lot "${split.lotNumber}".`);
+      }
       const uploadsFolder = await ensureAppSubfolder(googleToken, projectFolder.folderId, 'Invoice Uploads');
       const splitFileName = buildInvoiceFileName({
         ...splitMetadata,
