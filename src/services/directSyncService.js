@@ -29,6 +29,97 @@ function isPhaseHeaderLabel(value) {
 }
 
 /**
+ * Locates the exact row number (1-indexed) where a transaction for tradePhase should be written.
+ * Guarantees that:
+ * 1. The transaction stays strictly within the tradePhase block.
+ * 2. It never writes over a subsequent phase header.
+ * 3. It returns whether a row insertion (insertDimension) is required to avoid overflowing into the next phase.
+ *
+ * @param {Array<Array<string>>} rows - 2D array of sheet values (0-indexed).
+ * @param {string} tradePhase - Target trade phase name (e.g. "Landscaping & Irrigation").
+ * @returns {{ targetRowNumber: number, needsRowInsertion: boolean, insertAtIndex: number|null } | null}
+ */
+export function findTargetPhaseRow(rows, tradePhase) {
+  if (!Array.isArray(rows) || !tradePhase) return null;
+
+  // 1. Locate phase header row index
+  let phaseHeaderRowIdx = -1;
+  const targetPhaseAliases = getPhaseAliases(tradePhase);
+
+  for (let r = 0; r < rows.length; r++) {
+    const cellVal = rows[r]?.[0] || '';
+    if (cellVal && isPhaseHeaderLabel(cellVal)) {
+      const rowPhaseNorm = normalizeKey(cellVal);
+      if (targetPhaseAliases.includes(rowPhaseNorm)) {
+        phaseHeaderRowIdx = r;
+        break;
+      }
+    }
+  }
+
+  if (phaseHeaderRowIdx === -1) {
+    return null;
+  }
+
+  // 2. Locate the boundary where the next phase block starts (if any)
+  let nextBlockHeaderRowIdx = null;
+  for (let r = phaseHeaderRowIdx + 1; r < rows.length; r++) {
+    const cellVal = rows[r]?.[0] || '';
+    if (cellVal && isPhaseHeaderLabel(cellVal)) {
+      nextBlockHeaderRowIdx = r;
+      break;
+    }
+  }
+
+  // 3. Scan inside this block for the first unoccupied row
+  // A row is occupied if any transaction column (A..F) has non-empty text
+  const scanLimit = nextBlockHeaderRowIdx !== null ? nextBlockHeaderRowIdx : rows.length;
+  let emptySlotRowIdx = -1;
+  let lastOccupiedRowIdx = phaseHeaderRowIdx;
+
+  for (let r = phaseHeaderRowIdx + 1; r < scanLimit; r++) {
+    const row = rows[r] || [];
+    const hasData = Boolean(
+      (row[0] || '').trim() || (row[1] || '').trim() || (row[2] || '').trim() ||
+      (row[3] || '').trim() || (row[4] || '').trim() || (row[5] || '').trim()
+    );
+    if (hasData) {
+      lastOccupiedRowIdx = r;
+    } else if (emptySlotRowIdx === -1) {
+      emptySlotRowIdx = r;
+    }
+  }
+
+  // Case 1: An empty pre-allocated slot exists inside this block before the next phase
+  if (emptySlotRowIdx !== -1) {
+    return {
+      targetRowNumber: emptySlotRowIdx + 1, // 1-indexed row for PUT range
+      needsRowInsertion: false,
+      insertAtIndex: null
+    };
+  }
+
+  // Case 2: All existing slots inside this bounded block are occupied
+  if (nextBlockHeaderRowIdx !== null) {
+    // Next phase header exists immediately below!
+    // Insert a new row before nextBlockHeaderRowIdx to expand the block safely
+    return {
+      targetRowNumber: nextBlockHeaderRowIdx + 1, // 1-indexed row after insertion
+      needsRowInsertion: true,
+      insertAtIndex: nextBlockHeaderRowIdx // 0-indexed row for insertDimension
+    };
+  }
+
+  // Case 3: Last phase on the tab (no subsequent phase header)
+  // Safely target the very next row after the last occupied row
+  return {
+    targetRowNumber: lastOccupiedRowIdx + 2, // 1-indexed
+    needsRowInsertion: false,
+    insertAtIndex: null
+  };
+}
+
+/**
  * Synchronizes uploaded invoice PDFs directly to the Google Spreadsheet using the active Google access token.
  */
 export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId) {
@@ -183,45 +274,6 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
     const rangeData = await rangeRes.json();
     const rows = rangeData.values || [];
 
-    // Find phase header row index
-    let phaseHeaderRowIdx = -1;
-    const targetPhaseAliases = getPhaseAliases(tradePh);
-
-    for (let r = 0; r < rows.length; r++) {
-      const cellVal = rows[r]?.[0] || '';
-      if (cellVal && isPhaseHeaderLabel(cellVal)) {
-        const rowPhaseNorm = normalizeKey(cellVal);
-        if (targetPhaseAliases.includes(rowPhaseNorm)) {
-          phaseHeaderRowIdx = r;
-          break;
-        }
-      }
-    }
-
-    if (phaseHeaderRowIdx === -1) {
-      console.warn(`Phase header "${tradePh}" not found in sheet "${sheetTitle}".`);
-      continue;
-    }
-
-    // Find first empty row below phase header
-    let targetRowIdx = -1;
-    for (let r = phaseHeaderRowIdx + 1; r < rows.length; r++) {
-      const row = rows[r] || [];
-      const colA = row[0] || '';
-      const colB = row[1] || '';
-      const colC = row[2] || '';
-      const colD = row[3] || '';
-
-      if (isPhaseHeaderLabel(colA)) {
-        break;
-      }
-
-      if (!colA && !colB && !colC && !colD) {
-        targetRowIdx = r;
-        break;
-      }
-    }
-
     const isLabor = costCat.includes('labor');
     const displayVal = rawCost > 0 ? rawCost : `"PDF"`;
     const materialValue = !isLabor ? `=HYPERLINK("${fileUrl}", ${displayVal})` : '';
@@ -236,30 +288,51 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
       checkNumber
     ];
 
-    if (targetRowIdx !== -1) {
-      // Update existing empty row (1-indexed)
-      const targetRowNumber = targetRowIdx + 1;
-      const updateUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A${targetRowNumber}:F${targetRowNumber}?valueInputOption=USER_ENTERED`;
-      await fetch(updateUrl, {
-        method: 'PUT',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: [rowValues] })
-      });
-    } else {
-      // Append row below block
-      const appendUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A1:F100:append?valueInputOption=USER_ENTERED`;
-      await fetch(appendUrl, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ values: [rowValues] })
-      });
+    const phaseTarget = findTargetPhaseRow(rows, tradePh);
+    if (!phaseTarget) {
+      console.warn(`Phase header "${tradePh}" not found in sheet "${sheetTitle}". Direct log skipped.`);
+      continue;
     }
+
+    // If bounded phase block was full, insert a new row to expand the block safely
+    if (phaseTarget.needsRowInsertion && phaseTarget.insertAtIndex !== null) {
+      try {
+        const batchUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}:batchUpdate`;
+        await fetch(batchUrl, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            requests: [{
+              insertDimension: {
+                range: {
+                  sheetId: matchedSheetProp.sheetId,
+                  dimension: 'ROWS',
+                  startIndex: phaseTarget.insertAtIndex,
+                  endIndex: phaseTarget.insertAtIndex + 1
+                },
+                inheritFromBefore: true
+              }
+            }]
+          })
+        });
+      } catch (insertErr) {
+        console.warn('Failed to insert row for expanded phase block, proceeding with explicit write:', insertErr);
+      }
+    }
+
+    // Always write via explicit PUT to A{row}:F{row} (Zero generic :append)
+    const updateUrl = `${GOOGLE_SHEETS_API_BASE}/${spreadsheetId}/values/'${encodeURIComponent(sheetTitle)}'!A${phaseTarget.targetRowNumber}:F${phaseTarget.targetRowNumber}?valueInputOption=USER_ENTERED`;
+    await fetch(updateUrl, {
+      method: 'PUT',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ values: [rowValues] })
+    });
 
     // Move file to Vendors / Stores / [Vendor Name] if vendor is confidently identified, else Unknown Vendors exception queue
     let destinationFolderId = null;
