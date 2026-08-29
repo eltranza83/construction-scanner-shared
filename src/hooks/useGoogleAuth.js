@@ -6,6 +6,7 @@ import {
   loadStoredAppState,
   persistGoogleToken,
   persistGoogleUser,
+  APP_STORAGE_KEYS,
 } from '../services/appStorage';
 import { getFirebaseAuthInstance, signInToFirebaseWithGooglePopup, signOutFromFirebase } from '../services/firebase';
 
@@ -122,10 +123,14 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
               }
             } else if (tokenResponse.error) {
               console.warn('Silent Google token request note:', tokenResponse.error);
-              // CRITICAL: NEVER wipe existing stored token on silent background error
-              const currentStoredToken = localStorage.getItem(APP_STORAGE_KEYS.googleToken);
-              if (!currentStoredToken) {
-                setGoogleToken(null);
+              // CRITICAL: NEVER wipe existing stored token or user session on silent background error
+              try {
+                const currentStoredToken = localStorage.getItem(APP_STORAGE_KEYS.googleToken);
+                if (!currentStoredToken) {
+                  setGoogleToken(null);
+                }
+              } catch (storageErr) {
+                console.warn('Safe check of stored token note:', storageErr);
               }
             }
           }
@@ -206,7 +211,11 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
   const handleSessionExpired = useCallback((options = {}) => {
     const user = loadStoredAppState().googleUser;
     const emailHint = user?.email || '';
-    console.warn('Google Drive token expired. Triggering silent background refresh with hint:', emailHint);
+    console.warn('Google Drive token expired. Triggering non-destructive refresh with hint:', emailHint);
+
+    // Only clear the expired Drive token. NEVER wipe the user's project, invite, or Firebase session!
+    clearGoogleIdentity();
+    setGoogleToken(null);
 
     try {
       if (window.googleTokenClient) {
@@ -216,9 +225,27 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
         });
       }
     } catch (err) {
-      console.error('Silent token refresh failed:', err);
+      console.warn('Background token refresh attempt note:', err);
     }
   }, []);
+
+  const reconnectGoogleDrive = useCallback((options = {}) => {
+    const user = loadStoredAppState().googleUser;
+    const emailHint = user?.email || '';
+    if (window.googleTokenClient) {
+      try {
+        window.googleTokenClient.requestAccessToken({
+          hint: emailHint,
+          prompt: options.interactive === false ? 'none' : ''
+        });
+        return;
+      } catch (err) {
+        console.warn('GIS requestAccessToken failed, falling back to popup sign-in:', err);
+      }
+    }
+    // Fallback to signIn popup if GIS client not loaded yet
+    signIn();
+  }, [signIn]);
 
   return {
     googleClientId,
@@ -229,6 +256,7 @@ export function useGoogleAuth({ setError, setSuccess, onSignedOut } = {}) {
     signingIn,
     signIn,
     signOut,
+    reconnectGoogleDrive,
     handleSessionExpired,
     requestDriveAccessToken,
   };

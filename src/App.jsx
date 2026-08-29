@@ -36,6 +36,7 @@ export default function App() {
   const [success, setSuccess] = useState(null);
   const {
     isInvited,
+    isAuthChecking,
     unlockInvite,
     resetInvite
   } = useInviteGate();
@@ -48,6 +49,7 @@ export default function App() {
     signingIn,
     signIn: handleGoogleSignIn,
     signOut: googleSignOut,
+    reconnectGoogleDrive,
     handleSessionExpired,
     requestDriveAccessToken
   } = useGoogleAuth({
@@ -138,6 +140,10 @@ export default function App() {
       document.removeEventListener('click', handleOutsideClick);
     };
   }, [showProjectDropdown]);
+
+  if (isAuthChecking) {
+    return <LazyScreenFallback />;
+  }
 
   if (!isInvited) {
     return (
@@ -420,20 +426,24 @@ export default function App() {
                   onError={setError}
                 />
 
-                {/* Google Drive Sign In Banner if not signed in */}
+                {/* Google Drive Sign In / Reconnect Banner if not signed in */}
                 {!googleToken && (
                   <div className="settings-card" style={{ display: 'flex', flexDirection: 'column', gap: '12px', border: '1px solid var(--color-zinc-800)' }}>
                     <div style={{ display: 'flex', gap: '10px', alignItems: 'flex-start' }}>
                       <Folder size={20} style={{ color: 'var(--color-amber-500)', marginTop: '2px', flex: 'none' }} />
                       <div>
-                        <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>Connect Google Drive</h4>
+                        <h4 style={{ fontWeight: 600, color: 'var(--color-zinc-200)' }}>
+                          {googleUser ? 'Reconnect Google Drive' : 'Connect Google Drive'}
+                        </h4>
                         <p style={{ fontSize: '0.8rem', color: 'var(--color-zinc-500)', lineHeight: '1.4', marginTop: '2px' }}>
-                          Sign in to save PDFs directly to your Google Drive and log expense items into a Google Sheet automatically.
+                          {googleUser
+                            ? 'Your Google Drive authorization expired. Tap Reconnect to resume saving invoices and syncing budget spreadsheets.'
+                            : 'Sign in to save PDFs directly to your Google Drive and log expense items into a Google Sheet automatically.'}
                         </p>
                       </div>
                     </div>
-                    <button onClick={handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
-                      <LogIn size={16} /> Sign In with Google
+                    <button onClick={reconnectGoogleDrive || handleGoogleSignIn} className="btn btn-secondary" style={{ backgroundColor: '#fff', color: '#18181b', fontWeight: 700 }}>
+                      <LogIn size={16} /> {googleUser ? 'Reconnect Google Drive' : 'Sign In with Google'}
                     </button>
                   </div>
                 )}

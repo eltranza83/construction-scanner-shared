@@ -1,7 +1,18 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
-import { getAuth, GoogleAuthProvider, signInWithPopup, signOut } from 'firebase/auth';
+import { 
+  getAuth, 
+  initializeAuth, 
+  indexedDBLocalPersistence, 
+  browserLocalPersistence, 
+  inMemoryPersistence, 
+  GoogleAuthProvider, 
+  signInWithPopup, 
+  signOut 
+} from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore/lite';
 import { DEFAULT_FIREBASE_CONFIG, STORAGE_KEYS, getStoredConfigValue } from '../config/appConfig.js';
+
+let cachedAuthInstance = null;
 
 /**
  * Dynamically gets or initializes the Firestore database instance
@@ -43,7 +54,20 @@ export function getFirebaseDb() {
 
 export function getFirebaseAuthInstance() {
   const app = getFirebaseAppInstance();
-  return app ? getAuth(app) : null;
+  if (!app) return null;
+  if (cachedAuthInstance) return cachedAuthInstance;
+
+  try {
+    const isBrowser = typeof window !== 'undefined';
+    const persistence = isBrowser
+      ? [indexedDBLocalPersistence, browserLocalPersistence]
+      : [inMemoryPersistence];
+
+    cachedAuthInstance = initializeAuth(app, { persistence });
+  } catch (err) {
+    cachedAuthInstance = getAuth(app);
+  }
+  return cachedAuthInstance;
 }
 
 export async function signInToFirebaseWithGooglePopup(scopes = []) {

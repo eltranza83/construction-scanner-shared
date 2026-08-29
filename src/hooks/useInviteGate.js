@@ -10,15 +10,26 @@ import { isBuiltInAdmin } from '../config/appConfig';
 
 export function useInviteGate() {
   const [isInvited, setIsInvited] = useState(loadInitialInviteState);
+  const [isAuthChecking, setIsAuthChecking] = useState(() => {
+    // If already verified invited from storage, no initial blocking needed
+    if (loadInitialInviteState()) return false;
+    // If a googleUser exists in storage, hold screen until Firebase checks auth state
+    const storedUser = localStorage.getItem(APP_STORAGE_KEYS.googleUser);
+    return Boolean(storedUser);
+  });
 
   useEffect(() => {
     const auth = getFirebaseAuthInstance();
-    if (!auth) return;
+    if (!auth) {
+      setIsAuthChecking(false);
+      return;
+    }
 
     const unsubscribe = auth.onAuthStateChanged((user) => {
       if (user?.email) {
         if (isBuiltInAdmin(user.email)) {
           unlockInvite(user.email);
+          setIsAuthChecking(false);
           return;
         }
         const storedEmail = localStorage.getItem(APP_STORAGE_KEYS.authorizedEmail);
@@ -27,6 +38,7 @@ export function useInviteGate() {
           setIsInvited(true);
         }
       }
+      setIsAuthChecking(false);
     });
 
     return () => unsubscribe();
@@ -44,6 +56,7 @@ export function useInviteGate() {
 
   return {
     isInvited,
+    isAuthChecking,
     unlockInvite,
     resetInvite
   };
