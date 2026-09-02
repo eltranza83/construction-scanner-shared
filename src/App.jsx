@@ -783,12 +783,14 @@ export default function App() {
       </main>
 
       {/* Global Floating AI Field Agent Button */}
-      <GlobalAIAssistant
-        activeProject={activeProject}
-        selectedFolder={selectedFolder}
-        googleToken={googleToken}
-        onNavigateTab={setActiveTab}
-      />
+      <DashboardErrorBoundary>
+        <GlobalAIAssistant
+          activeProject={activeProject}
+          selectedFolder={selectedFolder}
+          googleToken={googleToken}
+          onNavigateTab={setActiveTab}
+        />
+      </DashboardErrorBoundary>
 
       {/* 3. Navigation Footer - 5 Mobile-Optimized Tabs */}
       {!editingItemId && (
