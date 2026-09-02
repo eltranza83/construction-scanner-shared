@@ -1,10 +1,6 @@
 import { initializeApp, getApp, getApps } from 'firebase/app';
 import { 
   getAuth, 
-  initializeAuth, 
-  indexedDBLocalPersistence, 
-  browserLocalPersistence, 
-  inMemoryPersistence, 
   GoogleAuthProvider, 
   signInWithPopup, 
   signOut 
@@ -57,16 +53,7 @@ export function getFirebaseAuthInstance() {
   if (!app) return null;
   if (cachedAuthInstance) return cachedAuthInstance;
 
-  try {
-    const isBrowser = typeof window !== 'undefined';
-    const persistence = isBrowser
-      ? [indexedDBLocalPersistence, browserLocalPersistence]
-      : [inMemoryPersistence];
-
-    cachedAuthInstance = initializeAuth(app, { persistence });
-  } catch {
-    cachedAuthInstance = getAuth(app);
-  }
+  cachedAuthInstance = getAuth(app);
   return cachedAuthInstance;
 }
 
