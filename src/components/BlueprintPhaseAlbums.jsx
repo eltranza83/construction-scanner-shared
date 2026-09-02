@@ -19,20 +19,16 @@ export default function BlueprintPhaseAlbums({
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', height: '100%' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '12px 14px', borderRadius: '10px' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-          <span style={{ fontSize: '0.75rem', color: 'var(--color-zinc-400)', fontWeight: 600 }}>Photos & Progress Log</span>
-          <span style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff' }}>Browse progress photos by phase</span>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', backgroundColor: 'var(--color-zinc-950)', border: '1px solid var(--color-zinc-800)', padding: '10px 14px', borderRadius: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ width: '32px', height: '32px', borderRadius: '8px', backgroundColor: 'rgba(217, 119, 6, 0.12)', border: '1px solid rgba(217, 119, 6, 0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#f59e0b', flexShrink: 0 }}>
+            <Camera size={16} />
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1px' }}>
+            <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#fff' }}>Phase Photo Albums</span>
+            <span style={{ fontSize: '0.70rem', color: 'var(--color-zinc-400)' }}>Progress photos by trade phase</span>
+          </div>
         </div>
-        {!imageSrc && (
-          <button
-            onClick={onBackToBlueprint}
-            className="btn btn-primary"
-            style={{ width: 'auto', padding: '6px 12px', fontSize: '0.75rem', height: '32px', border: 'none' }}
-          >
-            Link Floor Plan
-          </button>
-        )}
       </div>
 
       {activeAlbumPhase ? (
