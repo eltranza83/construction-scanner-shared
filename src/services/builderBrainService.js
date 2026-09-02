@@ -1626,16 +1626,67 @@ export async function askGeminiBrain(
 
   try {
     const headers = { 'Content-Type': 'application/json' };
-    try {
-      const auth = getFirebaseAuthInstance();
-      const user = auth?.currentUser;
-      if (user) {
-        const idToken = await user.getIdToken();
+
+    // 1. Wait for Firebase auth hydration and acquire authenticated ID token
+    const auth = getFirebaseAuthInstance();
+    let user = options.mockUser || auth?.currentUser || null;
+
+    if (!user && auth && typeof auth.authStateReady === 'function' && typeof window !== 'undefined') {
+      try {
+        await auth.authStateReady();
+        user = auth.currentUser;
+      } catch (authReadyErr) {
+        console.warn('[BuilderBrain] authStateReady warning:', authReadyErr);
+      }
+    }
+
+    if (!user && typeof window !== 'undefined' && !options.skipAuthGate) {
+      return {
+        text: 'Sign in is required. Please sign in to your account to use J.A.R.V.I.S.',
+        telemetry: {
+          modelUsed: 'Client Auth Guard',
+          source: 'Client Security Check',
+          intent: 'Authentication Required',
+          durationMs: Date.now() - clientStartTime,
+          toolsExecuted: [],
+          errorCode: 401
+        }
+      };
+    }
+
+    if (user) {
+      try {
+        const idToken = typeof user.getIdToken === 'function' ? await user.getIdToken() : (user.idToken || '');
+        if (!idToken && typeof window !== 'undefined' && !options.skipAuthGate) {
+          return {
+            text: 'Your sign-in session could not be verified. Please sign in again.',
+            telemetry: {
+              modelUsed: 'Client Auth Guard',
+              source: 'Client Security Check',
+              intent: 'Authentication Required',
+              durationMs: Date.now() - clientStartTime,
+              toolsExecuted: [],
+              errorCode: 401
+            }
+          };
+        }
         if (idToken) {
           headers.Authorization = `Bearer ${idToken}`;
         }
+      } catch (tokenErr) {
+        return {
+          text: `Your sign-in session could not be verified: ${tokenErr.message || 'Please sign in again.'}`,
+          telemetry: {
+            modelUsed: 'Client Auth Guard',
+            source: 'Client Security Check',
+            intent: 'Authentication Required',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [],
+            errorCode: 401
+          }
+        };
       }
-    } catch {}
+    }
 
     const reqPayload = JSON.stringify({
       contents,
@@ -1657,30 +1708,57 @@ export async function askGeminiBrain(
       });
       clearTimeout(timeoutId);
       attempt1DurationMs = Date.now() - attempt1Start;
-      if (!apiRes.ok && apiRes.status >= 500) {
-        throw new Error(`Server error ${apiRes.status}`);
+
+      // Only retry transient 5xx gateway errors (502, 504) - NEVER retry auth (401, 403), rate limits (429), or configuration (503)
+      if (!apiRes.ok && (apiRes.status === 502 || apiRes.status === 504)) {
+        throw new Error(`Transient gateway error ${apiRes.status}`);
       }
     } catch (firstErr) {
       attempt1DurationMs = Date.now() - attempt1Start;
+      const isTimeout = firstErr.name === 'AbortError' || attempt1DurationMs >= (CLIENT_REQUEST_TIMEOUT_MS - 500);
       retryOccurred = true;
-      retryReason = firstErr.name === 'AbortError' || attempt1DurationMs >= (CLIENT_REQUEST_TIMEOUT_MS - 500)
-        ? 'FIRST_ATTEMPT_TIMEOUT'
-        : (firstErr.message || 'FIRST_ATTEMPT_NETWORK_ERROR');
+      retryReason = isTimeout ? 'FIRST_ATTEMPT_TIMEOUT' : (firstErr.message || 'FIRST_ATTEMPT_NETWORK_ERROR');
 
-      // Single 1-second retry on network timeout/drop before local fallback
+      // Single 1-second retry ONLY on genuine network timeout/drop or 502/504
       await new Promise(resolve => setTimeout(resolve, 1000));
       const attempt2Start = Date.now();
       const retryController = new AbortController();
       const retryTimeoutId = setTimeout(() => retryController.abort(), CLIENT_REQUEST_TIMEOUT_MS);
 
-      apiRes = await fetch('/api/ask-brain', {
-        method: 'POST',
-        headers,
-        body: reqPayload,
-        signal: retryController.signal
-      });
-      clearTimeout(retryTimeoutId);
-      attempt2DurationMs = Date.now() - attempt2Start;
+      try {
+        apiRes = await fetch('/api/ask-brain', {
+          method: 'POST',
+          headers,
+          body: reqPayload,
+          signal: retryController.signal
+        });
+        clearTimeout(retryTimeoutId);
+        attempt2DurationMs = Date.now() - attempt2Start;
+      } catch (secondErr) {
+        attempt2DurationMs = Date.now() - attempt2Start;
+        if (secondErr.name === 'AbortError' || isTimeout) {
+          return {
+            text: `That request took longer than the expected response window, so I switched to local mode. All your project financials, schedule, and files for ${activeProjectName} are active locally. What specific record would you like to check?`,
+            telemetry: {
+              modelUsed: 'Local Fast Ledger Engine',
+              source: 'Local Project Ledger',
+              intent: 'Local Mode Switch',
+              durationMs: Date.now() - clientStartTime,
+              toolsExecuted: [],
+              errorCode: 'NETWORK_TIMEOUT',
+              latencyMetrics: {
+                attempt1DurationMs,
+                attempt2DurationMs,
+                retryOccurred: true,
+                retryReason,
+                totalDurationMs: Date.now() - clientStartTime,
+                latencyHealth: 'OFFLINE_FALLBACK'
+              }
+            }
+          };
+        }
+        throw secondErr;
+      }
     }
 
     if (apiRes.ok) {
@@ -1931,9 +2009,101 @@ ${getSemanticPromptGuidelines()}
       }
     } else {
       lastErrorCode = apiRes.status;
+      const errorJson = await apiRes.json().catch(() => ({}));
+      const serverMsg = errorJson.error || '';
+
+      if (apiRes.status === 401) {
+        return {
+          text: serverMsg || 'Sign in is required. Please sign in to your account to use J.A.R.V.I.S.',
+          telemetry: {
+            modelUsed: 'Server Auth Gate',
+            source: 'Authentication Service',
+            intent: 'Authentication Required',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [],
+            errorCode: 401
+          }
+        };
+      }
+
+      if (apiRes.status === 403) {
+        return {
+          text: serverMsg || 'Scanner access is not authorized for this account.',
+          telemetry: {
+            modelUsed: 'Server Auth Gate',
+            source: 'Authorization Service',
+            intent: 'Authorization Denied',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [],
+            errorCode: 403
+          }
+        };
+      }
+
+      if (apiRes.status === 429) {
+        return {
+          text: serverMsg || 'Too many requests. Please slow down and try again in a few moments.',
+          telemetry: {
+            modelUsed: 'Server Rate Limiter',
+            source: 'Rate Limit Guard',
+            intent: 'Rate Limited',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [],
+            errorCode: 429
+          }
+        };
+      }
+
+      if (apiRes.status === 503) {
+        return {
+          text: 'AI service is temporarily unavailable; contact the administrator.',
+          telemetry: {
+            modelUsed: 'Server Configuration Gate',
+            source: 'AI Service Config',
+            intent: 'Service Unavailable',
+            durationMs: Date.now() - clientStartTime,
+            toolsExecuted: [],
+            errorCode: 503,
+            rawServerError: serverMsg
+          }
+        };
+      }
+
+      return {
+        text: serverMsg || `I had a temporary issue connecting to the AI server (${apiRes.status}). Please try again.`,
+        telemetry: {
+          modelUsed: 'Server Error Handler',
+          source: 'Server Response',
+          intent: 'Server Error',
+          durationMs: Date.now() - clientStartTime,
+          toolsExecuted: [],
+          errorCode: apiRes.status
+        }
+      };
     }
-  } catch {
-    lastErrorCode = 'NETWORK_TIMEOUT';
+  } catch (outerErr) {
+    if (outerErr.name === 'AbortError' || retryReason === 'FIRST_ATTEMPT_TIMEOUT') {
+      return {
+        text: `That request took longer than the expected response window, so I switched to local mode. All your project financials, schedule, and files for ${activeProjectName} are active locally. What specific record would you like to check?`,
+        telemetry: {
+          modelUsed: 'Local Fast Ledger Engine',
+          source: 'Local Project Ledger',
+          intent: 'Local Mode Switch',
+          durationMs: Date.now() - clientStartTime,
+          toolsExecuted: [],
+          errorCode: 'NETWORK_TIMEOUT',
+          latencyMetrics: {
+            attempt1DurationMs,
+            attempt2DurationMs,
+            retryOccurred,
+            retryReason,
+            totalDurationMs: Date.now() - clientStartTime,
+            latencyHealth: 'OFFLINE_FALLBACK'
+          }
+        }
+      };
+    }
+    lastErrorCode = 'NETWORK_ERROR';
   }
 
   // 3. FAST LOCAL LEDGER & PERSISTENT MEMORY FALLBACK
