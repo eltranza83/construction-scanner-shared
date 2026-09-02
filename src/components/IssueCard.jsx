@@ -107,6 +107,7 @@ export default function IssueCard({
 
   const hasDefectPhoto = Boolean(photoUrl || photoBase64 || issue?.photoFileId);
   const hasProofPhoto = Boolean(proofPhotoUrl || proofPhotoBase64 || issue?.proofPhotoFileId);
+  const hasBothPhotos = Boolean(hasDefectPhoto && hasProofPhoto);
 
   // Format creation date
   const dateFormatted = createdAt ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -214,9 +215,9 @@ export default function IssueCard({
         };
       case 'in_progress':
         return {
-          label: 'Pending Verification',
+          label: 'Needs Review',
           color: '#fbbf24',
-          icon: <Clock size={14} style={{ color: '#fbbf24' }} />
+          icon: <Clock size={13} style={{ color: '#fbbf24' }} />
         };
       default:
         return {
@@ -381,7 +382,7 @@ export default function IssueCard({
       gap: '12px',
       position: 'relative'
     }}>
-      {/* Top row: Priority, Due Date (Left) | Utility Actions (Top-Right Corner) */}
+      {/* Top row: Priority, Status (Left) | Utility Actions (Top-Right Corner) */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
         <div style={{ display: 'flex', gap: '6px', alignItems: 'center', minWidth: 0 }}>
           {getPriorityBadge()}
@@ -390,30 +391,17 @@ export default function IssueCard({
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              fontSize: '0.70rem',
+              fontSize: '0.68rem',
               fontWeight: 700,
               color: statusConfig.color,
               backgroundColor: `${statusConfig.color}15`,
               border: `1px solid ${statusConfig.color}35`,
               padding: '2px 7px',
-              borderRadius: '4px'
+              borderRadius: '4px',
+              whiteSpace: 'nowrap'
             }}>
               {statusConfig.icon}
               <span>{statusConfig.label}</span>
-            </span>
-          )}
-          {dueDateFormatted && (
-            <span style={{
-              fontSize: '0.70rem',
-              color: 'var(--color-amber-400)',
-              backgroundColor: 'rgba(245, 158, 11, 0.1)',
-              border: '1px solid rgba(245, 158, 11, 0.25)',
-              padding: '2px 6px',
-              borderRadius: '4px',
-              fontWeight: 600,
-              whiteSpace: 'nowrap'
-            }}>
-              Due: {dueDateFormatted}
             </span>
           )}
         </div>
@@ -513,211 +501,429 @@ export default function IssueCard({
         </div>
       </div>
 
-      {/* Main Info + Right Side Photo Thumbnails */}
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <h4 style={{
-            fontSize: '1rem',
-            fontWeight: 600,
-            color: 'var(--color-zinc-100)',
-            lineHeight: '1.4',
-            marginBottom: '4px'
-          }}>
-            {title}
-          </h4>
-          {description && (
-            <p style={{
-              fontSize: '0.85rem',
-              color: 'var(--color-zinc-400)',
-              lineHeight: '1.5',
-              marginBottom: '6px'
+      {/* If BOTH Before & After photos exist: Full-width text + Dedicated Comparison Grid below */}
+      {hasBothPhotos ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          {/* 100% Full Width Text Section */}
+          <div style={{ width: '100%' }}>
+            <h4 style={{
+              fontSize: '1rem',
+              fontWeight: 600,
+              color: 'var(--color-zinc-100)',
+              lineHeight: '1.4',
+              marginBottom: '4px'
             }}>
-              {description}
-            </p>
-          )}
+              {title}
+            </h4>
+            {description && (
+              <p style={{
+                fontSize: '0.85rem',
+                color: 'var(--color-zinc-400)',
+                lineHeight: '1.5',
+                marginBottom: '6px'
+              }}>
+                {description}
+              </p>
+            )}
 
-          {/* Category details */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem', color: 'var(--color-zinc-400)' }}>
-            <div>
-              Category: <strong style={{ color: 'var(--color-zinc-200)' }}>{category?.replace(/_/g, ' ')}</strong>
-              {tradePhase && <span> • <strong>{tradePhase}</strong></span>}
-            </div>
-            {(contractorName || phoneNumber) && (
+            {/* Category details */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem', color: 'var(--color-zinc-400)' }}>
               <div>
-                Assigned: <strong style={{ color: 'var(--color-amber-400)' }}>{contractorName || 'N/A'}</strong> {phoneNumber ? `(${phoneNumber})` : ''}
+                Category: <strong style={{ color: 'var(--color-zinc-200)' }}>{category?.replace(/_/g, ' ')}</strong>
+                {tradePhase && <span> • <strong>{tradePhase}</strong></span>}
               </div>
-            )}
-            {dateFormatted && dateFormatted !== 'N/A' && (
-              <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-500)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
-                <Calendar size={11} />
-                <span>Logged {dateFormatted}</span>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Right Side: Compact Thumbnail(s) + Button Directly Underneath */}
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
-          {/* Thumbnails (Before / After) */}
-          {(hasDefectPhoto || hasProofPhoto) && (
-            <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start' }}>
-              {/* Defect Photo Thumbnail */}
-              {hasDefectPhoto && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-                  <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                    🔴 Before
-                  </span>
-                  {defectImage.loading ? (
-                    <div style={{ width: '72px', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
-                      <div className="spinner" style={{ width: '16px', height: '16px' }} />
-                    </div>
-                  ) : (
-                    <img
-                      src={defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w400')}
-                      alt="Defect photo"
-                      loading="lazy"
-                      onClick={() => setFullscreenPhotoSrc(defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w1000'))}
-                      style={{
-                        width: '72px',
-                        height: '72px',
-                        objectFit: 'cover',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        border: '1.5px solid rgba(239, 68, 68, 0.4)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                      }}
-                    />
-                  )}
+              {(contractorName || phoneNumber) && (
+                <div>
+                  Assigned: <strong style={{ color: 'var(--color-amber-400)' }}>{contractorName || 'N/A'}</strong> {phoneNumber ? `(${phoneNumber})` : ''}
                 </div>
               )}
-
-              {/* Proof Photo Thumbnail */}
-              {hasProofPhoto && (
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
-                  <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
-                    🟢 After
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--color-zinc-400)', flexWrap: 'wrap', marginTop: '3px' }}>
+                {dateFormatted && dateFormatted !== 'N/A' && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--color-zinc-500)' }}>
+                    <Calendar size={11} />
+                    <span>Logged {dateFormatted}</span>
                   </span>
-                  {proofImage.loading ? (
-                    <div style={{ width: '72px', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px', border: '1px solid rgba(52, 211, 153, 0.3)' }}>
-                      <div className="spinner" style={{ width: '16px', height: '16px' }} />
-                    </div>
-                  ) : (
-                    <img
-                      src={proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w400')}
-                      alt="Proof resolution photo"
-                      loading="lazy"
-                      onClick={() => setFullscreenPhotoSrc(proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w1000'))}
-                      style={{
-                        width: '72px',
-                        height: '72px',
-                        objectFit: 'cover',
-                        borderRadius: '8px',
-                        cursor: 'pointer',
-                        border: '1.5px solid rgba(52, 211, 153, 0.4)',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                      }}
-                    />
-                  )}
+                )}
+                {dueDateFormatted && (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    color: 'var(--color-amber-400)',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                  }}>
+                    <Clock size={10} />
+                    <span>Due {dueDateFormatted}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Dedicated Before & After Comparison Grid */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '8px',
+            padding: '10px',
+            backgroundColor: 'rgba(0, 0, 0, 0.25)',
+            border: '1px solid var(--color-zinc-800)',
+            borderRadius: '10px'
+          }}>
+            {/* Before Photo */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                🔴 Before
+              </span>
+              {defectImage.loading ? (
+                <div style={{ width: '100%', height: '105px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px' }}>
+                  <div className="spinner" style={{ width: '16px', height: '16px' }} />
                 </div>
+              ) : (
+                <img
+                  src={defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w400')}
+                  alt="Defect photo"
+                  loading="lazy"
+                  onClick={() => setFullscreenPhotoSrc(defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w1000'))}
+                  style={{
+                    width: '100%',
+                    height: '105px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    border: '1.5px solid rgba(239, 68, 68, 0.4)'
+                  }}
+                />
+              )}
+              {status === 'in_progress' && (
+                <button
+                  type="button"
+                  onClick={() => setShowReopenPrompt(true)}
+                  className="btn"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.12)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '5px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    borderRadius: '6px',
+                    width: '100%'
+                  }}
+                >
+                  <RotateCcw size={12} />
+                  <span>Reject</span>
+                </button>
               )}
             </div>
-          )}
 
-          {/* Action Button: Directly underneath the thumbnail */}
-          {status === 'open' && !showFixForm && (
-            <button
-              type="button"
-              onClick={() => setShowFixForm(true)}
-              className="btn"
-              style={{
-                backgroundColor: 'rgba(245, 158, 11, 0.12)',
-                border: '1px solid rgba(245, 158, 11, 0.35)',
-                color: 'var(--color-amber-400)',
-                fontSize: '0.66rem',
-                fontWeight: 700,
-                padding: '3px 6px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '3px',
-                borderRadius: '5px',
-                width: '100%',
-                maxWidth: (hasDefectPhoto && hasProofPhoto) ? '150px' : '72px',
-                whiteSpace: 'nowrap'
-              }}
-              title="Mark as Fixed"
-            >
-              <Camera size={11} />
-              <span>Mark Fixed</span>
-            </button>
-          )}
+            {/* After Photo */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '0.62rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                  🟢 After
+                </span>
+                {proofSubmittedAt && (
+                  <span style={{ fontSize: '0.60rem', color: 'var(--color-zinc-500)' }}>
+                    {new Date(proofSubmittedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                  </span>
+                )}
+              </div>
+              {proofImage.loading ? (
+                <div style={{ width: '100%', height: '105px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px' }}>
+                  <div className="spinner" style={{ width: '16px', height: '16px' }} />
+                </div>
+              ) : (
+                <img
+                  src={proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w400')}
+                  alt="Proof resolution photo"
+                  loading="lazy"
+                  onClick={() => setFullscreenPhotoSrc(proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w1000'))}
+                  style={{
+                    width: '100%',
+                    height: '105px',
+                    objectFit: 'cover',
+                    borderRadius: '8px',
+                    cursor: 'pointer',
+                    border: '1.5px solid rgba(52, 211, 153, 0.4)'
+                  }}
+                />
+              )}
+              {status === 'in_progress' && (
+                <button
+                  type="button"
+                  onClick={handleVerifyClick}
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669',
+                    color: '#fff',
+                    fontSize: '0.68rem',
+                    fontWeight: 700,
+                    padding: '5px 8px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '4px',
+                    borderRadius: '6px',
+                    width: '100%'
+                  }}
+                >
+                  <ShieldCheck size={13} />
+                  <span>Verify</span>
+                </button>
+              )}
+            </div>
+          </div>
 
-          {status === 'in_progress' && (
-            <div style={{ display: 'flex', gap: '4px', width: '100%', maxWidth: (hasDefectPhoto && hasProofPhoto) ? '150px' : '72px' }}>
+          {status === 'resolved' && (
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button
                 type="button"
                 onClick={() => setShowReopenPrompt(true)}
                 className="btn"
                 style={{
-                  backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                  border: '1px solid rgba(239, 68, 68, 0.3)',
-                  color: '#f87171',
-                  fontSize: '0.64rem',
-                  fontWeight: 700,
-                  padding: '3px 4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '5px',
-                  flex: 1
+                  backgroundColor: 'var(--color-zinc-800)',
+                  border: '1px solid var(--color-zinc-700)',
+                  color: 'var(--color-zinc-300)',
+                  fontSize: '0.66rem',
+                  padding: '4px 10px',
+                  borderRadius: '5px'
                 }}
               >
-                Reject
-              </button>
-              <button
-                type="button"
-                onClick={handleVerifyClick}
-                className="btn btn-primary"
-                style={{
-                  backgroundColor: '#10b981',
-                  borderColor: '#059669',
-                  color: '#fff',
-                  fontSize: '0.64rem',
-                  fontWeight: 700,
-                  padding: '3px 4px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: '5px',
-                  flex: 1
-                }}
-              >
-                Verify
+                Reopen Issue
               </button>
             </div>
           )}
-
-          {status === 'resolved' && (
-            <button
-              type="button"
-              onClick={() => setShowReopenPrompt(true)}
-              className="btn"
-              style={{
-                backgroundColor: 'var(--color-zinc-800)',
-                border: '1px solid var(--color-zinc-700)',
-                color: 'var(--color-zinc-300)',
-                fontSize: '0.64rem',
-                padding: '3px 6px',
-                borderRadius: '5px',
-                width: '100%',
-                maxWidth: (hasDefectPhoto && hasProofPhoto) ? '150px' : '72px'
-              }}
-            >
-              Reopen
-            </button>
-          )}
         </div>
-      </div>
+      ) : (
+        /* Single Photo (or No Photo) Compact Row: Text on Left + 72px Thumbnail on Right */
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h4 style={{
+              fontSize: '1rem',
+              fontWeight: 600,
+              color: 'var(--color-zinc-100)',
+              lineHeight: '1.4',
+              marginBottom: '4px'
+            }}>
+              {title}
+            </h4>
+            {description && (
+              <p style={{
+                fontSize: '0.85rem',
+                color: 'var(--color-zinc-400)',
+                lineHeight: '1.5',
+                marginBottom: '6px'
+              }}>
+                {description}
+              </p>
+            )}
+
+            {/* Category details */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '3px', fontSize: '0.75rem', color: 'var(--color-zinc-400)' }}>
+              <div>
+                Category: <strong style={{ color: 'var(--color-zinc-200)' }}>{category?.replace(/_/g, ' ')}</strong>
+                {tradePhase && <span> • <strong>{tradePhase}</strong></span>}
+              </div>
+              {(contractorName || phoneNumber) && (
+                <div>
+                  Assigned: <strong style={{ color: 'var(--color-amber-400)' }}>{contractorName || 'N/A'}</strong> {phoneNumber ? `(${phoneNumber})` : ''}
+                </div>
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.72rem', color: 'var(--color-zinc-400)', flexWrap: 'wrap', marginTop: '3px' }}>
+                {dateFormatted && dateFormatted !== 'N/A' && (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '3px', color: 'var(--color-zinc-500)' }}>
+                    <Calendar size={11} />
+                    <span>Logged {dateFormatted}</span>
+                  </span>
+                )}
+                {dueDateFormatted && (
+                  <span style={{
+                    fontSize: '0.68rem',
+                    color: 'var(--color-amber-400)',
+                    backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                    border: '1px solid rgba(245, 158, 11, 0.25)',
+                    padding: '1px 6px',
+                    borderRadius: '4px',
+                    fontWeight: 600,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px'
+                  }}>
+                    <Clock size={10} />
+                    <span>Due {dueDateFormatted}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Right Side: Single Compact Thumbnail + Action Button Underneath */}
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '5px', flexShrink: 0 }}>
+            {hasDefectPhoto && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                  🔴 Before
+                </span>
+                {defectImage.loading ? (
+                  <div style={{ width: '72px', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.3)' }}>
+                    <div className="spinner" style={{ width: '16px', height: '16px' }} />
+                  </div>
+                ) : (
+                  <img
+                    src={defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w400')}
+                    alt="Defect photo"
+                    loading="lazy"
+                    onClick={() => setFullscreenPhotoSrc(defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w1000'))}
+                    style={{
+                      width: '72px',
+                      height: '72px',
+                      objectFit: 'cover',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      border: '1.5px solid rgba(239, 68, 68, 0.4)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {hasProofPhoto && !hasDefectPhoto && (
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '3px' }}>
+                <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#34d399', textTransform: 'uppercase', letterSpacing: '0.02em' }}>
+                  🟢 After
+                </span>
+                {proofImage.loading ? (
+                  <div style={{ width: '72px', height: '72px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '8px', border: '1px solid rgba(52, 211, 153, 0.3)' }}>
+                    <div className="spinner" style={{ width: '16px', height: '16px' }} />
+                  </div>
+                ) : (
+                  <img
+                    src={proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w400')}
+                    alt="Proof photo"
+                    loading="lazy"
+                    onClick={() => setFullscreenPhotoSrc(proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w1000'))}
+                    style={{
+                      width: '72px',
+                      height: '72px',
+                      objectFit: 'cover',
+                      borderRadius: '8px',
+                      cursor: 'pointer',
+                      border: '1.5px solid rgba(52, 211, 153, 0.4)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
+                    }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Action Button: Underneath the single thumbnail */}
+            {status === 'open' && !showFixForm && (
+              <button
+                type="button"
+                onClick={() => setShowFixForm(true)}
+                className="btn"
+                style={{
+                  backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                  border: '1px solid rgba(245, 158, 11, 0.35)',
+                  color: 'var(--color-amber-400)',
+                  fontSize: '0.66rem',
+                  fontWeight: 700,
+                  padding: '3px 6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '3px',
+                  borderRadius: '5px',
+                  width: '100%',
+                  maxWidth: '72px',
+                  whiteSpace: 'nowrap'
+                }}
+                title="Mark as Fixed"
+              >
+                <Camera size={11} />
+                <span>Mark Fixed</span>
+              </button>
+            )}
+
+            {status === 'in_progress' && (
+              <div style={{ display: 'flex', gap: '4px', width: '100%', maxWidth: '72px' }}>
+                <button
+                  type="button"
+                  onClick={() => setShowReopenPrompt(true)}
+                  className="btn"
+                  style={{
+                    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                    border: '1px solid rgba(239, 68, 68, 0.3)',
+                    color: '#f87171',
+                    fontSize: '0.64rem',
+                    fontWeight: 700,
+                    padding: '3px 4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '5px',
+                    flex: 1
+                  }}
+                >
+                  Reject
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVerifyClick}
+                  className="btn btn-primary"
+                  style={{
+                    backgroundColor: '#10b981',
+                    borderColor: '#059669',
+                    color: '#fff',
+                    fontSize: '0.64rem',
+                    fontWeight: 700,
+                    padding: '3px 4px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: '5px',
+                    flex: 1
+                  }}
+                >
+                  Verify
+                </button>
+              </div>
+            )}
+
+            {status === 'resolved' && (
+              <button
+                type="button"
+                onClick={() => setShowReopenPrompt(true)}
+                className="btn"
+                style={{
+                  backgroundColor: 'var(--color-zinc-800)',
+                  border: '1px solid var(--color-zinc-700)',
+                  color: 'var(--color-zinc-300)',
+                  fontSize: '0.64rem',
+                  padding: '3px 6px',
+                  borderRadius: '5px',
+                  width: '100%',
+                  maxWidth: '72px'
+                }}
+              >
+                Reopen
+              </button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Stored Proof Notes (if any) */}
       {storedProofNotes && (
