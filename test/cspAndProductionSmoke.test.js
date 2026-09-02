@@ -57,6 +57,7 @@ describe('CSP & Production Security Headers Smoke Test Suite', () => {
     // Firebase Auth Identity Toolkit & Token Refresh
     assert.ok(connectSrc.includes('https://identitytoolkit.googleapis.com'), 'Firebase identitytoolkit must be in connect-src');
     assert.ok(connectSrc.includes('https://securetoken.googleapis.com'), 'Firebase securetoken must be in connect-src');
+    assert.ok(frameSrc.includes('https://adepec-scanner-invites.firebaseapp.com'), 'Firebase authDomain iframe must be in frame-src');
   });
 
   it('authorizes Google Drive and Sheets API endpoints in CSP', () => {
