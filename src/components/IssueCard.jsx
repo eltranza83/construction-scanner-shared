@@ -406,56 +406,8 @@ export default function IssueCard({
           )}
         </div>
 
-        {/* Top-Right Utility Bar: Pinned permanently to top right corner */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, marginLeft: 'auto' }}>
-          {onSendPacket && (
-            <button
-              type="button"
-              onClick={handleSendPacketClick}
-              disabled={preparingPacket}
-              style={{
-                background: 'rgba(255, 255, 255, 0.04)',
-                border: '1px solid var(--color-zinc-800)',
-                color: 'var(--color-zinc-300)',
-                cursor: 'pointer',
-                padding: '3px 6px',
-                borderRadius: '5px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '3px',
-                fontSize: '0.70rem',
-                fontWeight: 600,
-                opacity: preparingPacket ? 0.6 : 1
-              }}
-              title="Download PDF Packet"
-            >
-              <FileText size={12} />
-              <span>{preparingPacket ? '...' : 'PDF'}</span>
-            </button>
-          )}
-
-          <button
-            type="button"
-            onClick={handleShareWithSub}
-            style={{
-              background: 'rgba(255, 255, 255, 0.04)',
-              border: '1px solid var(--color-zinc-800)',
-              color: copiedShare ? '#34d399' : 'var(--color-zinc-300)',
-              cursor: 'pointer',
-              padding: '3px 6px',
-              borderRadius: '5px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '3px',
-              fontSize: '0.70rem',
-              fontWeight: 600
-            }}
-            title="Copy text summary to share with sub"
-          >
-            {copiedShare ? <Check size={12} /> : <Share2 size={12} />}
-            <span>{copiedShare ? 'Copied!' : 'Share'}</span>
-          </button>
-
+        {/* Top-Right Utility Bar: ONLY Edit and Delete */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, marginLeft: 'auto' }}>
           {onEdit && (
             <button
               type="button"
@@ -506,15 +458,66 @@ export default function IssueCard({
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           {/* 100% Full Width Text Section */}
           <div style={{ width: '100%' }}>
-            <h4 style={{
-              fontSize: '1rem',
-              fontWeight: 600,
-              color: 'var(--color-zinc-100)',
-              lineHeight: '1.4',
-              marginBottom: '4px'
-            }}>
-              {title}
-            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+              <h4 style={{
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'var(--color-zinc-100)',
+                lineHeight: '1.4',
+                margin: 0
+              }}>
+                {title}
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                {onSendPacket && (
+                  <button
+                    type="button"
+                    onClick={handleSendPacketClick}
+                    disabled={preparingPacket}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid var(--color-zinc-800)',
+                      color: 'var(--color-zinc-300)',
+                      cursor: 'pointer',
+                      padding: '3px 7px',
+                      borderRadius: '5px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      opacity: preparingPacket ? 0.6 : 1
+                    }}
+                    title="Download PDF Packet"
+                  >
+                    <FileText size={12} />
+                    <span>{preparingPacket ? '...' : 'PDF'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleShareWithSub}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--color-zinc-800)',
+                    color: copiedShare ? '#34d399' : 'var(--color-zinc-300)',
+                    cursor: 'pointer',
+                    padding: '3px 7px',
+                    borderRadius: '5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontSize: '0.68rem',
+                    fontWeight: 600
+                  }}
+                  title="Copy text summary to share with sub"
+                >
+                  {copiedShare ? <Check size={12} /> : <Share2 size={12} />}
+                  <span>{copiedShare ? 'Copied!' : 'Share'}</span>
+                </button>
+              </div>
+            </div>
             {description && (
               <p style={{
                 fontSize: '0.85rem',
@@ -709,15 +712,66 @@ export default function IssueCard({
         /* Single Photo (or No Photo) Compact Row: Text on Left + 72px Thumbnail on Right */
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px' }}>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <h4 style={{
-              fontSize: '1rem',
-              fontWeight: 600,
-              color: 'var(--color-zinc-100)',
-              lineHeight: '1.4',
-              marginBottom: '4px'
-            }}>
-              {title}
-            </h4>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px', marginBottom: '4px', flexWrap: 'wrap' }}>
+              <h4 style={{
+                fontSize: '1rem',
+                fontWeight: 600,
+                color: 'var(--color-zinc-100)',
+                lineHeight: '1.4',
+                margin: 0
+              }}>
+                {title}
+              </h4>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0 }}>
+                {onSendPacket && (
+                  <button
+                    type="button"
+                    onClick={handleSendPacketClick}
+                    disabled={preparingPacket}
+                    style={{
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      border: '1px solid var(--color-zinc-800)',
+                      color: 'var(--color-zinc-300)',
+                      cursor: 'pointer',
+                      padding: '3px 7px',
+                      borderRadius: '5px',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '3px',
+                      fontSize: '0.68rem',
+                      fontWeight: 600,
+                      opacity: preparingPacket ? 0.6 : 1
+                    }}
+                    title="Download PDF Packet"
+                  >
+                    <FileText size={12} />
+                    <span>{preparingPacket ? '...' : 'PDF'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleShareWithSub}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid var(--color-zinc-800)',
+                    color: copiedShare ? '#34d399' : 'var(--color-zinc-300)',
+                    cursor: 'pointer',
+                    padding: '3px 7px',
+                    borderRadius: '5px',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '3px',
+                    fontSize: '0.68rem',
+                    fontWeight: 600
+                  }}
+                  title="Copy text summary to share with sub"
+                >
+                  {copiedShare ? <Check size={12} /> : <Share2 size={12} />}
+                  <span>{copiedShare ? 'Copied!' : 'Share'}</span>
+                </button>
+              </div>
+            </div>
             {description && (
               <p style={{
                 fontSize: '0.85rem',
