@@ -1,10 +1,16 @@
 import { useState, useEffect } from 'react';
-import { loadIssuesVault, saveIssuesVault, uploadIssuePhoto, mergeIssues } from '../services/issuesDrive';
+import { loadIssuesVault, saveIssuesVault, uploadIssuePhoto, uploadIssueProofPhoto, mergeIssues, mergeActivityHistories } from '../services/issuesDrive';
 import { syncIssuesToSheet } from '../services/sheetsDataService';
 import { getDriveErrorMessage } from '../services/appErrors';
 
 const OFFLINE_QUEUE_KEY = 'jobscan_offline_issues_queue';
 const CACHED_ISSUES_PREFIX = 'jobscan_cached_issues_';
+
+function appendActivityHistoryEvent(history = [], newEvent) {
+  const list = Array.isArray(history) ? history : [];
+  const eventId = newEvent.id || `act_${newEvent.action}_${Date.now()}`;
+  return mergeActivityHistories(list, [{ ...newEvent, id: eventId }]);
+}
 
 // Helper to convert File to Base64 (for offline storage)
 function fileToBase64(file) {
@@ -195,6 +201,7 @@ export function useIssues({ googleToken, activeProject }) {
     contractorName,
     phoneNumber,
     priority,
+    dueDate = '',
     photoFile,
     floorPlanX = null,
     floorPlanY = null
@@ -238,6 +245,24 @@ export function useIssues({ googleToken, activeProject }) {
       }
     }
 
+    const createdAtIso = new Date(timestamp).toISOString();
+    const initialEvents = [
+      {
+        id: `act_created_${timestamp}`,
+        action: 'created',
+        timestamp: createdAtIso,
+        actor: 'Builder',
+        note: description ? `Initial defect logged: ${description}` : 'Initial defect logged'
+      },
+      contractorName?.trim() ? {
+        id: `act_assigned_${timestamp}`,
+        action: 'assigned',
+        timestamp: createdAtIso,
+        actor: 'Builder',
+        details: `Assigned to ${contractorName.trim()}${dueDate ? ` (Due: ${dueDate})` : ''}`
+      } : null
+    ].filter(Boolean);
+
     const payload = {
       title,
       description,
@@ -247,9 +272,20 @@ export function useIssues({ googleToken, activeProject }) {
       phoneNumber: phoneNumber || '',
       priority,
       status: 'open',
+      dueDate: dueDate || '',
+      activityHistory: initialEvents,
       photoBase64,
       photoUrl,
       photoFileId,
+      proofPhotoBase64: null,
+      proofPhotoUrl: null,
+      proofPhotoFileId: null,
+      proofNotes: '',
+      proofSubmittedAt: null,
+      verifiedAt: null,
+      verifiedBy: null,
+      reopenReason: '',
+      reopenedAt: null,
       floorPlanX,
       floorPlanY
     };
@@ -340,18 +376,32 @@ export function useIssues({ googleToken, activeProject }) {
     }
 
     const payload = {
-      title: updates.title,
-      description: updates.description,
-      category: updates.category,
-      tradePhase: updates.tradePhase || '',
-      contractorName: updates.contractorName || '',
-      phoneNumber: updates.phoneNumber || '',
-      priority: updates.priority,
+      title: updates.title !== undefined ? updates.title : existingIssue.title,
+      description: updates.description !== undefined ? updates.description : existingIssue.description,
+      category: updates.category !== undefined ? updates.category : existingIssue.category,
+      tradePhase: updates.tradePhase !== undefined ? updates.tradePhase : (existingIssue.tradePhase || ''),
+      contractorName: updates.contractorName !== undefined ? updates.contractorName : (existingIssue.contractorName || ''),
+      phoneNumber: updates.phoneNumber !== undefined ? updates.phoneNumber : (existingIssue.phoneNumber || ''),
+      priority: updates.priority !== undefined ? updates.priority : existingIssue.priority,
+      status: updates.status !== undefined ? updates.status : existingIssue.status,
+      dueDate: updates.dueDate !== undefined ? updates.dueDate : (existingIssue.dueDate || ''),
       photoBase64,
       photoUrl,
       photoFileId,
-      floorPlanX: Number.isFinite(Number(updates.floorPlanX)) ? updates.floorPlanX : null,
-      floorPlanY: Number.isFinite(Number(updates.floorPlanY)) ? updates.floorPlanY : null,
+      proofPhotoBase64: updates.proofPhotoBase64 !== undefined ? updates.proofPhotoBase64 : (existingIssue.proofPhotoBase64 || null),
+      proofPhotoUrl: updates.proofPhotoUrl !== undefined ? updates.proofPhotoUrl : (existingIssue.proofPhotoUrl || null),
+      proofPhotoFileId: updates.proofPhotoFileId !== undefined ? updates.proofPhotoFileId : (existingIssue.proofPhotoFileId || null),
+      proofNotes: updates.proofNotes !== undefined ? updates.proofNotes : (existingIssue.proofNotes || ''),
+      proofSubmittedAt: updates.proofSubmittedAt !== undefined ? updates.proofSubmittedAt : (existingIssue.proofSubmittedAt || null),
+      verifiedAt: updates.verifiedAt !== undefined ? updates.verifiedAt : (existingIssue.verifiedAt || null),
+      verifiedBy: updates.verifiedBy !== undefined ? updates.verifiedBy : (existingIssue.verifiedBy || null),
+      reopenReason: updates.reopenReason !== undefined ? updates.reopenReason : (existingIssue.reopenReason || ''),
+      reopenedAt: updates.reopenedAt !== undefined ? updates.reopenedAt : (existingIssue.reopenedAt || null),
+      activityHistory: updates.activityHistory !== undefined
+        ? updates.activityHistory
+        : (Array.isArray(existingIssue.activityHistory) ? existingIssue.activityHistory : []),
+      floorPlanX: Number.isFinite(Number(updates.floorPlanX)) ? updates.floorPlanX : existingIssue.floorPlanX,
+      floorPlanY: Number.isFinite(Number(updates.floorPlanY)) ? updates.floorPlanY : existingIssue.floorPlanY,
       floorPlanSnapshotUrl: updates.floorPlanSnapshotUrl || existingIssue.floorPlanSnapshotUrl || '',
       floorPlanSnapshotFileId: updates.floorPlanSnapshotFileId || existingIssue.floorPlanSnapshotFileId || ''
     };
@@ -398,6 +448,119 @@ export function useIssues({ googleToken, activeProject }) {
       setSuccess('Issue updated locally. Will sync when online.');
       setTimeout(() => setSuccess(null), 3000);
     }
+  };
+
+  // Subcontractor / field mark fixed action (Recorded by Builder on behalf of sub)
+  const markIssueFixed = async (id, { proofPhotoFile = null, proofNotes = '' } = {}) => {
+    const existingIssue = issues.find(i => i.id === id);
+    if (!existingIssue) return;
+
+    let proofPhotoUrl = null;
+    let proofPhotoFileId = null;
+    let proofPhotoBase64 = null;
+
+    if (proofPhotoFile) {
+      const isOnline = !!(googleToken && activeProject?.folderId);
+      if (isOnline) {
+        setLoading(true);
+        try {
+          const uploadResult = await uploadIssueProofPhoto(googleToken, activeProject.folderId, proofPhotoFile);
+          proofPhotoUrl = uploadResult.url;
+          proofPhotoFileId = uploadResult.id;
+        } catch (uploadErr) {
+          console.error('Failed to upload proof photo immediately:', uploadErr);
+          setError('Failed to upload proof photo to Drive, saving locally...');
+          proofPhotoBase64 = await fileToBase64(proofPhotoFile);
+        } finally {
+          setLoading(false);
+        }
+      } else {
+        proofPhotoBase64 = await fileToBase64(proofPhotoFile);
+      }
+    }
+
+    const timestamp = Date.now();
+    const subLabel = existingIssue.contractorName?.trim() || 'subcontractor';
+    const proofEvent = {
+      id: `act_proof_${timestamp}`,
+      action: 'proof_submitted',
+      timestamp: new Date(timestamp).toISOString(),
+      actor: 'Builder',
+      details: `Submitted on behalf of ${subLabel}`,
+      note: proofNotes?.trim() || 'Resolution proof submitted'
+    };
+
+    const updatedHistory = appendActivityHistoryEvent(existingIssue.activityHistory, proofEvent);
+
+    await updateIssue(id, {
+      status: 'in_progress',
+      proofPhotoUrl: proofPhotoUrl || existingIssue.proofPhotoUrl,
+      proofPhotoFileId: proofPhotoFileId || existingIssue.proofPhotoFileId,
+      proofPhotoBase64: proofPhotoBase64 || existingIssue.proofPhotoBase64,
+      proofNotes: proofNotes?.trim() || existingIssue.proofNotes,
+      proofSubmittedAt: new Date(timestamp).toISOString(),
+      activityHistory: updatedHistory
+    });
+  };
+
+  // Builder verification action (Requires photo proof OR explicit builder inspection record)
+  const verifyIssue = async (id, { verifiedBy = 'Builder', inspectionNote = '' } = {}) => {
+    const existingIssue = issues.find(i => i.id === id);
+    if (!existingIssue) return;
+
+    const hasPhotoProof = Boolean(existingIssue.proofPhotoUrl || existingIssue.proofPhotoBase64);
+    if (!hasPhotoProof && !inspectionNote?.trim()) {
+      throw new Error('Verification requires a resolution photo or an explicit builder inspection record.');
+    }
+
+    const timestamp = Date.now();
+    const verifyEvent = {
+      id: `act_verified_${timestamp}`,
+      action: 'verified_closed',
+      timestamp: new Date(timestamp).toISOString(),
+      actor: verifiedBy || 'Builder',
+      details: hasPhotoProof ? 'Resolution photo inspected and approved' : 'On-site visual inspection verified',
+      note: inspectionNote?.trim() || 'Work verified and approved by Builder'
+    };
+
+    const updatedHistory = appendActivityHistoryEvent(existingIssue.activityHistory, verifyEvent);
+
+    await updateIssue(id, {
+      status: 'resolved',
+      verifiedAt: new Date(timestamp).toISOString(),
+      verifiedBy: verifiedBy || 'Builder',
+      activityHistory: updatedHistory
+    });
+  };
+
+  // Builder reject / reopen action (Requires mandatory feedback note)
+  const reopenIssue = async (id, { reason = '' } = {}) => {
+    const trimmedReason = reason?.trim();
+    if (!trimmedReason) {
+      throw new Error('Rejection requires an explanatory feedback note.');
+    }
+
+    const existingIssue = issues.find(i => i.id === id);
+    if (!existingIssue) return;
+
+    const timestamp = Date.now();
+    const rejectEvent = {
+      id: `act_rejected_${timestamp}`,
+      action: 'rejected',
+      timestamp: new Date(timestamp).toISOString(),
+      actor: 'Builder',
+      details: 'Fix rejected during inspection',
+      note: trimmedReason
+    };
+
+    const updatedHistory = appendActivityHistoryEvent(existingIssue.activityHistory, rejectEvent);
+
+    await updateIssue(id, {
+      status: 'open',
+      reopenReason: trimmedReason,
+      reopenedAt: new Date(timestamp).toISOString(),
+      activityHistory: updatedHistory
+    });
   };
 
   // Update status action
@@ -494,6 +657,9 @@ export function useIssues({ googleToken, activeProject }) {
     addIssue,
     updateIssue,
     updateIssueStatus,
+    markIssueFixed,
+    verifyIssue,
+    reopenIssue,
     softDeleteIssue,
     triggerSync
   };

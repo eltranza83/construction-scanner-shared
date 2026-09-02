@@ -377,6 +377,9 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           onToggleIssueAddMode={handleToggleIssueAddMode}
           onToggleAddMode={handleToggleBlueprintAddMode}
           onUpdateIssueStatus={issuesState.updateIssueStatus}
+          onMarkIssueFixed={issuesState.markIssueFixed}
+          onVerifyIssue={issuesState.verifyIssue}
+          onReopenIssue={issuesState.reopenIssue}
           googleToken={googleToken}
           pins={pinboard.pins}
           selectedIssue={selectedIssue}

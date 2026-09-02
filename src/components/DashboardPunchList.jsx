@@ -250,6 +250,9 @@ export default function DashboardPunchList({
               onDelete={softDeleteIssue}
               onEdit={setEditingIssue}
               onSendPacket={onSendIssuePacket}
+              onMarkFixed={issuesState.markIssueFixed}
+              onVerify={issuesState.verifyIssue}
+              onReopen={issuesState.reopenIssue}
             />
           ))}
         </div>

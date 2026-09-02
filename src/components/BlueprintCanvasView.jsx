@@ -41,8 +41,7 @@ export default function BlueprintCanvasView({
   tradeSectionsConfig,
   zoomScale
 }) {
-  const locatedIssues = issues.filter(isLocatedIssue);
-  const activeDropMode = isIssueAddMode ? 'issue' : (isAddMode ? 'xray' : null);
+  const [showResolvedIssues, setShowResolvedIssues] = React.useState(false);
   const frameBorderColor = activeDropMode === 'issue'
     ? 'rgba(248, 113, 113, 0.82)'
     : activeDropMode === 'xray'
@@ -145,6 +144,24 @@ export default function BlueprintCanvasView({
             </span>
           </button>
 
+          {resolvedIssuesCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowResolvedIssues(prev => !prev)}
+              className="btn blueprint-action-button"
+              style={{
+                ...actionButtonBaseStyle,
+                backgroundColor: showResolvedIssues ? 'rgba(52, 211, 153, 0.15)' : 'var(--color-zinc-800)',
+                color: showResolvedIssues ? '#34d399' : 'var(--color-zinc-400)',
+                borderColor: showResolvedIssues ? 'rgba(52, 211, 153, 0.3)' : 'rgba(255,255,255,0.08)',
+                fontSize: '0.72rem',
+                padding: '0 8px'
+              }}
+              title={showResolvedIssues ? 'Hide resolved issues' : 'Show resolved issues'}
+            >
+              <span>{showResolvedIssues ? `Hide Closed (${resolvedIssuesCount})` : `Show Closed (${resolvedIssuesCount})`}</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -370,6 +387,9 @@ export default function BlueprintCanvasView({
           onDelete={onDeleteIssue}
           onEdit={onEditIssue}
           onSendPacket={onSendIssuePacket}
+          onMarkFixed={onMarkIssueFixed}
+          onVerify={onVerifyIssue}
+          onReopen={onReopenIssue}
         />
       ) : selectedPin ? (
         <BlueprintSelectedPinCard

@@ -37,6 +37,7 @@ export default function IssueFormModal({
   const [contractorName, setContractorName] = useState(editingIssue?.contractorName || '');
   const [phoneNumber, setPhoneNumber] = useState(editingIssue?.phoneNumber || '');
   const [priority, setPriority] = useState(editingIssue?.priority || 'medium'); // 'low' | 'medium' | 'high'
+  const [dueDate, setDueDate] = useState(editingIssue?.dueDate || '');
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(getDisplayImageUrl(editingIssue?.photoUrl || '', editingIssue?.photoBase64 || '', 'w400') || null);
   const [showContactPickerBtn, setShowContactPickerBtn] = useState(false);
@@ -223,6 +224,7 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
       contractorName: contractorName.trim(),
       phoneNumber: phoneNumber.trim(),
       priority,
+      dueDate: dueDate.trim(),
       photoFile,
       floorPlanX: Number.isFinite(initialFloorLocation?.x)
         ? initialFloorLocation.x
@@ -478,6 +480,34 @@ function compressImage(file, maxWidth = 1024, maxHeight = 1024, quality = 0.7) {
                   placeholder="e.g. +15550199"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Priority & Due Date */}
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <div style={{ flex: 1 }}>
+              <label className="form-label" htmlFor="issue-priority">Priority</label>
+              <select
+                id="issue-priority"
+                className="form-input"
+                value={priority}
+                onChange={(e) => setPriority(e.target.value)}
+                style={{ appearance: 'auto' }}
+              >
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="form-label" htmlFor="issue-due-date">Target Due Date</label>
+              <input
+                id="issue-due-date"
+                type="date"
+                className="form-input"
+                value={dueDate}
+                onChange={(e) => setDueDate(e.target.value)}
+              />
             </div>
           </div>
 

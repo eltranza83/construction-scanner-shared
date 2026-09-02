@@ -4,8 +4,7 @@ import {
   findOrCreateFolder,
   getFileContent,
   updateFileContent,
-  uploadFileToDrive,
-  makeFilePubliclyReadable
+  uploadFileToDrive
 } from './googleDrive.js';
 
 const X_RAY_FOLDER_NAME = 'X-Ray Photos';
@@ -81,15 +80,24 @@ export async function uploadIssuePhoto(accessToken, projectFolderId, file) {
   const extension = file.name.split('.').pop();
   const issuePhotoName = `Issue_Photo_${Date.now()}.${extension}`;
   
-  // 1. Upload the file to Drive
+  // Upload the file to Drive (retains project-restricted folder permissions)
   const imgUpload = await uploadFileToDrive(accessToken, photosFolderId, issuePhotoName, file.type, file);
-  
-  // 2. Set file permissions so anyone with the link can view it (required for contractor messaging)
-  try {
-    await makeFilePubliclyReadable(accessToken, imgUpload.id);
-  } catch (permissionErr) {
-    console.error('Failed to make issue photo publicly readable:', permissionErr);
-  }
+
+  return {
+    id: imgUpload.id,
+    url: imgUpload.webViewLink
+  };
+}
+
+export async function uploadIssueProofPhoto(accessToken, projectFolderId, file) {
+  const xRayFolderId = await ensureXRayFolder(accessToken, projectFolderId);
+  const photosFolderId = await ensureIssuePhotosFolder(accessToken, xRayFolderId);
+
+  const extension = file.name.split('.').pop();
+  const proofPhotoName = `Issue_Proof_${Date.now()}.${extension}`;
+
+  // Upload the file to Drive (retains project-restricted folder permissions)
+  const imgUpload = await uploadFileToDrive(accessToken, photosFolderId, proofPhotoName, file.type, file);
 
   return {
     id: imgUpload.id,
@@ -105,12 +113,6 @@ export async function uploadIssueFloorPlanSnapshot(accessToken, projectFolderId,
 
   const uploadResult = await uploadFileToDrive(accessToken, photosFolderId, fileName, 'image/jpeg', fileBlob);
 
-  try {
-    await makeFilePubliclyReadable(accessToken, uploadResult.id);
-  } catch (permissionErr) {
-    console.error('Failed to make floor plan snapshot publicly readable:', permissionErr);
-  }
-
   return {
     id: uploadResult.id,
     url: uploadResult.webViewLink
@@ -118,11 +120,35 @@ export async function uploadIssueFloorPlanSnapshot(accessToken, projectFolderId,
 }
 
 /**
+ * Deduplicates and sorts activity history events (append-only by convention).
+ */
+export function mergeActivityHistories(historyA = [], historyB = []) {
+  const combined = [...(historyA || []), ...(historyB || [])];
+  const seen = new Set();
+  const merged = [];
+
+  for (const item of combined) {
+    if (!item) continue;
+    const key = item.id || `${item.action}_${item.timestamp}_${item.note || ''}_${item.details || ''}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(item);
+    }
+  }
+
+  return merged.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+}
+
+/**
  * Merges remote issues list with offline operations queue.
- * Handles CREATE, UPDATE_STATUS, and SOFT_DELETE operations in chronological order.
+ * Handles CREATE, UPDATE, UPDATE_STATUS, and SOFT_DELETE operations in chronological order.
+ * Ensures backward compatibility with legacy issues missing activityHistory.
  */
 export function mergeIssues(remoteIssues, offlineOperations) {
-  const merged = [...(remoteIssues || [])];
+  const merged = [...(remoteIssues || [])].map(issue => ({
+    ...issue,
+    activityHistory: Array.isArray(issue.activityHistory) ? issue.activityHistory : []
+  }));
   const sortedOps = [...(offlineOperations || [])].sort((a, b) => a.timestamp - b.timestamp);
 
   sortedOps.forEach(op => {
@@ -134,7 +160,8 @@ export function mergeIssues(remoteIssues, offlineOperations) {
       const newIssue = {
         id,
         ...payload,
-        createdAt: payload.createdAt || isoTimestamp,
+        activityHistory: Array.isArray(payload?.activityHistory) ? payload.activityHistory : [],
+        createdAt: payload?.createdAt || isoTimestamp,
         updatedAt: isoTimestamp,
         deletedAt: null
       };
@@ -146,9 +173,13 @@ export function mergeIssues(remoteIssues, offlineOperations) {
     } else if (type === 'UPDATE') {
       const existingIdx = merged.findIndex(i => i.id === id);
       if (existingIdx > -1) {
+        const existing = merged[existingIdx];
+        const mergedHistory = mergeActivityHistories(existing.activityHistory, payload?.activityHistory);
+
         merged[existingIdx] = {
-          ...merged[existingIdx],
+          ...existing,
           ...payload,
+          activityHistory: mergedHistory,
           updatedAt: isoTimestamp
         };
       }

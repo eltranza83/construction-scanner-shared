@@ -35,6 +35,18 @@ async function getIssuePhotoBlob(issue, googleToken) {
   return null;
 }
 
+async function getIssueProofPhotoBlob(issue, googleToken) {
+  if (issue?.proofPhotoBase64) {
+    return dataUrlToBlob(issue.proofPhotoBase64);
+  }
+
+  if (issue?.proofPhotoFileId && googleToken) {
+    return await fetchDriveFileBlob(googleToken, issue.proofPhotoFileId);
+  }
+
+  return null;
+}
+
 async function getFloorPlanSnapshotBlob(issue, floorPlanImageSrc) {
   const hasLocation = Number.isFinite(Number(issue?.floorPlanX)) && Number.isFinite(Number(issue?.floorPlanY));
   if (!hasLocation || !floorPlanImageSrc) {
@@ -63,8 +75,9 @@ export async function createAndShareIssuePacket({
   selectedFolderName,
   projectInfo = null
 }) {
-  const [issuePhotoBlob, floorPlanSnapshotBlob, { generateIssuePacketPDF }] = await Promise.all([
+  const [issuePhotoBlob, issueProofPhotoBlob, floorPlanSnapshotBlob, { generateIssuePacketPDF }] = await Promise.all([
     getIssuePhotoBlob(issue, googleToken),
+    getIssueProofPhotoBlob(issue, googleToken),
     getFloorPlanSnapshotBlob(issue, floorPlanImageSrc),
     import('./pdfGenerator.js')
   ]);
@@ -75,6 +88,7 @@ export async function createAndShareIssuePacket({
     selectedFolderName,
     projectInfo,
     issuePhotoBlob,
+    issueProofPhotoBlob,
     floorPlanSnapshotBlob
   });
 
