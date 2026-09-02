@@ -57,10 +57,6 @@ export async function POST(request) {
     const headers = {
       'content-type': 'application/json'
     };
-    if (secret) {
-      headers['x-apps-script-secret'] = secret;
-      headers['authorization'] = `Bearer ${secret}`;
-    }
 
     const response = await fetch(scriptUrl, {
       method: 'POST',

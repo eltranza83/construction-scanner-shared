@@ -129,7 +129,7 @@ describe('Apps Script Sync Security Tests', () => {
       'The secret value must never appear anywhere in the request URL string'
     );
 
-    // Secret must instead be delivered safely in the POST body and headers
+    // Secret must be delivered solely via the single canonical transport: the POST body
     assert.strictEqual(
       captured.body?.secret,
       'SUPER_SECRET_PRODUCTION_TOKEN_XYZ123',
@@ -137,8 +137,13 @@ describe('Apps Script Sync Security Tests', () => {
     );
     assert.strictEqual(
       captured.headers?.['x-apps-script-secret'],
-      'SUPER_SECRET_PRODUCTION_TOKEN_XYZ123',
-      'Secret must be present in server-to-server headers'
+      undefined,
+      'Duplicate header x-apps-script-secret must not be sent'
+    );
+    assert.strictEqual(
+      captured.headers?.authorization,
+      undefined,
+      'Duplicate authorization header must not be sent'
     );
   });
 
