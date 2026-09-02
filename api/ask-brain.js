@@ -17,8 +17,14 @@ export async function POST(request) {
     }
 
     // 2. Exact byte length verification on received payload body before JSON parsing
-    const rawText = await request.text().catch(() => '');
-    const actualBytes = new TextEncoder().encode(rawText).length;
+    let rawText;
+    try {
+      rawText = await request.text();
+    } catch {
+      throw new HttpError(400, 'Failed to read request body.');
+    }
+
+    const actualBytes = new TextEncoder().encode(rawText || '').length;
     if (actualBytes > MAX_PAYLOAD_BYTES) {
       throw new HttpError(413, 'Request payload exceeds maximum allowed size of 100 KB.');
     }
@@ -64,7 +70,9 @@ export async function POST(request) {
       }
     }
 
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || (process.env.NODE_ENV !== 'production' ? clientApiKey : '') || '';
+    const apiKey = process.env.NODE_ENV === 'production'
+      ? (process.env.GEMINI_API_KEY || '')
+      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
 
     if (!apiKey) {
       throw new HttpError(503, 'AI Service is not configured on the server. Please configure GEMINI_API_KEY.');

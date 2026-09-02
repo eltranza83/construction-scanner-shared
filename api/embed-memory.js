@@ -12,7 +12,9 @@ export async function POST(request) {
 
     const body = await request.json().catch(() => ({}));
     const { text, texts, apiKey: clientApiKey } = body;
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';
+    const apiKey = process.env.NODE_ENV === 'production'
+      ? (process.env.GEMINI_API_KEY || '')
+      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
 
     if (!apiKey) {
       return errorResponse(new Error('GEMINI_API_KEY is not configured.'), 500);

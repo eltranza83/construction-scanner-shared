@@ -188,5 +188,42 @@ describe('AI Request Limits & Conversation Caps Test Suite', () => {
     const data = await response.json();
     assert.strictEqual(data.text, 'Answer from AI');
   });
+
+  it('returns 400 when reading request body fails', async () => {
+    mockAuthorizedAuth();
+
+    const faultyRequest = {
+      url: 'http://localhost:3000/api/ask-brain',
+      headers: {
+        get: (key) => key.toLowerCase() === 'authorization' ? 'Bearer valid-id-token' : null
+      },
+      text: async () => { throw new Error('Stream terminated prematurely'); },
+      json: async () => { throw new Error('Stream terminated prematurely'); }
+    };
+
+    const response = await POST(faultyRequest);
+    assert.strictEqual(response.status, 400);
+    const data = await response.json();
+    assert.ok(data.error.includes('Failed to read request body'));
+  });
+
+  it('in production mode, strictly ignores client-supplied keys and VITE_GEMINI_API_KEY fallback', async () => {
+    mockAuthorizedAuth();
+    process.env.NODE_ENV = 'production';
+    delete process.env.GEMINI_API_KEY;
+    process.env.VITE_GEMINI_API_KEY = 'client-facing-vite-key';
+
+    const request = createMockRequest({
+      body: {
+        prompt: 'Hello',
+        apiKey: 'client-injected-gemini-key'
+      }
+    });
+
+    const response = await POST(request);
+    assert.strictEqual(response.status, 503);
+    const data = await response.json();
+    assert.ok(data.error.includes('GEMINI_API_KEY'));
+  });
 });
 

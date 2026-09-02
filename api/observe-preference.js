@@ -1,4 +1,4 @@
-﻿import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
+import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
 import { AI_CONFIG } from './_lib/ai-config.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 
@@ -35,7 +35,9 @@ export async function POST(request) {
 
     const body = await request.json().catch(() => ({}));
     const { query, apiKey: clientApiKey } = body;
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';
+    const apiKey = process.env.NODE_ENV === 'production'
+      ? (process.env.GEMINI_API_KEY || '')
+      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
 
     if (!query) {
       return jsonResponse({ hasPreference: false });
