@@ -381,9 +381,9 @@ export default function IssueCard({
       gap: '12px',
       position: 'relative'
     }}>
-      {/* Top row: Priority, Status, Date, Due Date, PDF/Share/Edit/Delete */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '8px' }}>
-        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
+      {/* Top row: Priority, Due Date (Left) | Utility Actions (Top-Right Corner) */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center', minWidth: 0 }}>
           {getPriorityBadge()}
           {status !== 'open' && (
             <span style={{
@@ -402,54 +402,47 @@ export default function IssueCard({
               <span>{statusConfig.label}</span>
             </span>
           )}
-          <span style={{
-            fontSize: '0.74rem',
-            color: 'var(--color-zinc-500)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px'
-          }}>
-            <Calendar size={12} />
-            {dateFormatted}
-          </span>
           {dueDateFormatted && (
             <span style={{
               fontSize: '0.70rem',
               color: 'var(--color-amber-400)',
               backgroundColor: 'rgba(245, 158, 11, 0.1)',
-              padding: '1px 6px',
+              border: '1px solid rgba(245, 158, 11, 0.25)',
+              padding: '2px 6px',
               borderRadius: '4px',
-              fontWeight: 600
+              fontWeight: 600,
+              whiteSpace: 'nowrap'
             }}>
               Due: {dueDateFormatted}
             </span>
           )}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+        {/* Top-Right Utility Bar: Pinned permanently to top right corner */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '3px', flexShrink: 0, marginLeft: 'auto' }}>
           {onSendPacket && (
             <button
               type="button"
               onClick={handleSendPacketClick}
               disabled={preparingPacket}
               style={{
-                background: 'none',
-                border: 'none',
-                color: 'var(--color-zinc-400)',
+                background: 'rgba(255, 255, 255, 0.04)',
+                border: '1px solid var(--color-zinc-800)',
+                color: 'var(--color-zinc-300)',
                 cursor: 'pointer',
-                padding: '4px 6px',
-                borderRadius: '4px',
+                padding: '3px 6px',
+                borderRadius: '5px',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '4px',
-                fontSize: '0.72rem',
+                gap: '3px',
+                fontSize: '0.70rem',
                 fontWeight: 600,
                 opacity: preparingPacket ? 0.6 : 1
               }}
               title="Download PDF Packet"
             >
-              <FileText size={13} />
-              <span>{preparingPacket ? 'PDF...' : 'PDF'}</span>
+              <FileText size={12} />
+              <span>{preparingPacket ? '...' : 'PDF'}</span>
             </button>
           )}
 
@@ -457,21 +450,21 @@ export default function IssueCard({
             type="button"
             onClick={handleShareWithSub}
             style={{
-              background: 'none',
-              border: 'none',
-              color: copiedShare ? '#34d399' : 'var(--color-zinc-500)',
+              background: 'rgba(255, 255, 255, 0.04)',
+              border: '1px solid var(--color-zinc-800)',
+              color: copiedShare ? '#34d399' : 'var(--color-zinc-300)',
               cursor: 'pointer',
-              padding: '4px',
-              borderRadius: '4px',
+              padding: '3px 6px',
+              borderRadius: '5px',
               display: 'flex',
               alignItems: 'center',
-              gap: '4px',
-              fontSize: '0.72rem',
+              gap: '3px',
+              fontSize: '0.70rem',
               fontWeight: 600
             }}
             title="Copy text summary to share with sub"
           >
-            {copiedShare ? <Check size={14} /> : <Share2 size={14} />}
+            {copiedShare ? <Check size={12} /> : <Share2 size={12} />}
             <span>{copiedShare ? 'Copied!' : 'Share'}</span>
           </button>
 
@@ -482,9 +475,9 @@ export default function IssueCard({
               style={{
                 background: 'none',
                 border: 'none',
-                color: 'var(--color-zinc-500)',
+                color: 'var(--color-zinc-400)',
                 cursor: 'pointer',
-                padding: '4px',
+                padding: '3px 4px',
                 borderRadius: '4px',
                 display: 'flex',
                 alignItems: 'center',
@@ -492,7 +485,7 @@ export default function IssueCard({
               }}
               title="Edit issue"
             >
-              <Edit3 size={15} />
+              <Edit3 size={14} />
             </button>
           )}
 
@@ -505,9 +498,9 @@ export default function IssueCard({
             style={{
               background: 'none',
               border: 'none',
-              color: 'var(--color-zinc-500)',
+              color: 'var(--color-zinc-400)',
               cursor: 'pointer',
-              padding: '4px',
+              padding: '3px 4px',
               borderRadius: '4px',
               display: 'flex',
               alignItems: 'center',
@@ -515,7 +508,7 @@ export default function IssueCard({
             }}
             title="Delete issue"
           >
-            <Trash2 size={15} />
+            <Trash2 size={14} />
           </button>
         </div>
       </div>
@@ -552,6 +545,12 @@ export default function IssueCard({
             {(contractorName || phoneNumber) && (
               <div>
                 Assigned: <strong style={{ color: 'var(--color-amber-400)' }}>{contractorName || 'N/A'}</strong> {phoneNumber ? `(${phoneNumber})` : ''}
+              </div>
+            )}
+            {dateFormatted && dateFormatted !== 'N/A' && (
+              <div style={{ fontSize: '0.70rem', color: 'var(--color-zinc-500)', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '1px' }}>
+                <Calendar size={11} />
+                <span>Logged {dateFormatted}</span>
               </div>
             )}
           </div>
