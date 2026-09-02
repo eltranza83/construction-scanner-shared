@@ -1,3 +1,5 @@
+import { HttpError } from './firebase-auth.js';
+
 /**
  * Helper to perform fetch requests with exponential backoff and jitter.
  * Replaces hardcoded multi-model trial failover loops with reliable retries on the configured model.
@@ -30,7 +32,7 @@ export async function fetchWithExponentialBackoff(
       lastError = `Status ${response.status}: ${errorText}`;
     } catch (err) {
       if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-        throw new Error(`Upstream AI request timed out after ${Math.round(timeoutMs / 1000)} seconds.`);
+        throw new HttpError(504, `AI request timed out after ${Math.round(timeoutMs / 1000)} seconds. Please retry.`);
       }
       lastError = err.message || String(err);
       if (attempt === maxRetries) {

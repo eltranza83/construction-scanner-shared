@@ -374,4 +374,36 @@ describe('AI Route Security Refactor & Error Sanitization Suite', () => {
       globalThis.fetch = originalFetch;
     }
   });
+
+  it('ask-brain route returns HTTP 504 when upstream Gemini request times out', async () => {
+    globalThis.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('identitytoolkit.googleapis.com')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ users: [{ localId: 'user_123', email: 'admin@sitetactix.com' }] })
+        };
+      }
+      if (urlStr.includes('firestore.googleapis.com')) {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        const err = new Error('The operation was aborted');
+        err.name = 'TimeoutError';
+        throw err;
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+
+    const req = createMockRequest({
+      body: { prompt: 'How much for framing?' },
+      headers: { 'x-disable-retry': 'true' }
+    });
+
+    const res = await postAskBrain(req);
+    assert.strictEqual(res.status, 504, 'Route should return HTTP 504 on Gemini timeout');
+    const data = await res.json();
+    assert.ok(data.error.includes('timed out'));
+  });
 });
