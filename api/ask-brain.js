@@ -8,8 +8,62 @@ export async function POST(request) {
   try {
     await requireScannerAccess(request, fetch, { rateLimit: 30 });
 
-    const body = await request.json().catch(() => ({}));
+    const MAX_PAYLOAD_BYTES = 100 * 1024; // 100 KB limit
+
+    // 1. Early check via Content-Length header if present
+    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
+    if (contentLength > MAX_PAYLOAD_BYTES) {
+      throw new HttpError(413, 'Request payload exceeds maximum allowed size of 100 KB.');
+    }
+
+    // 2. Exact byte length verification on received payload body before JSON parsing
+    const rawText = await request.text().catch(() => '');
+    const actualBytes = new TextEncoder().encode(rawText).length;
+    if (actualBytes > MAX_PAYLOAD_BYTES) {
+      throw new HttpError(413, 'Request payload exceeds maximum allowed size of 100 KB.');
+    }
+
+    let body = {};
+    try {
+      body = rawText ? JSON.parse(rawText) : {};
+    } catch {
+      throw new HttpError(400, 'Invalid JSON body.');
+    }
+
     const { contents, systemInstruction, prompt, query, forceDeepReasoning, forceNoTools, apiKey: clientApiKey } = body;
+
+    // 3. System instruction character cap: max 10,000 characters
+    if (systemInstruction) {
+      const sysLen = typeof systemInstruction === 'string'
+        ? systemInstruction.length
+        : (systemInstruction.parts ? systemInstruction.parts.reduce((s, p) => s + String(p?.text || '').length, 0) : JSON.stringify(systemInstruction).length);
+      if (sysLen > 10000) {
+        throw new HttpError(400, 'System instruction exceeds maximum allowed limit of 10,000 characters.');
+      }
+    }
+
+    // 4. Conversation turns cap: max 30 turns
+    if (Array.isArray(contents) && contents.length > 30) {
+      throw new HttpError(400, 'Conversation exceeds maximum length (30 turns). Please start a fresh chat topic.');
+    }
+
+    // 5. Total character cap across all conversation turns: max 50,000 characters
+    if (Array.isArray(contents) && contents.length > 0) {
+      let totalChars = 0;
+      for (const turn of contents) {
+        if (Array.isArray(turn.parts)) {
+          for (const p of turn.parts) {
+            totalChars += String(p?.text || '').length;
+          }
+        } else if (turn.text || turn.content) {
+          totalChars += String(turn.text || turn.content || '').length;
+        }
+      }
+      if (totalChars > 50000) {
+        throw new HttpError(400, 'Conversation content exceeds maximum limit of 50,000 characters. Please start a fresh chat topic.');
+      }
+    }
+
     const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || (process.env.NODE_ENV !== 'production' ? clientApiKey : '') || '';
 
     if (!apiKey) {

@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { test, describe } from 'node:test';
+import { test, describe, before, after } from 'node:test';
 import { determineTaskModel, AI_CONFIG } from '../src/config/aiConfig.js';
 import { executeClientToolCall, runAllAiToolDiagnostics, evaluateSystemAndDataHealth } from '../src/services/aiTools.js';
 import { fetchWithExponentialBackoff } from '../api/_lib/ai-retry.js';
@@ -78,6 +78,41 @@ describe('Exponential Backoff Retry Engine', () => {
 });
 
 describe('AI Tools & Two-Tier Diagnostic Health Suite', () => {
+  let originalFetch;
+
+  before(() => {
+    originalFetch = globalThis.fetch;
+    globalThis.fetch = async (url, options) => {
+      if (String(url).includes('open-meteo.com')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            current: {
+              temperature_2m: 22,
+              relative_humidity_2m: 45,
+              precipitation: 0,
+              weather_code: 0,
+              wind_speed_10m: 10
+            },
+            daily: {
+              time: ['2026-09-01'],
+              weather_code: [0],
+              temperature_2m_max: [30],
+              temperature_2m_min: [18],
+              precipitation_sum: [0]
+            }
+          })
+        };
+      }
+      return originalFetch(url, options);
+    };
+  });
+
+  after(() => {
+    globalThis.fetch = originalFetch;
+  });
+
   test('executeClientToolCall handles subcontractor balance query', async () => {
     const mockDashboardData = {
       phases: [
