@@ -189,13 +189,13 @@ export default function App() {
               HOMES
             </div>
             <div style={{ 
-              fontSize: '0.62rem', 
+              fontSize: '0.60rem', 
               fontWeight: 700, 
               letterSpacing: '0.18em', 
               color: 'var(--color-zinc-300)',
               textTransform: 'uppercase',
               fontFamily: 'var(--font-serif)',
-              marginTop: '4px',
+              marginTop: '3px',
               textAlign: 'center',
               width: '100%',
               display: 'flex',

@@ -111,16 +111,25 @@ button, input, select, textarea {
 
 .logo-section {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  gap: 3px;
   flex-shrink: 0;
 }
 
 .logo-icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   color: var(--color-amber-500);
   flex: none;
+}
+
+.logo-text-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 140px;
 }
 
 .logo-main-text {
@@ -131,12 +140,13 @@ button, input, select, textarea {
   color: #fff;
   text-transform: uppercase;
   line-height: 1.1;
-  margin-right: -0.12em; /* Fixes trailing letter-spacing on 'C' */
+  text-align: center;
 }
 
 .header-logo-homes {
   display: flex;
   align-items: center;
+  justify-content: center;
   width: 100%;
   font-family: var(--font-syne);
   font-size: 0.55rem;
@@ -145,7 +155,6 @@ button, input, select, textarea {
   color: var(--color-zinc-400);
   text-transform: uppercase;
   margin-top: 1px;
-  padding-right: 2px; /* Centers HOMES perfectly while keeping balanced line margins */
 }
 
 .header-logo-homes::before,
@@ -156,11 +165,11 @@ button, input, select, textarea {
 }
 
 .header-logo-homes::before {
-  margin-right: 7px;
+  margin-right: 6px;
 }
 
 .header-logo-homes::after {
-  margin-left: 5px;
+  margin-left: 6px;
 }
 
 .header-project-section {
