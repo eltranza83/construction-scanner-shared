@@ -1,6 +1,7 @@
 import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
 import { AI_CONFIG } from './_lib/ai-config.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
+import { resolveServerGeminiKey, readAndValidateJsonBody, sanitizeUpstreamAiError } from './_lib/ai-auth.js';
 
 export const OBSERVER_SYSTEM_INSTRUCTION = `You are the Cognitive Preference Observer for SiteTactix (J.A.R.V.I.S.).
 Your role is to analyze a builder's conversational input and detect any emerging, implied, or explicit behavioral preferences.
@@ -33,18 +34,16 @@ export async function POST(request) {
   try {
     await requireScannerAccess(request, fetch, { rateLimit: 30 });
 
-    const body = await request.json().catch(() => ({}));
+    const body = await readAndValidateJsonBody(request);
     const { query, apiKey: clientApiKey } = body;
-    const apiKey = process.env.NODE_ENV === 'production'
-      ? (process.env.GEMINI_API_KEY || '')
-      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
+    const apiKey = resolveServerGeminiKey(clientApiKey);
 
-    if (!query) {
+    if (!query || typeof query !== 'string') {
       return jsonResponse({ hasPreference: false });
     }
 
     if (!apiKey) {
-      return jsonResponse({ hasPreference: false, warning: 'No API key configured for preference observer' });
+      throw new HttpError(503, 'AI preference observation is not configured on the server. Please configure GEMINI_API_KEY.');
     }
 
     const payload = {
@@ -68,7 +67,7 @@ export async function POST(request) {
     }, fetch);
 
     if (!res.ok) {
-      return jsonResponse({ hasPreference: false, error: 'Observer model call failed' });
+      throw sanitizeUpstreamAiError(res.status);
     }
 
     const data = await res.json();
@@ -77,9 +76,6 @@ export async function POST(request) {
 
     return jsonResponse(parsed);
   } catch (err) {
-    if (err instanceof HttpError) {
-      return errorResponse(err.status, err.message);
-    }
-    return jsonResponse({ hasPreference: false, error: err?.message });
+    return errorResponse(err);
   }
 }

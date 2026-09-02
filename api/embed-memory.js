@@ -2,22 +2,21 @@
  * Serverless API Route: /api/embed-memory
  * Generates vector embeddings for memory text and search queries via Gemini Embeddings API.
  */
-import { errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
+import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './_lib/firebase-auth.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 import { AI_CONFIG } from './_lib/ai-config.js';
+import { resolveServerGeminiKey, readAndValidateJsonBody } from './_lib/ai-auth.js';
 
 export async function POST(request) {
   try {
     await requireScannerAccess(request, fetch, { rateLimit: 40 });
 
-    const body = await request.json().catch(() => ({}));
+    const body = await readAndValidateJsonBody(request);
     const { text, texts, apiKey: clientApiKey } = body;
-    const apiKey = process.env.NODE_ENV === 'production'
-      ? (process.env.GEMINI_API_KEY || '')
-      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
+    const apiKey = resolveServerGeminiKey(clientApiKey);
 
     if (!apiKey) {
-      return errorResponse(new Error('GEMINI_API_KEY is not configured.'), 500);
+      return errorResponse(new HttpError(503, 'Embedding service is not configured on the server. Please configure GEMINI_API_KEY.'));
     }
 
     const inputTexts = Array.isArray(texts) ? texts : (text ? [String(text)] : []);
@@ -48,11 +47,10 @@ export async function POST(request) {
     );
 
     if (!response.ok) {
-      const errText = await response.text();
       // Gracefully return empty embeddings on embedding service unavailability
       return jsonResponse({
         embeddings: [],
-        warning: `Embedding API unavailable: ${response.status} ${errText}`
+        warning: `Embedding service is temporarily unavailable (status ${response.status}).`
       });
     }
 

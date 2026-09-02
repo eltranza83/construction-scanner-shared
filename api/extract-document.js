@@ -7,6 +7,7 @@ import {
   jsonResponse,
   requireScannerAccess
 } from './_lib/firebase-auth.js';
+import { resolveServerGeminiKey, sanitizeUpstreamAiError } from './_lib/ai-auth.js';
 
 const MAX_DOCUMENT_BYTES = 4 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set([
@@ -60,9 +61,7 @@ export async function generateDocumentData({ bytes, mimeType, apiKey, fetchImpl 
   );
 
   if (!response.ok) {
-    const detail = await response.text();
-    console.error(`Gemini extraction failed (${response.status}): ${detail}`);
-    throw new HttpError(502, 'AI extraction is temporarily unavailable. Please try again.');
+    throw sanitizeUpstreamAiError(response.status);
   }
 
   const payload = await response.json();
@@ -86,9 +85,8 @@ export async function POST(request) {
   try {
     await requireScannerAccess(request);
 
-    const apiKey = process.env.NODE_ENV === 'production'
-      ? (process.env.GEMINI_API_KEY || '')
-      : (process.env.GEMINI_API_KEY || request.headers.get('x-gemini-api-key') || '');
+    const clientHeaderKey = request.headers.get('x-gemini-api-key') || '';
+    const apiKey = resolveServerGeminiKey(clientHeaderKey);
     if (!apiKey) {
       throw new HttpError(503, 'AI processing is not configured on the server. Please configure GEMINI_API_KEY.');
     }

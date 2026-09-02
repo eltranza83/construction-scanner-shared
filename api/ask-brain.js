@@ -2,43 +2,36 @@ import { HttpError, errorResponse, jsonResponse, requireScannerAccess } from './
 import { determineTaskModel, AI_CONFIG } from './_lib/ai-config.js';
 import { fetchWithExponentialBackoff } from './_lib/ai-retry.js';
 import { AI_TOOL_DECLARATIONS } from './_lib/ai-tools-definitions.js';
+import { resolveServerGeminiKey, readAndValidateJsonBody, sanitizeUpstreamAiError } from './_lib/ai-auth.js';
 
 export async function POST(request) {
   const startTime = Date.now();
   try {
     await requireScannerAccess(request, fetch, { rateLimit: 30 });
 
-    const MAX_PAYLOAD_BYTES = 100 * 1024; // 100 KB limit
-
-    // 1. Early check via Content-Length header if present
-    const contentLength = parseInt(request.headers.get('content-length') || '0', 10);
-    if (contentLength > MAX_PAYLOAD_BYTES) {
-      throw new HttpError(413, 'Request payload exceeds maximum allowed size of 100 KB.');
-    }
-
-    // 2. Exact byte length verification on received payload body before JSON parsing
-    let rawText;
-    try {
-      rawText = await request.text();
-    } catch {
-      throw new HttpError(400, 'Failed to read request body.');
-    }
-
-    const actualBytes = new TextEncoder().encode(rawText || '').length;
-    if (actualBytes > MAX_PAYLOAD_BYTES) {
-      throw new HttpError(413, 'Request payload exceeds maximum allowed size of 100 KB.');
-    }
-
-    let body = {};
-    try {
-      body = rawText ? JSON.parse(rawText) : {};
-    } catch {
-      throw new HttpError(400, 'Invalid JSON body.');
-    }
-
+    const body = await readAndValidateJsonBody(request);
     const { contents, systemInstruction, prompt, query, forceDeepReasoning, forceNoTools, apiKey: clientApiKey } = body;
 
-    // 3. System instruction character cap: max 10,000 characters
+    // Lightweight shape validation (reject clearly malformed payloads while allowing future multimodal extensions)
+    if (contents !== undefined && contents !== null && !Array.isArray(contents)) {
+      throw new HttpError(400, 'Invalid request: contents must be an array.');
+    }
+    if (prompt !== undefined && prompt !== null && typeof prompt !== 'string') {
+      throw new HttpError(400, 'Invalid request: prompt must be a string.');
+    }
+    if (query !== undefined && query !== null && typeof query !== 'string') {
+      throw new HttpError(400, 'Invalid request: query must be a string.');
+    }
+    if (Array.isArray(contents)) {
+      for (let i = 0; i < contents.length; i++) {
+        const turn = contents[i];
+        if (!turn || typeof turn !== 'object') {
+          throw new HttpError(400, `Invalid request: turn at index ${i} must be an object.`);
+        }
+      }
+    }
+
+    // System instruction character cap: max 10,000 characters
     if (systemInstruction) {
       const sysLen = typeof systemInstruction === 'string'
         ? systemInstruction.length
@@ -48,12 +41,12 @@ export async function POST(request) {
       }
     }
 
-    // 4. Conversation turns cap: max 30 turns
+    // Conversation turns cap: max 30 turns
     if (Array.isArray(contents) && contents.length > 30) {
       throw new HttpError(400, 'Conversation exceeds maximum length (30 turns). Please start a fresh chat topic.');
     }
 
-    // 5. Total character cap across all conversation turns: max 50,000 characters
+    // Total character cap across all conversation turns: max 50,000 characters
     if (Array.isArray(contents) && contents.length > 0) {
       let totalChars = 0;
       for (const turn of contents) {
@@ -70,9 +63,7 @@ export async function POST(request) {
       }
     }
 
-    const apiKey = process.env.NODE_ENV === 'production'
-      ? (process.env.GEMINI_API_KEY || '')
-      : (process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '');
+    const apiKey = resolveServerGeminiKey(clientApiKey);
 
     if (!apiKey) {
       throw new HttpError(503, 'AI Service is not configured on the server. Please configure GEMINI_API_KEY.');
@@ -171,8 +162,7 @@ export async function POST(request) {
     }
 
     if (!response.ok) {
-      const errText = await response.text();
-      throw new HttpError(response.status || 502, `Gemini API error (${response.status}): ${errText}`);
+      throw sanitizeUpstreamAiError(response.status);
     }
 
     const data = await response.json();
