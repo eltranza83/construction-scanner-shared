@@ -1,6 +1,6 @@
 import GlobalAIAssistant from './components/GlobalAIAssistant';
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, Trash2, X, Zap, Bot } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, Trash2, X, Zap } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
@@ -18,6 +18,83 @@ const InviteScreen = lazy(() => import('./components/InviteScreen'));
 const Dashboard = lazy(() => import('./components/Dashboard'));
 const BlueprintPinboard = lazy(() => import('./components/BlueprintPinboard'));
 const BuilderBrain = lazy(() => import('./components/BuilderBrain'));
+
+function IronManIcon({ size = 18 }) {
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      style={{ display: 'block', flexShrink: 0 }}
+    >
+      <defs>
+        <linearGradient id="im-gold" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#FDE68A" />
+          <stop offset="50%" stopColor="#F59E0B" />
+          <stop offset="100%" stopColor="#B45309" />
+        </linearGradient>
+        <linearGradient id="im-red" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#EF4444" />
+          <stop offset="100%" stopColor="#991B1B" />
+        </linearGradient>
+      </defs>
+
+      {/* Red Helmet Base / Cheeks / Crown */}
+      <path
+        d="M26 18 C26 12 36 6 50 6 C64 6 74 12 74 18 L76 34 L82 42 L81 60 L73 66 L67 89 L50 93 L33 89 L27 66 L19 60 L18 42 L24 34 Z"
+        fill="url(#im-red)"
+      />
+
+      {/* Ear Plates */}
+      <path d="M18 40 L23 35 V57 L18 55 Z" fill="#7F1D1D" />
+      <path d="M82 40 L77 35 V57 L82 55 Z" fill="#7F1D1D" />
+
+      {/* Gold Faceplate */}
+      <path
+        d="M30 22 C35 18 43 16 50 16 C57 16 65 18 70 22 L73 37 L68 45 L70 63 L64 70 L59 87 L50 90 L41 87 L36 70 L30 63 L32 45 L27 37 Z"
+        fill="url(#im-gold)"
+      />
+
+      {/* Forehead Brow Inset */}
+      <path
+        d="M35 27 L50 32 L65 27 L63 35 L50 39 L37 35 Z"
+        fill="#78350F"
+        opacity="0.4"
+      />
+
+      {/* Iconic Slanted Glowing Cyan-White Eye Slits */}
+      <polygon
+        points="33,48 45,51 44,55 34,53"
+        fill="#E0F2FE"
+        stroke="#0284C7"
+        strokeWidth="0.8"
+      />
+      <polygon
+        points="67,48 55,51 56,55 66,53"
+        fill="#E0F2FE"
+        stroke="#0284C7"
+        strokeWidth="0.8"
+      />
+
+      {/* Mouth Slit Line */}
+      <path
+        d="M42 74 L50 76 L58 74"
+        stroke="#78350F"
+        strokeWidth="2.2"
+        strokeLinecap="round"
+      />
+      {/* Chin Inset */}
+      <path
+        d="M45 82 H55"
+        stroke="#78350F"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 function LazyScreenFallback() {
   return (
@@ -191,18 +268,7 @@ export default function App() {
           }}
           title="Ask Jarvis"
         >
-          <div style={{
-            width: '18px',
-            height: '18px',
-            borderRadius: '50%',
-            backgroundColor: 'var(--color-amber-500)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: '#000'
-          }}>
-            <Bot size={11} />
-          </div>
+          <IronManIcon size={18} />
           <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
             Jarvis
           </span>
