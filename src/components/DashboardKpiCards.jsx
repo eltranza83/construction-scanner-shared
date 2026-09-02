@@ -1,7 +1,7 @@
 import React from 'react';
 import { Wallet } from 'lucide-react';
 
-export default function DashboardKpiCards({ projectInfo = {}, formatCurrency }) {
+export default function DashboardKpiCards({ projectInfo = {} }) {
   const safeFormat = (val) => {
     const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
     const hasCents = Math.abs(num % 1) > 0.009;

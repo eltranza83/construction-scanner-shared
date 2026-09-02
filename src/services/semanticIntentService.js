@@ -671,7 +671,7 @@ export class SemanticIntentRegistry {
           if (!plugin.isApplicable(context, evidenceList)) {
             continue;
           }
-        } catch (_) {
+        } catch {
           continue;
         }
       }
@@ -697,7 +697,7 @@ export class SemanticIntentRegistry {
             plugin
           });
         }
-      } catch (_) {}
+      } catch {}
     }
 
     if (matches.length > 0) {

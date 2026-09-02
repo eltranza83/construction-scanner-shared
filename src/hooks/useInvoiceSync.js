@@ -167,7 +167,7 @@ export function useInvoiceSync({
         setTimeout(() => {
           try {
             URL.revokeObjectURL(fileURL);
-          } catch (_) {}
+          } catch {}
         }, 60000);
         return;
       } catch (err) {

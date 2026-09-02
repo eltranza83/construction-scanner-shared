@@ -7,11 +7,6 @@ import {
   Plus,
   Camera,
   Trash2,
-  ShieldCheck,
-  FileText,
-  Building,
-  Wrench,
-  ChevronRight,
   ChevronDown,
   ChevronUp,
   Folder
@@ -28,7 +23,6 @@ export default function Inspections({ activeProject, selectedFolder }) {
   const [filterCategory, setFilterCategory] = useState('all');
   const [showAddModal, setShowAddModal] = useState(false);
   const [collapsedCategories, setCollapsedCategories] = useState({});
-  const [isWatchOutsOpen, setIsWatchOutsOpen] = useState(false);
 
   // New Custom Item Form State
   const [newItemTitle, setNewItemTitle] = useState('');

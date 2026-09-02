@@ -155,10 +155,6 @@ export function sanitizeProjects(projects) {
   return Array.isArray(projects) ? projects.map(sanitizeProject).filter(Boolean) : [];
 }
 
-function getSessionStorage() {
-  return typeof sessionStorage === 'undefined' ? null : sessionStorage;
-}
-
 export function persistHistory(history) {
   setStoredJson(APP_STORAGE_KEYS.history, history);
 }

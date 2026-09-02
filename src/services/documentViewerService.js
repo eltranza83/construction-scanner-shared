@@ -395,7 +395,7 @@ export function getCachedStrategyId(platformKey, category) {
   try {
     if (typeof localStorage === 'undefined') return null;
     return localStorage.getItem(`${STRATEGY_CACHE_KEY_PREFIX}${platformKey}_${category}`);
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -404,7 +404,7 @@ export function cacheSuccessfulStrategy(platformKey, category, strategyId) {
   try {
     if (typeof localStorage === 'undefined') return;
     localStorage.setItem(`${STRATEGY_CACHE_KEY_PREFIX}${platformKey}_${category}`, strategyId);
-  } catch (_) {}
+  } catch {}
 }
 
 // ---------------------------------------------------------------------------
@@ -427,7 +427,7 @@ export function logViewerTelemetry(event) {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(TELEMETRY_STORAGE_KEY, JSON.stringify(inMemoryTelemetry.slice(0, 20)));
     }
-  } catch (_) {}
+  } catch {}
 
   return payload;
 }
@@ -442,7 +442,7 @@ export function clearViewerTelemetry() {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(TELEMETRY_STORAGE_KEY);
     }
-  } catch (_) {}
+  } catch {}
 }
 
 /**

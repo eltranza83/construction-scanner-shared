@@ -1,6 +1,5 @@
 import { fetchDriveFileBlob } from './googleDrive';
 import { createIssueFloorPlanSnapshotBlob } from './floorPlanSnapshot';
-import { generateIssuePacketPDF } from './pdfGenerator';
 
 function dataUrlToBlob(dataUrl) {
   const [meta, base64] = String(dataUrl || '').split(',');
@@ -64,9 +63,10 @@ export async function createAndShareIssuePacket({
   selectedFolderName,
   projectInfo = null
 }) {
-  const [issuePhotoBlob, floorPlanSnapshotBlob] = await Promise.all([
+  const [issuePhotoBlob, floorPlanSnapshotBlob, { generateIssuePacketPDF }] = await Promise.all([
     getIssuePhotoBlob(issue, googleToken),
-    getFloorPlanSnapshotBlob(issue, floorPlanImageSrc)
+    getFloorPlanSnapshotBlob(issue, floorPlanImageSrc),
+    import('./pdfGenerator.js')
   ]);
 
   const pdfBlob = await generateIssuePacketPDF({

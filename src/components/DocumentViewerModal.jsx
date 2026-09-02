@@ -85,7 +85,7 @@ export default function DocumentViewerModal({ file, token, onClose }) {
       if (viewPlan?.srcUrl && viewPlan?.strategyId === 'blob_embed') {
         try {
           URL.revokeObjectURL(viewPlan.srcUrl);
-        } catch (_) {}
+        } catch {}
       }
     };
   }, [file, token]);

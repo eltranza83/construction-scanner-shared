@@ -1,6 +1,6 @@
 import GlobalAIAssistant from './components/GlobalAIAssistant';
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, ClipboardCheck, Trash2, X, Zap } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, Trash2, X, Zap } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';

@@ -20,7 +20,6 @@ export default function BlueprintSelectedPinCard({
   React.useEffect(() => {
     let cancelled = false;
     const nextImageUrls = {};
-    const attachmentKeys = attachments.map((attachment) => attachment.fileId || attachment.url || '');
 
     const resolveAttachments = async () => {
       if (!googleToken) {
@@ -102,7 +101,7 @@ export default function BlueprintSelectedPinCard({
                     url: resolvedImageUrl || attachmentUrl,
                     webViewLink: attachment.webViewLink || attachmentUrl || attachment.url
                   })}
-                  style={{ display: 'block', width: '100%', padding: 0, background: 'none', border: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-zinc-800)' }}
+                  style={{ display: 'block', width: '100%', padding: 0, background: 'none', cursor: 'pointer', textAlign: 'left', borderRadius: '8px', overflow: 'hidden', border: '1px solid var(--color-zinc-800)' }}
                   title={`Open ${attachmentName}`}
                 >
                   <img

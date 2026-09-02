@@ -4,14 +4,6 @@ import {
   Mic,
   Send,
   X,
-  Volume2,
-  VolumeX,
-  Settings,
-  Sparkles,
-  Zap,
-  Loader2,
-  FileText,
-  ExternalLink,
   Square,
   MoreVertical
 } from 'lucide-react';
@@ -23,15 +15,13 @@ import {
 } from '../services/builderBrainService';
 import {
   fetchProjectFinishes,
-  saveFinishSpec,
-  deleteFinishSpec
+  saveFinishSpec
 } from '../services/finishService';
-import { runAllAiToolDiagnostics, evaluateSystemAndDataHealth } from '../services/aiTools';
+import { runAllAiToolDiagnostics } from '../services/aiTools';
 import {
   fetchProjectDriveTree,
   createFolder,
   trashDriveFileOrFolder,
-  syncFinishSpecsToDrive,
   fetchDriveFileBase64
 } from '../services/googleDrive';
 
@@ -42,7 +32,6 @@ import {
   VOICE_STATES,
   VOICE_MODES,
   isExitIntent,
-  containsWakeWord,
   stripWakeWord
 } from '../services/voiceStateMachine';
 
@@ -201,23 +190,22 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     try {
       const raw = localStorage.getItem('jobscan_ai_voice_config');
       return raw ? JSON.parse(raw) : null;
-    } catch (_) {
+    } catch {
       return null;
     }
   });
   const [selectedVoiceURI, setSelectedVoiceURI] = useState(() => {
     const raw = localStorage.getItem('jobscan_ai_voice_config');
     if (raw) {
-      try { return JSON.parse(raw).uri || ''; } catch (_) {}
+      try { return JSON.parse(raw).uri || ''; } catch {}
     }
     return localStorage.getItem('jobscan_ai_voice_uri') || '';
   });
   const [aiLanguage, setAiLanguage] = useState(() => localStorage.getItem('jobscan_ai_lang') || 'auto');
-  const [forceDeepReasoning, setForceDeepReasoning] = useState(false);
   const [devMode, setDevMode] = useState(() => {
     try {
       return localStorage.getItem('jobscan_dev_mode') === 'true';
-    } catch (_) {
+    } catch {
       return false;
     }
   });
@@ -228,14 +216,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     try {
       const saved = localStorage.getItem('jobscan_ai_activity_logs');
       return saved ? JSON.parse(saved) : [];
-    } catch (_) {
+    } catch {
       return [];
     }
   });
   const [isRunningTests, setIsRunningTests] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
-  const [apiKey, setApiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
+  const [apiKey] = useState(() => localStorage.getItem('jobscan_gemini_api_key') || localStorage.getItem('jobscan_gemini_key') || '');
   const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const [activePreviewFile, setActivePreviewFile] = useState(null);
   const [finishCount, setFinishCount] = useState(0);
@@ -254,7 +242,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [voiceMode, setVoiceMode] = useState(() => {
     try {
       return localStorage.getItem('jobscan_voice_mode') || VOICE_MODES.CONTINUOUS_HANDS_FREE;
-    } catch (_) {
+    } catch {
       return VOICE_MODES.CONTINUOUS_HANDS_FREE;
     }
   });
@@ -262,14 +250,14 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
   const [silenceTimeoutSec, setSilenceTimeoutSec] = useState(() => {
     try {
       return parseInt(localStorage.getItem('jobscan_silence_timeout_sec') || '7', 10);
-    } catch (_) {
+    } catch {
       return 7;
     }
   });
   const [wakeWordEnabled, setWakeWordEnabled] = useState(() => {
     try {
       return localStorage.getItem('jobscan_wake_word_enabled') === 'true';
-    } catch (_) {
+    } catch {
       return false;
     }
   });
@@ -311,12 +299,6 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       setIsRunningTests(false);
     }
   };
-
-  const handleOpenDocumentPreview = (fileObj) => {
-    if (!fileObj || !fileObj.fileId) return;
-    setActivePreviewFile(fileObj);
-  };
-
 
   // Sync Google Drive folders & files manifest
   useEffect(() => {
@@ -436,7 +418,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           try {
             const raw = localStorage.getItem('jobscan_ai_voice_config');
             if (raw) activeConfig = JSON.parse(raw);
-          } catch (_) {}
+          } catch {}
         }
 
         const resolved = resolveVoice(voices, activeConfig, false);
@@ -482,7 +464,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       const lines = clean.split('\n');
       const listLineIndices = [];
       lines.forEach((l, idx) => {
-        if (/^\s*(?:\d+[\.\)]|[-•*])\s+/.test(l)) {
+        if (/^\s*(?:\d+[.)]|[-•*])\s+/.test(l)) {
           listLineIndices.push(idx);
         }
       });
@@ -512,17 +494,17 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       });
 
       clean = clean
-        .replace(/\(Folder ID:[^\)]+\)/gi, '')
-        .replace(/\(File ID:[^\)]+\)/gi, '')
-        .replace(/\b(?:Folder|File)\s+ID:\s*[`'"]?[a-zA-Z0-9_\-]+[`'"]?/gi, '')
-        .replace(/\b[a-zA-Z0-9_\-]{24,}\b/g, '')
-        .replace(/[*_#🚨⏰👷📍•`]/g, '')
-        .replace(/[\[\]\(\)]/g, ' ')
+        .replace(/\(Folder ID:[^)]+\)/gi, '')
+        .replace(/\(File ID:[^)]+\)/gi, '')
+        .replace(/\b(?:Folder|File)\s+ID:\s*[`'"]?[a-zA-Z0-9_-]+[`'"]?/gi, '')
+        .replace(/\b[a-zA-Z0-9_-]{24,}\b/g, '')
+        .replace(/[*_#🚨⏰👷📍•`]/gu, '')
+        .replace(/[[\]()]/g, ' ')
         .replace(/\n+/g, '. ')
         .replace(/\.pdf\b/gi, '')
         .replace(/\.txt\b/gi, '')
         .replace(/\.docx?\b/gi, '')
-        .replace(/[_\-]+/g, ' ')
+        .replace(/[_-]+/g, ' ')
         .replace(/\s{2,}/g, ' ')
         .trim();
 
@@ -543,7 +525,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         try {
           const raw = localStorage.getItem('jobscan_ai_voice_config');
           if (raw) currentConfig = JSON.parse(raw);
-        } catch (_) {}
+        } catch {}
       }
 
       const isSpanish = /[áéíóúüñ¿¡]/i.test(text) || /\b(el|la|los|las|un|una|del|por|para|con|este|esta|lote|plomero|electricista|dinero|gastado|cuanto|quien|recordatorio|buenos|dias|tardes|hola|subcontratista|factura|presupuesto)\b/i.test(text);
@@ -902,7 +884,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
         const updated = [logEntry, ...prev.slice(0, 49)];
         try {
           localStorage.setItem('jobscan_ai_activity_logs', JSON.stringify(updated));
-        } catch (_) {}
+        } catch {}
         return updated;
       });
     } catch (err) {
@@ -954,7 +936,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       localStorage.setItem('jobscan_voice_mode', voiceMode);
       localStorage.setItem('jobscan_silence_timeout_sec', String(silenceTimeoutSec));
       localStorage.setItem('jobscan_wake_word_enabled', String(wakeWordEnabled));
-    } catch (_) {}
+    } catch {}
   }, [voiceMode, silenceTimeoutSec, wakeWordEnabled]);
 
   // 3. Speech Recognition Controller tied to Voice State Machine
@@ -965,7 +947,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       if (recognitionRef.current) {
         try {
           recognitionRef.current.abort();
-        } catch (_) {}
+        } catch {}
         recognitionRef.current = null;
       }
       return;
@@ -1030,7 +1012,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
           timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         };
         setMessages((prev) => [...prev, exitMsg]);
-        try { rec.stop(); } catch (_) {}
+        try { rec.stop(); } catch {}
 
         let closeFired = false;
         const safeClose = () => {
@@ -1045,7 +1027,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
       try {
         rec.stop();
-      } catch (_) {}
+      } catch {}
 
       // Normal Query or Wake-Word Processing
       const finalQuery = stripWakeWord(trimmed);
@@ -1119,7 +1101,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
       if (silenceDebounceTimer) clearTimeout(silenceDebounceTimer);
       try {
         rec.abort();
-      } catch (_) {}
+      } catch {}
     };
   }, [voiceState, aiLanguage]);
 
@@ -1637,7 +1619,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                           testUtt.lang = chosen.lang || 'en-GB';
                           testUtt.rate = 1.2;
                           window.speechSynthesis.speak(testUtt);
-                        } catch (_) {}
+                        } catch {}
                       }
                     }}
                     style={{
@@ -1675,7 +1657,7 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
                           testUtt.lang = chosen.lang || 'en-GB';
                           testUtt.rate = 1.2;
                           window.speechSynthesis.speak(testUtt);
-                        } catch (_) {}
+                        } catch {}
                       }
                     }}
                     style={{

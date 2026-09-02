@@ -13,7 +13,13 @@ let currentLogBuffer = "";
 
 function isAuthorizedRequest(e) {
   if (!WEBHOOK_SECRET) return true;
-  const receivedSecret = e && e.parameter ? String(e.parameter.secret || '') : '';
+  let receivedSecret = e && e.parameter ? String(e.parameter.secret || '') : '';
+  if (!receivedSecret && e && e.postData && e.postData.contents) {
+    try {
+      const parsed = JSON.parse(e.postData.contents);
+      if (parsed && parsed.secret) receivedSecret = String(parsed.secret || '');
+    } catch (_) {}
+  }
   return receivedSecret === WEBHOOK_SECRET;
 }
 

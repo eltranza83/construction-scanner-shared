@@ -108,7 +108,7 @@ export class FirestoreProjectAdapter {
             const norm = normalizeProjectRecord(docSnap.data(), docSnap.id);
             itemsMap.set(norm.id, norm);
           });
-        } catch (_) {}
+        } catch {}
       }
 
       const items = Array.from(itemsMap.values());

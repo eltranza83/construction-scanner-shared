@@ -76,7 +76,7 @@ export default function DocumentCard({ file, folderName, error, onOpen }) {
           href={link}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={(e) => {
+          onClick={() => {
             if (onOpen) onOpen(file);
           }}
           style={{

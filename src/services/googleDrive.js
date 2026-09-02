@@ -405,7 +405,7 @@ export async function findSpreadsheetInFolder(accessToken, folderId, preferredNa
         }
       }
     }
-  } catch (_) {}
+  } catch {}
 
   return directFiles[0] || null;
 }
@@ -1284,7 +1284,7 @@ export async function syncFinishSpecsToDrive(accessToken, projectFolderId, proje
             },
             body: JSON.stringify({ trashed: true })
           });
-        } catch (_) {}
+        } catch {}
       }
     }
 
@@ -1354,7 +1354,7 @@ export async function getFinishSheetSyncStatus(accessToken, projectFolderId, fir
         }
         return { status: 'synced', webViewLink, rowCount: dataRows.length };
       }
-    } catch (_) {}
+    } catch {}
 
     return { status: 'synced', webViewLink };
   } catch (err) {

@@ -146,7 +146,7 @@ export class LocalStorageFinishAdapter {
             return parsed.map((p) => normalizeFinishSpec(p));
           }
         }
-      } catch (_) {}
+      } catch {}
     }
     return this.memoryStore.get(key) || [];
   }
@@ -493,7 +493,7 @@ export async function migrateLegacyLocalStorageSpecs(projectId) {
           raw = val;
           break;
         }
-      } catch (_) {}
+      } catch {}
     }
   }
 

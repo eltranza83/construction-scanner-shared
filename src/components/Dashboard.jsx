@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { RefreshCw, AlertCircle, Database, FileSpreadsheet } from 'lucide-react';
+import { RefreshCw, AlertCircle, FileSpreadsheet } from 'lucide-react';
 import { STATUS_MESSAGES, getDriveErrorMessage, getUploadErrorMessage, isAuthError } from '../services/appErrors';
 import {
   getCachedDashboardSpreadsheetId,

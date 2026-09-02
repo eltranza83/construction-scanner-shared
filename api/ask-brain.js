@@ -10,7 +10,11 @@ export async function POST(request) {
 
     const body = await request.json().catch(() => ({}));
     const { contents, systemInstruction, prompt, query, forceDeepReasoning, forceNoTools, apiKey: clientApiKey } = body;
-    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || clientApiKey || '';
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY || (process.env.NODE_ENV !== 'production' ? clientApiKey : '') || '';
+
+    if (!apiKey) {
+      throw new HttpError(503, 'AI Service is not configured on the server. Please configure GEMINI_API_KEY.');
+    }
 
     let userQuery = String(prompt || query || '');
 
@@ -119,12 +123,9 @@ export async function POST(request) {
     const text = textParts.join('\n').trim();
     const durationMs = Date.now() - startTime;
 
-    console.log('[API ask-brain] User message received:', userQuery);
+    console.log('[API ask-brain] Request processed. Query length:', userQuery.length, '| Model:', model, '| Intent:', intent, '| Duration:', `${durationMs}ms`);
     if (toolCalls.length > 0) {
-      console.log('[API ask-brain] Raw Gemini functionCalls count:', toolCalls.length);
-      toolCalls.forEach((tc, idx) => {
-        console.log(`[API ask-brain] Tool #${idx + 1} Name:`, tc.name, '| Raw Args:', JSON.stringify(tc.args || {}));
-      });
+      console.log('[API ask-brain] Tools invoked count:', toolCalls.length, '| Tools:', toolCalls.map(t => t.name).join(', '));
     }
 
     return jsonResponse({

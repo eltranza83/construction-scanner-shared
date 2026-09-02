@@ -14,7 +14,6 @@ import {
   Palette,
   FileText,
   ExternalLink,
-  Download,
   Printer,
   ChevronDown,
   ChevronUp,
@@ -27,7 +26,6 @@ import {
 import MemoryVault from './MemoryVault.jsx';
 import { getMemories } from '../services/memoryService.js';
 import {
-  playChimeAlert,
   loadGlobalPhases,
   saveGlobalPhases,
   resetGlobalPhases,
@@ -41,19 +39,14 @@ import {
   fetchProjectFinishes,
   saveFinishSpec,
   deleteFinishSpec,
-  STANDARD_FINISH_CATEGORIES,
-  FINISH_SCOPES,
-  SURFACE_TYPES
+  STANDARD_FINISH_CATEGORIES
 } from '../services/finishService';
 import {
   fetchProjectDriveTree,
-  createFolder,
-  trashDriveFileOrFolder,
   syncFinishSpecsToDrive,
   getFinishSheetSyncStatus,
   uploadBuyerHandoverPdfToDrive
 } from '../services/googleDrive';
-import { generateBuyerHandoverPdf } from '../services/buyerHandoverPdfGenerator';
 
 export const DEFAULT_SITE_SETUP_PROTOCOL = {
   id: 'site_setup_protocol',
@@ -377,7 +370,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const projectName = activeProject?.name || selectedFolder?.name || 'Active Job Site';
 
   const [activeSubTab, setActiveSubTab] = useState('site_setup'); // 'site_setup' | 'phases' | 'specs' | 'vault'
-  const [driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
+  const [_driveTree, setDriveTree] = useState(() => loadProjectDriveTree(projectId));
   const [memoryVaultCount, setMemoryVaultCount] = useState(0);
 
   useEffect(() => {
@@ -627,7 +620,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
     }
   };
 
-  const handleOpenAddSpecModal = () => {
+  const _handleOpenAddSpecModal = () => {
     setEditingSpecId(null);
     setCustomAttributeEntries([]);
     setNewSpecForm({
@@ -803,6 +796,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
   const handlePrintBuyerPdf = async () => {
     try {
       setIsGeneratingPdf(true);
+      const { generateBuyerHandoverPdf } = await import('../services/buyerHandoverPdfGenerator');
       const pdf = await generateBuyerHandoverPdf({
         projectName: projectName,
         projectAddress: activeProject?.address || '',
@@ -860,7 +854,7 @@ export default function BuilderBrain({ activeProject, selectedFolder, googleToke
       const updated = { ...prev, [key]: !prev[key] };
       try {
         localStorage.setItem('jobscan_phase_checks_' + projectId, JSON.stringify(updated));
-      } catch (_) {}
+      } catch {}
       return updated;
     });
   };

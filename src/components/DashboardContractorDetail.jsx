@@ -4,7 +4,6 @@ import { Camera, X, Copy, Check } from 'lucide-react';
 export default function DashboardContractorDetail({
   selectedSub,
   formatCurrency,
-  getStatusStyle,
   onViewPhasePhotos,
   onClearSelection,
   onShowToast

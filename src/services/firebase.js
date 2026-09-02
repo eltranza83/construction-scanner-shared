@@ -64,7 +64,7 @@ export function getFirebaseAuthInstance() {
       : [inMemoryPersistence];
 
     cachedAuthInstance = initializeAuth(app, { persistence });
-  } catch (err) {
+  } catch {
     cachedAuthInstance = getAuth(app);
   }
   return cachedAuthInstance;

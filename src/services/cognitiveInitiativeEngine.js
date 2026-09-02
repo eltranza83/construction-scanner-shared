@@ -44,7 +44,7 @@ export function loadInitiativeMemory(userId = 'default_user') {
       const raw = localStorage.getItem(`${INITIATIVE_STORAGE_PREFIX}${userId}`);
       if (raw) return JSON.parse(raw);
     }
-  } catch (_) {}
+  } catch {}
 
   // Default neutral affinity
   const initialMemory = {
@@ -73,7 +73,7 @@ export function saveInitiativeMemory(userId = 'default_user', memory) {
     if (typeof localStorage !== 'undefined') {
       localStorage.setItem(`${INITIATIVE_STORAGE_PREFIX}${userId}`, JSON.stringify(memory));
     }
-  } catch (_) {}
+  } catch {}
 }
 
 /**

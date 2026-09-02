@@ -132,7 +132,7 @@ export async function syncUploadedInvoicesDirectly(accessToken, projectFolderId)
 
   // 1. Resolve Uploads and Archive folders inside canonical 'App Folders' container
   const uploadsFolderId = await ensureAppSubfolder(accessToken, projectFolderId, 'Invoice Uploads');
-  const archiveFolderId = await ensureAppSubfolder(accessToken, projectFolderId, 'Processed Invoices');
+  await ensureAppSubfolder(accessToken, projectFolderId, 'Processed Invoices');
 
   // 2. Resolve Google Spreadsheet in the project folder
   const spreadsheet = await findSpreadsheetInFolder(accessToken, projectFolderId);

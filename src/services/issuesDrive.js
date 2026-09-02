@@ -1,6 +1,5 @@
 import {
   ensureAppSubfolder,
-  fetchDriveFileBlob,
   findFileInFolder,
   findOrCreateFolder,
   getFileContent,

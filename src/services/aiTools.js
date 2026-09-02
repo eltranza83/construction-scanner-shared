@@ -16,45 +16,26 @@ import {
   deleteUserPreference,
   resetAllUserPreferences
 } from './memoryService.js';
-import {
-  PREFERENCE_STATUS,
-  PREFERENCE_SCOPES,
-  PREFERENCE_SOURCES,
-  resolvePreferenceConflicts
-} from './userPreferenceEngine.js';
+import { resolvePreferenceConflicts } from './userPreferenceEngine.js';
 import {
   parseGoogleDocPurchasingStructure,
-  calculateSectionInsertion,
-  calculateMarkPurchased,
-  calculateRemoveItem,
-  calculateRemoveSection,
-  queryPurchasingList,
-  resolvePurchasingTarget,
-  classifyTradeCategory,
   resolveTargetProjectId,
   loadMasterPurchasingDoc,
   saveMasterPurchasingDoc,
   loadProjectPurchasingDoc,
   saveProjectPurchasingDoc,
-  getPurchasingDocStorageKey,
   syncMasterPurchasingToProjects,
-  cloneMasterToNewProject,
   getPurchasingAuditLog,
-  recordPurchasingAuditLog,
   deprecateMasterItem,
-  incrementMasterVersion,
   discoverAndBindProjectPurchasingDoc,
-  RESOURCE_TYPES,
-  MASTER_PROJECT_ID
+  RESOURCE_TYPES
 } from './googleDocsPurchasingService.js';
 import { purchasingService, PURCHASING_STATUSES, TRADE_SECTION_MAP as STRUCTURED_TRADE_MAP } from './purchasingService.js';
 import {
   fetchProjectFinishes,
   saveFinishSpec,
-  deleteFinishSpec,
   findMatchingFinish,
   formatFinishesForAI,
-  FINISH_SCOPES,
   exportToGoogleDocMarkdown as exportFinishesToMarkdown
 } from './finishService.js';
 import { executeClientAction, ACTION_TYPES } from './clientActionService.js';
@@ -186,11 +167,6 @@ export const TOOL_REGISTRY = {
     type: 'READ',
     source: 'Google Drive',
     description: 'Searches project blueprints, permits, and engineering files.'
-  },
-  get_homeowner_specs: {
-    type: 'READ',
-    source: 'Homeowner Specifications',
-    description: 'Retrieves finish, fixture, and paint specifications.'
   },
   get_site_setup: {
     type: 'READ',
@@ -525,7 +501,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
           isDuplicate: true,
           _executionDurationMs: Date.now() - startTime
         }, functionName, correlationId);
-      } catch (_) {
+      } catch {
         // Fall through to retry fresh execution if in-flight failed
       }
     }
@@ -1804,7 +1780,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       if (targetProj && allSpecs.length === 0) {
         try {
           allSpecs = await fetchProjectFinishes(targetProj);
-        } catch (_) {}
+        } catch {}
       }
 
       const filtered = allSpecs.filter(s => {
@@ -1840,7 +1816,7 @@ export async function executeClientToolCall(functionName, rawArgs = {}, projectC
       let allSpecs = Array.isArray(projectSpecs) ? projectSpecs : [];
       try {
         allSpecs = await fetchProjectFinishes(targetProj);
-      } catch (_) {}
+      } catch {}
 
       // Check conservative matching if specId not explicitly provided
       if (!args.specId) {
@@ -2318,7 +2294,6 @@ export function evaluateSystemAndDataHealth(projectContext = {}) {
     dashboardData = null,
     driveTree = null,
     projectSpecs = [],
-    apiKey = '',
     googleToken = ''
   } = projectContext;
 

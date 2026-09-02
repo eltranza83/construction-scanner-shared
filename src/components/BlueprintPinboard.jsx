@@ -70,8 +70,6 @@ export const TRADE_SECTIONS_CONFIG = {
   }
 };
 
-import Inspections from './Inspections';
-
 function BlueprintViewModeToggle({ viewMode, onSetViewMode, activeIssuesCount }) {
   return (
     <div

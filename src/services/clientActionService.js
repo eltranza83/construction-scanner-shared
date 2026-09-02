@@ -358,7 +358,7 @@ export const ACTION_EXECUTORS = {
     if (folderLink && typeof window !== 'undefined' && typeof window.open === 'function') {
       try {
         window.open(folderLink, '_blank', 'noopener,noreferrer');
-      } catch (_) {}
+      } catch {}
     }
 
     return {

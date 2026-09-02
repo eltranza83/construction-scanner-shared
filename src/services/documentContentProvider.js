@@ -211,7 +211,7 @@ export async function fetchDocumentContent(params = {}) {
           };
         }
       }
-    } catch (_) {}
+    } catch {}
   }
 
   return {
@@ -289,7 +289,7 @@ export async function writeDocumentContent(params = {}) {
           error: null
         };
       }
-    } catch (_) {}
+    } catch {}
   }
 
   // 3. Apps Script Webhook Fallback
@@ -335,7 +335,7 @@ export async function writeDocumentContent(params = {}) {
           };
         }
       }
-    } catch (_) {}
+    } catch {}
   }
 
   clearDocumentContentCache(documentId);

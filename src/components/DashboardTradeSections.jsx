@@ -29,7 +29,7 @@ const requiresPayeeTracking = (phaseName, catName) => {
   return PAYEE_REQUIRED_KEYWORDS.some(kw => combined.includes(kw));
 };
 
-function PhaseMetricGroup({ sub, formatCurrency }) {
+function PhaseMetricGroup({ sub }) {
   const safeFormat = (val) => {
     const num = typeof val === 'number' ? val : parseFloat(String(val || 0).replace(/[^0-9.-]/g, '')) || 0;
     const hasCents = Math.abs(num % 1) > 0.009;
@@ -124,7 +124,7 @@ export default function DashboardTradeSections({
       </h3>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-        {safeCategories.map((cat, index) => {
+        {safeCategories.map((cat) => {
           const isExpanded = !!expandedCategories[cat.name];
           const catSubs = safeSubcontractors.filter(sub => sub.category === cat.name);
 

@@ -331,7 +331,7 @@ export class VoiceStateMachine {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();
-      } catch (_) {}
+      } catch {}
     }
 
     // 3. Transition to listening
@@ -385,7 +385,7 @@ export class VoiceStateMachine {
     if (typeof window !== 'undefined' && window.speechSynthesis) {
       try {
         window.speechSynthesis.cancel();
-      } catch (_) {}
+      } catch {}
     }
     return this.transition(VOICE_STATES.IDLE, reason);
   }

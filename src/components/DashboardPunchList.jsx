@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertCircle, Clock, CheckCircle2, Plus, Filter, RefreshCw } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Plus, RefreshCw } from 'lucide-react';
 import IssueCard from './IssueCard';
 import IssueFormModal from './IssueFormModal';
 import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';

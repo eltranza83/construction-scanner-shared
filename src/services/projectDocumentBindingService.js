@@ -10,7 +10,7 @@
  *   -> Read/Write
  */
 
-import { PROJECT_DOC_REGISTRY, getDocumentDefinition } from './projectDocumentRegistry.js';
+import { getDocumentDefinition } from './projectDocumentRegistry.js';
 import { resolvePurchasingAdapter } from './googleDocsPurchasingService.js';
 
 export function buildDocumentProvenance(projectNameOrId = 'Project', docTypeKey = 'purchasing_checklist', isMaster = false) {
@@ -176,7 +176,7 @@ export function discoverAndBindProjectDocument(storageOrAdapter, projectId = 'de
     try {
       const raw = storageOrAdapter.getItem(bindingKey);
       if (raw) durableBinding = JSON.parse(raw);
-    } catch (_) {}
+    } catch {}
   }
 
   // 1. Authoritative Binding Reuse
@@ -206,7 +206,7 @@ export function discoverAndBindProjectDocument(storageOrAdapter, projectId = 'de
           fileName: existingMeta.fileName || def.canonicalFileName,
           boundAt: new Date().toISOString()
         }));
-      } catch (_) {}
+      } catch {}
     }
 
     return {
@@ -279,7 +279,7 @@ export function discoverAndBindProjectDocument(storageOrAdapter, projectId = 'de
           boundAt: new Date().toISOString(),
           score: best.baseScore
         }));
-      } catch (_) {}
+      } catch {}
     }
 
     return {

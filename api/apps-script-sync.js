@@ -5,8 +5,8 @@ import {
   requireScannerAccess
 } from './_lib/firebase-auth.js';
 
-function getConfiguredScriptUrl(customUrl = '') {
-  const value = customUrl || process.env.APPS_SCRIPT_URL || '';
+function getConfiguredScriptUrl() {
+  const value = process.env.APPS_SCRIPT_URL || '';
   let url;
   try {
     url = new URL(value);
@@ -23,10 +23,9 @@ function getConfiguredScriptUrl(customUrl = '') {
 export async function POST(request) {
   try {
     await requireScannerAccess(request);
-    const clientScriptUrl = request.headers.get('x-apps-script-url') || '';
-    const secret = request.headers.get('x-apps-script-secret') || process.env.APPS_SCRIPT_SECRET || '';
+    const secret = process.env.APPS_SCRIPT_SECRET || '';
 
-    if (!clientScriptUrl && !process.env.APPS_SCRIPT_URL) {
+    if (!process.env.APPS_SCRIPT_URL) {
       throw new HttpError(503, 'Spreadsheet sync is not configured on the server. Please add APPS_SCRIPT_URL to .env or Vercel settings.');
     }
 
@@ -42,14 +41,33 @@ export async function POST(request) {
       throw new HttpError(400, 'A valid project folder is required.');
     }
 
-    const scriptUrl = getConfiguredScriptUrl(clientScriptUrl);
+    const scriptUrl = getConfiguredScriptUrl();
     scriptUrl.searchParams.set('action', 'sync');
     scriptUrl.searchParams.set('folderId', folderId);
+    // CRITICAL: Secret is NEVER placed in URL search params to avoid credential exposure or logging leaks
+
+    const syncPayload = {
+      action: 'sync',
+      folderId
+    };
     if (secret) {
-      scriptUrl.searchParams.set('secret', secret);
+      syncPayload.secret = secret;
     }
 
-    const response = await fetch(scriptUrl, { method: 'POST', redirect: 'follow' });
+    const headers = {
+      'content-type': 'application/json'
+    };
+    if (secret) {
+      headers['x-apps-script-secret'] = secret;
+      headers['authorization'] = `Bearer ${secret}`;
+    }
+
+    const response = await fetch(scriptUrl, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(syncPayload),
+      redirect: 'follow'
+    });
     if (!response.ok) {
       console.error(`Apps Script sync failed with status ${response.status}.`);
       throw new HttpError(502, 'Spreadsheet sync could not be started. Please try again.');

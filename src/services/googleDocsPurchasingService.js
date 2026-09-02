@@ -304,7 +304,7 @@ export class LocalStoragePurchasingAdapter {
       if (!raw) return [];
       const parsed = JSON.parse(raw);
       return Array.isArray(parsed) ? parsed.slice(0, limit) : [];
-    } catch (_) {
+    } catch {
       return [];
     }
   }
@@ -317,7 +317,7 @@ export class LocalStoragePurchasingAdapter {
         this.storage.setItem(this.auditKey, JSON.stringify(current.slice(0, 100)));
       }
       return entry;
-    } catch (_) {
+    } catch {
       return null;
     }
   }
@@ -401,7 +401,7 @@ export function resolvePurchasingTarget(args = {}, projectContext = {}) {
           const match = list.find(p => p.id === projId);
           if (match?.name) projId = match.name;
         }
-      } catch (_) {}
+      } catch {}
     }
   }
 

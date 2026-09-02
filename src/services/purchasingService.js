@@ -278,7 +278,7 @@ export class LocalStoragePurchasingAdapter {
       if (raw) {
         try {
           return JSON.parse(raw) || [];
-        } catch (_) {}
+        } catch {}
       }
       return [];
     }
@@ -313,7 +313,7 @@ export class LocalStoragePurchasingAdapter {
       if (raw) {
         try {
           return JSON.parse(raw) || null;
-        } catch (_) {}
+        } catch {}
       }
     }
     return this.memoryStore.get(key) || null;

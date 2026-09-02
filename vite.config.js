@@ -43,6 +43,11 @@ function apiDevPlugin() {
 export default defineConfig({
   plugins: [react(), apiDevPlugin()],
   build: {
+    modulePreload: {
+      resolveDependencies: (filename, deps) => {
+        return deps.filter(dep => !dep.includes('vendor-jspdf') && !dep.includes('vendor-html2canvas'));
+      }
+    },
     rolldownOptions: {
       output: {
         manualChunks(id) {

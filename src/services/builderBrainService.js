@@ -3,22 +3,17 @@
  * Pure AI Model Architecture: Feeds live project records directly to Gemini Cloud AI in one pass.
  * No brittle hardcoded if/else rules or regex catchphrases.
  */
-import { determineTaskModel, AI_CONFIG } from '../config/aiConfig.js';
+import { determineTaskModel } from '../config/aiConfig.js';
 import { executeClientToolCall, circuitBreaker, resetWriteIdempotencyState } from './aiTools.js';
 import { getFirebaseAuthInstance } from './firebase.js';
 import { INSPECTION_STAGES, loadInspectionData } from './inspectionService.js';
-import { getMemories, searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference, updateUserPreferenceStatus, deleteUserPreference, resetAllUserPreferences } from './memoryService.js';
+import { searchMemories, formatMemoriesForPrompt, loadUserPreferences, saveUserPreference } from './memoryService.js';
 import { getTodayCalendarDate } from './sheetsDataService.js';
 import {
   compileUserPreferencesPrompt,
   analyzeInteractionForPreference,
-  calculateObservationConfidence,
-  shouldProactivelyPrompt,
-  generateProactiveConfirmationQuestion,
-  evaluateConfirmationResponse,
   PREFERENCE_STATUS,
-  PREFERENCE_SOURCES,
-  PREFERENCE_SCOPES
+  PREFERENCE_SOURCES
 } from './userPreferenceEngine.js';
 
 import {
@@ -26,25 +21,17 @@ import {
   resolvePendingSuggestionConfirmation,
   recordSuggestionOutcome,
   isConversationEnding,
-  isUserCorrectingInformation,
-  INITIATIVE_OUTCOMES,
-  DEFAULT_INITIATIVE_CONFIG
+  INITIATIVE_OUTCOMES
 } from './cognitiveInitiativeEngine.js';
 
 import {
-  classifySemanticIntent,
   synthesizeGroundedEvidence,
-  getSemanticPromptGuidelines,
-  INTENT_MODALITIES
+  getSemanticPromptGuidelines
 } from './semanticIntentService.js';
 
 import {
   fetchProjectFinishes,
-  saveFinishSpec,
-  deleteFinishSpec,
-  findMatchingFinish,
-  formatFinishesForAI,
-  FINISH_SCOPES
+  formatFinishesForAI
 } from './finishService.js';
 
 let _activeSessionCognitiveState = {
@@ -65,7 +52,7 @@ export function resetActiveSessionCognitiveState() {
   };
   try {
     resetWriteIdempotencyState();
-  } catch (_) {}
+  } catch {}
 }
 
 
@@ -90,7 +77,7 @@ export function playChimeAlert() {
     gain.connect(ctx.destination);
     osc.start();
     osc.stop(ctx.currentTime + 0.36);
-  } catch (_) {}
+  } catch {}
 }
 
 export function loadGlobalSiteSetupProtocol(defaultProtocol = {}) {
@@ -212,7 +199,7 @@ export function loadStoredReminders() {
         if (Array.isArray(parsed)) return parsed;
       }
     }
-  } catch (_) {}
+  } catch {}
   return [];
 }
 
@@ -221,7 +208,7 @@ export function saveStoredReminders(reminders) {
   try {
     localStorage.setItem('jobscan_reminders', JSON.stringify(reminders));
     localStorage.setItem('jobscan_ai_reminders', JSON.stringify(reminders));
-  } catch (_) {}
+  } catch {}
 }
 
 export function loadProjectSpecs(projectId) {
@@ -235,7 +222,7 @@ export function loadProjectSpecs(projectId) {
     }
     const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(`${SPECS_STORAGE_PREFIX}${projectId}`) : null;
     return raw ? JSON.parse(raw) : [];
-  } catch (_) {
+  } catch {
     return [];
   }
 }
@@ -248,7 +235,7 @@ export function saveProjectSpecs(projectId, specs) {
       localStorage.setItem(`sitetactix_finishes_${cleanId}`, JSON.stringify(specs));
       localStorage.setItem(`${SPECS_STORAGE_PREFIX}${projectId}`, JSON.stringify(specs));
     }
-  } catch (_) {}
+  } catch {}
 }
 
 export function loadProjectDashboard(projectId) {
@@ -263,7 +250,7 @@ export function loadProjectDashboard(projectId) {
     if (rawNorm) return JSON.parse(rawNorm);
 
     return null;
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -273,7 +260,7 @@ export function loadProjectDriveTree(projectId) {
     if (!projectId) return null;
     const raw = localStorage.getItem(`jobscan_cached_drivetree_${projectId}`);
     return raw ? JSON.parse(raw) : null;
-  } catch (_) {
+  } catch {
     return null;
   }
 }
@@ -282,7 +269,7 @@ export function saveProjectDriveTree(projectId, tree) {
   if (!projectId || !tree) return;
   try {
     localStorage.setItem(`jobscan_cached_drivetree_${projectId}`, JSON.stringify(tree));
-  } catch (_) {}
+  } catch {}
 }
 
 export const loadDriveTree = loadProjectDriveTree;
@@ -302,8 +289,8 @@ export function buildGroundingSystemInstruction(context) {
     pendingR = [],
     memoriesData = [],
     userPreferencesPrompt = '',
-    timeGreeting = 'Good morning',
-    spanishTimeGreeting = 'Buenos días',
+    _timeGreeting = 'Good morning',
+    _spanishTimeGreeting = 'Buenos días',
     currentTimeString = '',
     currentDayString = ''
   } = context;
@@ -839,7 +826,7 @@ export function formatToolResultsForSynthesis(toolTelemetryList = []) {
  * Granular & Truthful Grounded Source Provenance Detector
  * Resolves exact originating systems based on the user's query, synthesized answer, and context.
  */
-export function detectGroundedSourcesUsed(query = '', answerText = '', context = {}) {
+export function detectGroundedSourcesUsed(query = '', answerText = '', _context = {}) {
   const sources = new Set();
   const q = String(query).toLowerCase();
   const a = String(answerText).toLowerCase();
@@ -984,7 +971,7 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
   }
 
   // 3. Document / Blueprint File Claims (*.pdf, *.dwg, etc.)
-  const fileRegex = /\b([a-zA-Z0-9_\-]+\.(?:pdf|dwg|png|jpg|docx|xlsx|csv))\b/gi;
+  const fileRegex = /\b([a-zA-Z0-9_-]+\.(?:pdf|dwg|png|jpg|docx|xlsx|csv))\b/gi;
   const fileMatches = [...synthesizedText.matchAll(fileRegex)];
 
   for (const fm of fileMatches) {
@@ -1063,7 +1050,7 @@ export function verifyResponseGrounding(synthesizedText = '', projectContext = {
   } else if (purchasingData?.summary) {
     const summary = purchasingData.summary;
     const needed = summary.neededCount;
-    const purchased = summary.purchasedCount;
+    const _purchased = summary.purchasedCount;
     const total = summary.totalChecklistCount;
     const tradeBreakdown = summary.tradeBreakdown || {};
 
@@ -1189,7 +1176,7 @@ export async function askGeminiBrain(
   let projectSpecs = [];
   try {
     projectSpecs = await fetchProjectFinishes(projectId);
-  } catch (_) {
+  } catch {
     projectSpecs = loadProjectSpecs(projectId);
   }
   const siteSetupProtocol = getSiteSetupProtocol();
@@ -1202,7 +1189,7 @@ export async function askGeminiBrain(
       const raw = localStorage.getItem(`jobscan_sitesetup_checks_${projectId}`);
       if (raw) siteSetupChecks = JSON.parse(raw);
     }
-  } catch (_) {}
+  } catch {}
 
   const siteSetupData = {
     protocol: siteSetupProtocol,
@@ -1219,7 +1206,7 @@ export async function askGeminiBrain(
       const raw = window.localStorage.getItem('jobscan_phase_checks_' + projectId);
       if (raw) savedPhaseChecks = JSON.parse(raw);
     }
-  } catch (_) {}
+  } catch {}
 
   // Load All 6 Municipal Inspection Stages with live checklist status
   const inspectionsData = (INSPECTION_STAGES || []).map((stage) => {
@@ -1648,7 +1635,7 @@ export async function askGeminiBrain(
           headers.Authorization = `Bearer ${idToken}`;
         }
       }
-    } catch (_) {}
+    } catch {}
 
     const reqPayload = JSON.stringify({
       contents,
@@ -1745,7 +1732,7 @@ export async function askGeminiBrain(
                 result
               });
             }
-          } catch (tErr) {
+          } catch {
             const friendlyError = formatUserFriendlyToolError(tc.name);
             toolTelemetryList.push({
               name: tc.name,
@@ -1945,7 +1932,7 @@ ${getSemanticPromptGuidelines()}
     } else {
       lastErrorCode = apiRes.status;
     }
-  } catch (err) {
+  } catch {
     lastErrorCode = 'NETWORK_TIMEOUT';
   }
 

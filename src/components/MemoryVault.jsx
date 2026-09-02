@@ -6,26 +6,19 @@ import {
   Trash2,
   Edit2,
   History,
-  Check,
   X,
-  Tag,
-  AlertCircle,
-  Clock,
   User,
   Bot,
   Globe,
   ChevronDown,
-  ChevronUp,
-  FileText
+  ChevronUp
 } from 'lucide-react';
 import {
   getMemories,
   saveMemory,
   updateMemory,
   deactivateMemory,
-  searchMemories,
-  MEMORY_TYPES,
-  MEMORY_IMPORTANCE
+  searchMemories
 } from '../services/memoryService.js';
 
 export default function MemoryVault({ projectId, projectName }) {
