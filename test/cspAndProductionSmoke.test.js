@@ -62,7 +62,8 @@ describe('CSP & Production Security Headers Smoke Test Suite', () => {
   it('authorizes Google Drive and Sheets API endpoints in CSP', () => {
     const connectSrc = parsed['connect-src'] || [];
 
-    assert.ok(connectSrc.includes('https://www.googleapis.com'), 'Google APIs (Drive & Sheets) must be in connect-src');
+    assert.ok(connectSrc.includes('https://www.googleapis.com'), 'Google APIs (Drive) must be in connect-src');
+    assert.ok(connectSrc.includes('https://sheets.googleapis.com'), 'Google Sheets API must be in connect-src');
   });
 
   it('authorizes Firestore database endpoints in CSP', () => {

@@ -29,47 +29,13 @@ async function parseApiResponse(response) {
 export async function triggerAppsScriptSync(folderId, fetchImpl = fetch) {
   if (!folderId) throw new Error('The active project does not have a Google Drive folder.');
 
-  const auth = getFirebaseAuthInstance();
-  const user = auth?.currentUser;
-  const email = user?.email ? String(user.email).trim().toLowerCase() : '';
-
-  const accountUrlKey = email ? `jobscan_apps_script_url_${email}` : 'jobscan_apps_script_url';
-  const accountSecretKey = email ? `jobscan_apps_script_secret_${email}` : 'jobscan_apps_script_secret';
-
-  const customScriptUrl = localStorage.getItem(accountUrlKey) || localStorage.getItem('jobscan_apps_script_url') || '';
-  const customScriptSecret = localStorage.getItem(accountSecretKey) || localStorage.getItem('jobscan_apps_script_secret') || '';
-
-  if (customScriptUrl) {
-    try {
-      const url = new URL(customScriptUrl);
-      url.searchParams.set('action', 'sync');
-      url.searchParams.set('folderId', folderId);
-      if (customScriptSecret) {
-        url.searchParams.set('secret', customScriptSecret);
-      }
-      const res = await fetchImpl(url.toString(), { method: 'POST', redirect: 'follow' });
-      if (res.ok) return { ok: true };
-    } catch (err) {
-      console.warn('Direct Apps Script URL call failed, attempting backend sync endpoint:', err);
-    }
-  }
-
   const authorization = await getAuthorizationHeader();
-  const headers = {
-    Authorization: authorization,
-    'Content-Type': 'application/json'
-  };
-
-  if (customScriptUrl) {
-    headers['x-apps-script-url'] = customScriptUrl;
-  }
-  if (customScriptSecret) {
-    headers['x-apps-script-secret'] = customScriptSecret;
-  }
-
   const response = await fetchImpl('/api/apps-script-sync', {
     method: 'POST',
-    headers,
+    headers: {
+      Authorization: authorization,
+      'Content-Type': 'application/json'
+    },
     body: JSON.stringify({ folderId })
   });
   return parseApiResponse(response);
