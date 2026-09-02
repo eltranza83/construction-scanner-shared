@@ -42,6 +42,10 @@ export async function POST(request) {
       return jsonResponse({ hasPreference: false });
     }
 
+    if (query.length > 2000) {
+      throw new HttpError(400, 'Query exceeds maximum limit of 2,000 characters.');
+    }
+
     if (!apiKey) {
       throw new HttpError(503, 'AI preference observation is not configured on the server. Please configure GEMINI_API_KEY.');
     }

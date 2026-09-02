@@ -59,5 +59,8 @@ export function sanitizeUpstreamAiError(status) {
   if (status === 429) {
     return new HttpError(429, 'AI service is temporarily experiencing high traffic. Please retry in a few moments.');
   }
+  if (status === 504 || status === 'TIMEOUT') {
+    return new HttpError(504, 'AI request timed out while contacting upstream service. Please retry.');
+  }
   return new HttpError(502, 'AI service is temporarily unavailable. Please retry in a moment.');
 }

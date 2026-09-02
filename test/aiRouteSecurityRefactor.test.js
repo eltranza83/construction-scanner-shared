@@ -4,7 +4,9 @@ import { POST as postAskBrain } from '../api/ask-brain.js';
 import { POST as postEmbedMemory } from '../api/embed-memory.js';
 import { POST as postObservePreference } from '../api/observe-preference.js';
 import { POST as postExtractDocument } from '../api/extract-document.js';
+import { POST as postAppsScriptSync } from '../api/apps-script-sync.js';
 import { resolveServerGeminiKey, sanitizeUpstreamAiError } from '../api/_lib/ai-auth.js';
+import { fetchWithExponentialBackoff } from '../api/_lib/ai-retry.js';
 
 describe('AI Route Security Refactor & Error Sanitization Suite', () => {
   const originalFetch = globalThis.fetch;
@@ -264,5 +266,112 @@ describe('AI Route Security Refactor & Error Sanitization Suite', () => {
     const err503 = sanitizeUpstreamAiError(503);
     assert.strictEqual(err503.status, 502);
     assert.ok(err503.message.includes('temporarily unavailable'));
+
+    const err504 = sanitizeUpstreamAiError(504);
+    assert.strictEqual(err504.status, 504);
+    assert.ok(err504.message.includes('timed out'));
+  });
+
+  // 6. Volume & batch limits on embed-memory and observe-preference
+  it('embed-memory: rejects batch size exceeding 50 items with 400', async () => {
+    mockAuthorizedAuth();
+
+    const largeBatch = Array.from({ length: 51 }, (_, i) => `Memory text chunk ${i}`);
+    const req = createMockRequest({
+      body: { texts: largeBatch }
+    });
+
+    const res = await postEmbedMemory(req);
+    assert.strictEqual(res.status, 400);
+    const data = await res.json();
+    assert.ok(data.error.includes('50 items'));
+  });
+
+  it('embed-memory: rejects total character volume exceeding 20,000 characters with 400', async () => {
+    mockAuthorizedAuth();
+
+    // 5 items of 4,500 chars = 22,500 chars total
+    const largeChunk = 'A'.repeat(4500);
+    const largeVolume = Array.from({ length: 5 }, () => largeChunk);
+    const req = createMockRequest({
+      body: { texts: largeVolume }
+    });
+
+    const res = await postEmbedMemory(req);
+    assert.strictEqual(res.status, 400);
+    const data = await res.json();
+    assert.ok(data.error.includes('20,000 characters'));
+  });
+
+  it('observe-preference: rejects query exceeding 2,000 characters with 400', async () => {
+    mockAuthorizedAuth();
+
+    const hugeQuery = 'Q'.repeat(2001);
+    const req = createMockRequest({
+      body: { query: hugeQuery }
+    });
+
+    const res = await postObservePreference(req);
+    assert.strictEqual(res.status, 400);
+    const data = await res.json();
+    assert.ok(data.error.includes('2,000 characters'));
+  });
+
+  // 7. Timeout handling with mocked aborted requests (fast, 0s delay)
+  it('fetchWithExponentialBackoff handles timeout/abort cleanly without waiting', async () => {
+    const mockTimeoutFetch = async () => {
+      const err = new Error('The operation was aborted');
+      err.name = 'TimeoutError';
+      throw err;
+    };
+
+    await assert.rejects(
+      async () => {
+        await fetchWithExponentialBackoff(
+          'https://example.com/api',
+          { timeoutMs: 100 },
+          { maxRetries: 0 },
+          mockTimeoutFetch
+        );
+      },
+      /timed out/
+    );
+  });
+
+  it('apps-script-sync maps a timed out request to HTTP 504', async () => {
+    process.env.APPS_SCRIPT_URL = 'https://script.google.com/macros/s/test-script/exec';
+
+    globalThis.fetch = async (url) => {
+      const urlStr = String(url);
+      if (urlStr.includes('identitytoolkit.googleapis.com')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ users: [{ localId: 'user_123', email: 'admin@sitetactix.com' }] })
+        };
+      }
+      if (urlStr.includes('firestore.googleapis.com')) {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (urlStr.includes('script.google.com')) {
+        const err = new Error('The operation was aborted');
+        err.name = 'TimeoutError';
+        throw err;
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+
+    try {
+      const req = createMockRequest({
+        body: { folderId: 'folder_abc123' }
+      });
+
+      const res = await postAppsScriptSync(req);
+      assert.strictEqual(res.status, 504);
+      const data = await res.json();
+      assert.ok(data.error.includes('timed out'));
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
   });
 });

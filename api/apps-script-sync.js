@@ -58,12 +58,22 @@ export async function POST(request) {
       'content-type': 'application/json'
     };
 
-    const response = await fetch(scriptUrl, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(syncPayload),
-      redirect: 'follow'
-    });
+    let response;
+    try {
+      response = await fetch(scriptUrl, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(syncPayload),
+        signal: typeof AbortSignal?.timeout === 'function' ? AbortSignal.timeout(25000) : undefined,
+        redirect: 'follow'
+      });
+    } catch (fetchErr) {
+      if (fetchErr.name === 'TimeoutError' || fetchErr.name === 'AbortError') {
+        throw new HttpError(504, 'Google Apps Script sync timed out after 25 seconds. Please try again.');
+      }
+      throw fetchErr;
+    }
+
     if (!response.ok) {
       console.error(`Apps Script sync failed with status ${response.status}.`);
       throw new HttpError(502, 'Spreadsheet sync could not be started. Please try again.');

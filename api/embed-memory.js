@@ -24,6 +24,15 @@ export async function POST(request) {
       return jsonResponse({ embeddings: [] });
     }
 
+    if (inputTexts.length > 50) {
+      throw new HttpError(400, 'Batch size exceeds maximum limit of 50 items.');
+    }
+
+    const totalChars = inputTexts.reduce((sum, t) => sum + String(t || '').length, 0);
+    if (totalChars > 20000) {
+      throw new HttpError(400, 'Total embedding text volume exceeds maximum limit of 20,000 characters.');
+    }
+
     // Call Gemini Embeddings API (text-embedding-004)
     const model = 'text-embedding-004';
     const targetUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:batchEmbedContents`;
