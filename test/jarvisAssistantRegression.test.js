@@ -79,4 +79,24 @@ describe('J.A.R.V.I.S. Assistant forceDeepReasoning ReferenceError Regression Su
     assert.ok(result, 'Result payload must be returned');
     assert.equal(result.text, 'I can hear you loud and clear, Sir.');
   });
+
+  test('3. JSX Tag Integrity: All JSX components used in GlobalAIAssistant.jsx are imported or declared', () => {
+    const filePath = path.resolve(process.cwd(), 'src/components/GlobalAIAssistant.jsx');
+    const content = fs.readFileSync(filePath, 'utf8');
+
+    const tags = [...new Set([...content.matchAll(/<([A-Z][A-Za-z0-9_]*)/g)].map(m => m[1]))];
+    const missing = [];
+
+    for (const tag of tags) {
+      if (['React', 'Fragment', 'Suspense'].includes(tag)) continue;
+      const imported = new RegExp('\\b' + tag + '\\b').test(content.slice(0, content.indexOf('export default')));
+      const declared = new RegExp('(function|class|const|let|var)\\s+' + tag + '\\b').test(content);
+      if (!imported && !declared) {
+        missing.push(tag);
+      }
+    }
+
+    assert.deepEqual(missing, [], `GlobalAIAssistant.jsx has undefined JSX tags: ${missing.join(', ')}`);
+    assert.ok(content.includes('Loader2'), 'Loader2 must be imported and present');
+  });
 });

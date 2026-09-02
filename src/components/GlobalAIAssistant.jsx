@@ -5,7 +5,8 @@ import {
   Send,
   X,
   Square,
-  MoreVertical
+  MoreVertical,
+  Loader2
 } from 'lucide-react';
 import {
   askGeminiBrain,
