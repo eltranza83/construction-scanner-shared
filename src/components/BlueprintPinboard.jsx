@@ -418,6 +418,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           projectInfo={formProjectInfo}
           projectName={activeProject?.name}
           selectedFolderName={selectedFolder?.name}
+          googleToken={googleToken}
           onSave={handleSaveLocatedIssue}
           onClose={() => setPendingIssueLocation(null)}
         />
@@ -431,6 +432,7 @@ export default function BlueprintPinboard({ googleToken, activeProject, selected
           projectInfo={formProjectInfo}
           projectName={activeProject?.name}
           selectedFolderName={selectedFolder?.name}
+          googleToken={googleToken}
           onSave={handleSaveIssueEdit}
           onClose={() => setEditingIssue(null)}
         />

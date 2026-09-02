@@ -246,6 +246,7 @@ export default function DashboardPunchList({
             <IssueCard
               key={issue.id}
               issue={issue}
+              googleToken={googleToken}
               onUpdateStatus={updateIssueStatus}
               onDelete={softDeleteIssue}
               onEdit={setEditingIssue}
@@ -288,6 +289,7 @@ export default function DashboardPunchList({
           projectInfo={projectInfo}
           projectName={activeProject?.name}
           selectedFolderName={selectedFolderName}
+          googleToken={googleToken}
           onSave={handleSaveIssue}
           onClose={() => setShowAddModal(false)}
         />
@@ -301,6 +303,7 @@ export default function DashboardPunchList({
           projectInfo={projectInfo}
           projectName={activeProject?.name}
           selectedFolderName={selectedFolderName}
+          googleToken={googleToken}
           onSave={handleSaveIssueEdit}
           onClose={() => setEditingIssue(null)}
         />

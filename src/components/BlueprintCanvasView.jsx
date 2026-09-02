@@ -383,6 +383,7 @@ export default function BlueprintCanvasView({
       {selectedIssue ? (
         <IssueCard
           issue={selectedIssue}
+          googleToken={googleToken}
           onUpdateStatus={onUpdateIssueStatus}
           onDelete={onDeleteIssue}
           onEdit={onEditIssue}

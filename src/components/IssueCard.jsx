@@ -16,6 +16,7 @@ import {
   History,
   ClipboardCheck
 } from 'lucide-react';
+import { useAuthenticatedDriveImage } from '../hooks/useAuthenticatedDriveImage';
 
 function getDisplayImageUrl(url, base64, size = 'w200') {
   if (base64) return base64;
@@ -34,6 +35,7 @@ function getDisplayImageUrl(url, base64, size = 'w200') {
 
 export default function IssueCard({
   issue,
+  googleToken = null,
   onUpdateStatus,
   onDelete,
   onEdit,
@@ -89,8 +91,22 @@ export default function IssueCard({
     createdAt
   } = issue;
 
-  const hasDefectPhoto = Boolean(photoUrl || photoBase64);
-  const hasProofPhoto = Boolean(proofPhotoUrl || proofPhotoBase64);
+  const defectImage = useAuthenticatedDriveImage({
+    googleToken,
+    fileId: issue?.photoFileId,
+    url: photoUrl,
+    base64: photoBase64
+  });
+
+  const proofImage = useAuthenticatedDriveImage({
+    googleToken,
+    fileId: issue?.proofPhotoFileId,
+    url: proofPhotoUrl,
+    base64: proofPhotoBase64
+  });
+
+  const hasDefectPhoto = Boolean(photoUrl || photoBase64 || issue?.photoFileId);
+  const hasProofPhoto = Boolean(proofPhotoUrl || proofPhotoBase64 || issue?.proofPhotoFileId);
 
   // Format creation date
   const dateFormatted = createdAt ? new Date(createdAt).toLocaleDateString(undefined, {
@@ -542,20 +558,26 @@ export default function IssueCard({
               <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#f87171', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
                 🔴 Before (Defect)
               </span>
-              <img
-                src={getDisplayImageUrl(photoUrl, photoBase64, 'w400')}
-                alt="Defect photo"
-                loading="lazy"
-                onClick={() => setFullscreenPhotoSrc(getDisplayImageUrl(photoUrl, photoBase64, 'w1000'))}
-                style={{
-                  width: '100%',
-                  height: '110px',
-                  objectFit: 'cover',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  border: '1px solid var(--color-zinc-800)'
-                }}
-              />
+              {defectImage.loading ? (
+                <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
+                  <div className="spinner" style={{ width: '18px', height: '18px' }} />
+                </div>
+              ) : (
+                <img
+                  src={defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w400')}
+                  alt="Defect photo"
+                  loading="lazy"
+                  onClick={() => setFullscreenPhotoSrc(defectImage.src || getDisplayImageUrl(photoUrl, photoBase64, 'w1000'))}
+                  style={{
+                    width: '100%',
+                    height: '110px',
+                    objectFit: 'cover',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    border: '1px solid var(--color-zinc-800)'
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -580,20 +602,26 @@ export default function IssueCard({
                   </span>
                 )}
               </div>
-              <img
-                src={getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w400')}
-                alt="Proof resolution photo"
-                loading="lazy"
-                onClick={() => setFullscreenPhotoSrc(getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w1000'))}
-                style={{
-                  width: '100%',
-                  height: '110px',
-                  objectFit: 'cover',
-                  borderRadius: '6px',
-                  cursor: 'pointer',
-                  border: '1px solid var(--color-zinc-800)'
-                }}
-              />
+              {proofImage.loading ? (
+                <div style={{ width: '100%', height: '110px', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: 'var(--color-zinc-900)', borderRadius: '6px' }}>
+                  <div className="spinner" style={{ width: '18px', height: '18px' }} />
+                </div>
+              ) : (
+                <img
+                  src={proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w400')}
+                  alt="Proof resolution photo"
+                  loading="lazy"
+                  onClick={() => setFullscreenPhotoSrc(proofImage.src || getDisplayImageUrl(proofPhotoUrl, proofPhotoBase64, 'w1000'))}
+                  style={{
+                    width: '100%',
+                    height: '110px',
+                    objectFit: 'cover',
+                    borderRadius: '6px',
+                    cursor: 'pointer',
+                    border: '1px solid var(--color-zinc-800)'
+                  }}
+                />
+              )}
               {storedProofNotes && (
                 <div style={{ fontSize: '0.72rem', color: 'var(--color-zinc-300)', fontStyle: 'italic', lineHeight: 1.3 }}>
                   "{storedProofNotes}"

@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { X, Camera, Upload, Check } from 'lucide-react';
 import { TRADE_SECTIONS_CONFIG } from '../services/editFormHelpers';
 import { getProjectPacketInfo } from '../services/projectInfoFormatter';
+import { useAuthenticatedDriveImage } from '../hooks/useAuthenticatedDriveImage';
 
 function getDisplayImageUrl(url, base64, size = 'w400') {
   if (base64) return base64;
@@ -25,6 +26,7 @@ export default function IssueFormModal({
   projectInfo = null,
   projectName = '',
   selectedFolderName = '',
+  googleToken = null,
   onSave,
   onClose
 }) {
@@ -41,6 +43,19 @@ export default function IssueFormModal({
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(getDisplayImageUrl(editingIssue?.photoUrl || '', editingIssue?.photoBase64 || '', 'w400') || null);
   const [showContactPickerBtn, setShowContactPickerBtn] = useState(false);
+
+  const authImage = useAuthenticatedDriveImage({
+    googleToken,
+    fileId: editingIssue?.photoFileId,
+    url: editingIssue?.photoUrl,
+    base64: editingIssue?.photoBase64
+  });
+
+  useEffect(() => {
+    if (authImage.src && !photoFile) {
+      setPhotoPreview(authImage.src);
+    }
+  }, [authImage.src, photoFile]);
 
   const fileInputRef = useRef(null);
 
