@@ -1,6 +1,8 @@
 import { describe, it, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { POST } from '../api/ask-brain.js';
+import { POST as postExtractDocument } from '../api/extract-document.js';
+import { POST as postObservePreference } from '../api/observe-preference.js';
 
 describe('AI Request Limits & Conversation Caps Test Suite', () => {
   const originalFetch = globalThis.fetch;
@@ -224,6 +226,83 @@ describe('AI Request Limits & Conversation Caps Test Suite', () => {
     assert.strictEqual(response.status, 503);
     const data = await response.json();
     assert.ok(data.error.includes('GEMINI_API_KEY'));
+  });
+
+  it('extract-document: in production, ignores browser x-gemini-api-key and omits Settings reference', async () => {
+    mockAuthorizedAuth();
+    process.env.NODE_ENV = 'production';
+    delete process.env.GEMINI_API_KEY;
+
+    const request = createMockRequest({
+      headers: {
+        'x-gemini-api-key': 'browser-supplied-key',
+        'x-document-mime': 'application/pdf'
+      }
+    });
+
+    const response = await postExtractDocument(request);
+    assert.strictEqual(response.status, 503);
+    const data = await response.json();
+    assert.ok(data.error.includes('GEMINI_API_KEY'));
+    assert.ok(!data.error.includes('save your key in Settings'), 'Production error must not suggest saving key in Settings');
+  });
+
+  it('observe-preference: sends Gemini key in x-goog-api-key header and never in URL query string', async () => {
+    process.env.NODE_ENV = 'production';
+    process.env.GEMINI_API_KEY = 'TEST_GEMINI_OBSERVER_SECRET_999';
+
+    let capturedUrl = '';
+    let capturedHeaders = null;
+
+    globalThis.fetch = async (url, options = {}) => {
+      const urlStr = String(url);
+      if (urlStr.includes('identitytoolkit.googleapis.com')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ users: [{ localId: 'user_123', email: 'admin@sitetactix.com' }] })
+        };
+      }
+      if (urlStr.includes('firestore.googleapis.com')) {
+        return { ok: true, status: 200, json: async () => ({}) };
+      }
+      if (urlStr.includes('generativelanguage.googleapis.com')) {
+        capturedUrl = urlStr;
+        capturedHeaders = options.headers;
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            candidates: [{ content: { parts: [{ text: JSON.stringify({ hasPreference: false }) }] } }]
+          })
+        };
+      }
+      return { ok: true, status: 200, json: async () => ({}) };
+    };
+
+    const request = createMockRequest({
+      body: { query: 'Show me all electrical invoices' }
+    });
+
+    const response = await postObservePreference(request);
+    assert.strictEqual(response.status, 200);
+
+    // Verify key is in header
+    assert.strictEqual(
+      capturedHeaders?.['x-goog-api-key'],
+      'TEST_GEMINI_OBSERVER_SECRET_999',
+      'Outbound request must provide secret in x-goog-api-key header'
+    );
+
+    // Verify secret is NEVER in URL query string
+    assert.ok(
+      !capturedUrl.includes('?key='),
+      'Outbound URL must not have ?key= query parameter'
+    );
+    assert.ok(
+      !capturedUrl.includes('TEST_GEMINI_OBSERVER_SECRET_999'),
+      'Outbound URL must never contain the secret key string'
+    );
   });
 });
 

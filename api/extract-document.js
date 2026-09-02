@@ -86,9 +86,11 @@ export async function POST(request) {
   try {
     await requireScannerAccess(request);
 
-    const apiKey = process.env.GEMINI_API_KEY || request.headers.get('x-gemini-api-key') || '';
+    const apiKey = process.env.NODE_ENV === 'production'
+      ? (process.env.GEMINI_API_KEY || '')
+      : (process.env.GEMINI_API_KEY || request.headers.get('x-gemini-api-key') || '');
     if (!apiKey) {
-      throw new HttpError(503, 'AI processing is not configured on the server. Please add GEMINI_API_KEY to .env.local or save your key in Settings.');
+      throw new HttpError(503, 'AI processing is not configured on the server. Please configure GEMINI_API_KEY.');
     }
 
     const mimeType = (request.headers.get('x-document-mime') || '').toLowerCase();

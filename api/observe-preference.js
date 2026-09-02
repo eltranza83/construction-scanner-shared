@@ -57,10 +57,13 @@ export async function POST(request) {
       }
     };
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_CONFIG.fastModel}:generateContent?key=${apiKey}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${AI_CONFIG.fastModel}:generateContent`;
     const res = await fetchWithExponentialBackoff(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey
+      },
       body: JSON.stringify(payload)
     }, fetch);
 
