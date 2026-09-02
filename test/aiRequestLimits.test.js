@@ -104,10 +104,26 @@ describe('AI Request Limits & Conversation Caps Test Suite', () => {
     assert.ok(data.error.includes('100 KB'));
   });
 
-  it('rejects system instructions exceeding 10,000 characters with 400', async () => {
+  it('accepts a realistic large J.A.R.V.I.S. system prompt around 45,000 characters', async () => {
     mockAuthorizedAuth();
 
-    const longInstruction = 'B'.repeat(10001);
+    const realisticInstruction = 'A'.repeat(45000);
+    const request = createMockRequest({
+      body: {
+        prompt: 'Hello Jarvis',
+        systemInstruction: realisticInstruction
+      }
+    });
+
+    const response = await POST(request);
+    assert.notStrictEqual(response.status, 400, '45,000 character prompt must not be rejected with 400');
+    assert.notStrictEqual(response.status, 413, '45,000 character prompt must not be rejected with 413');
+  });
+
+  it('rejects system instructions exceeding 80,000 characters with 400', async () => {
+    mockAuthorizedAuth();
+
+    const longInstruction = 'B'.repeat(80001);
     const request = createMockRequest({
       body: {
         prompt: 'Hello',
@@ -118,7 +134,7 @@ describe('AI Request Limits & Conversation Caps Test Suite', () => {
     const response = await POST(request);
     assert.strictEqual(response.status, 400);
     const data = await response.json();
-    assert.ok(data.error.includes('10,000 characters'));
+    assert.ok(data.error.includes('80,000 characters'));
   });
 
   it('rejects conversations exceeding 30 turns with 400', async () => {

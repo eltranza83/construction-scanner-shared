@@ -31,13 +31,13 @@ export async function POST(request) {
       }
     }
 
-    // System instruction character cap: max 10,000 characters
+    // System instruction character cap: max 80,000 characters
     if (systemInstruction) {
       const sysLen = typeof systemInstruction === 'string'
         ? systemInstruction.length
         : (systemInstruction.parts ? systemInstruction.parts.reduce((s, p) => s + String(p?.text || '').length, 0) : JSON.stringify(systemInstruction).length);
-      if (sysLen > 10000) {
-        throw new HttpError(400, 'System instruction exceeds maximum allowed limit of 10,000 characters.');
+      if (sysLen > 80000) {
+        throw new HttpError(400, 'System instruction exceeds maximum allowed limit of 80,000 characters.');
       }
     }
 
