@@ -1,6 +1,6 @@
 import GlobalAIAssistant from './components/GlobalAIAssistant';
 import React, { Suspense, lazy, useState, useEffect } from 'react';
-import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, Trash2, X, Zap } from 'lucide-react';
+import { Camera, Settings as SettingsIcon, Sparkles, Folder, LogIn, FileText, TrendingUp, MapPin, Check, Database, Trash2, X, Zap, Bot } from 'lucide-react';
 import StagingCard from './components/StagingCard';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useInvoiceSync } from './hooks/useInvoiceSync';
@@ -168,7 +168,46 @@ export default function App() {
         onClose={() => { setSuccess(null); setError(null); }}
       />
       {/* 1. Header */}
-      <header className="app-header">
+      <header className="app-header" style={{ position: 'relative' }}>
+        {/* Top-Right Header Jarvis Button */}
+        <button
+          type="button"
+          onClick={() => window.dispatchEvent(new CustomEvent('open-ai-assistant'))}
+          style={{
+            position: 'absolute',
+            right: '16px',
+            top: '16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '5px 12px',
+            backgroundColor: 'var(--color-zinc-900)',
+            border: '1.5px solid var(--color-amber-500)',
+            borderRadius: '20px',
+            color: 'var(--color-amber-500)',
+            cursor: 'pointer',
+            boxShadow: '0 2px 12px rgba(0, 0, 0, 0.5), 0 0 10px rgba(197, 160, 89, 0.3)',
+            zIndex: 10
+          }}
+          title="Ask Jarvis"
+        >
+          <div style={{
+            width: '18px',
+            height: '18px',
+            borderRadius: '50%',
+            backgroundColor: 'var(--color-amber-500)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: '#000'
+          }}>
+            <Bot size={11} />
+          </div>
+          <span style={{ fontSize: '0.74rem', fontWeight: 700, letterSpacing: '0.03em', whiteSpace: 'nowrap' }}>
+            Jarvis
+          </span>
+        </button>
+
         <div className="logo-section">
           <svg className="logo-icon" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>

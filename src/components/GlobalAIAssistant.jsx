@@ -238,6 +238,12 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
     return () => { active = false; };
   }, [projectId]);
 
+  useEffect(() => {
+    const handleOpen = () => setIsOpen(true);
+    window.addEventListener('open-ai-assistant', handleOpen);
+    return () => window.removeEventListener('open-ai-assistant', handleOpen);
+  }, []);
+
   // Voice State Machine & Continuous Hands-Free State
   const [voiceMode, setVoiceMode] = useState(() => {
     try {
@@ -1124,54 +1130,6 @@ export default function GlobalAIAssistant({ activeProject, selectedFolder, googl
 
   return (
     <>
-      {/* Persistent Floating AI Agent / Pet Button */}
-      <div
-        style={{
-          position: 'fixed',
-          bottom: 'calc(76px + env(safe-area-inset-bottom, 0px))',
-          right: 'max(16px, calc((100vw - 600px) / 2 + 16px))',
-          zIndex: 2500,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '8px'
-        }}
-      >
-        <button
-          onClick={() => setIsOpen(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '10px 14px',
-            backgroundColor: 'var(--color-zinc-900)',
-            border: '2px solid var(--color-amber-500)',
-            borderRadius: '30px',
-            color: 'var(--color-zinc-100)',
-            cursor: 'pointer',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.6), 0 0 12px rgba(197, 160, 89, 0.35)',
-            transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
-          }}
-          title="Ask Adepec Field AI"
-        >
-          <div
-            style={{
-              width: '26px',
-              height: '26px',
-              borderRadius: '50%',
-              backgroundColor: 'var(--color-amber-500)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#000'
-            }}
-          >
-            <Bot size={16} />
-          </div>
-          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: 'var(--color-amber-500)', letterSpacing: '0.02em' }}>
-            Ask AI
-          </span>
-        </button>
-      </div>
 
       {/* Interactive Global AI Assistant Chat Modal */}
       {isOpen && (
